@@ -6,8 +6,8 @@ use std::sync::{Arc, Mutex};
 use rusqlite::{Connection, OptionalExtension, Row};
 
 use crate::domain::{
-    AgentEvent, Backend, EventRecord, PermissionMode, Session, SessionRole, SessionStatus,
-    Workspace,
+    AgentEvent, Backend, EffortLevel, EventRecord, PermissionMode, Session, SessionRole,
+    SessionStatus, Workspace,
 };
 use crate::error::{AppError, Result};
 use crate::util::{now_rfc3339, uuid};
@@ -20,7 +20,9 @@ pub struct NewSession {
     pub backend: Backend,
     pub model: String,
     pub permission_mode: PermissionMode,
+    pub effort: EffortLevel,
     pub role: SessionRole,
+    pub auto_named: bool,
     pub agent_session_id: String,
     pub working_dir: String,
     pub branch: Option<String>,
@@ -119,8 +121,10 @@ impl Store {
             backend: new.backend,
             model: new.model,
             permission_mode: new.permission_mode,
+            effort: new.effort,
             status: SessionStatus::Idle,
             role: new.role,
+            auto_named: new.auto_named,
             agent_session_id: new.agent_session_id,
             working_dir: new.working_dir,
             branch: new.branch,
@@ -138,9 +142,9 @@ impl Store {
             "INSERT INTO sessions (
                 id, workspace_id, title, backend, model, permission_mode, status, role,
                 agent_session_id, working_dir, branch, base_sha, is_isolated, turns, cost_usd,
-                parent_id, created_at, updated_at
+                parent_id, created_at, updated_at, effort, auto_named
              ) VALUES (
-                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18
+                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20
              )",
             rusqlite::params![
                 session.id,
@@ -161,6 +165,8 @@ impl Store {
                 session.parent_id,
                 session.created_at,
                 session.updated_at,
+                session.effort.as_str(),
+                session.auto_named as i64,
             ],
         )?;
         Ok(session)
@@ -187,6 +193,60 @@ impl Store {
             "UPDATE sessions SET status = ?2, updated_at = ?3 WHERE id = ?1",
             (id, status.as_str(), now_rfc3339()),
         )?;
+        Ok(())
+    }
+
+    /// Update the per-turn agent settings that the composer can change mid-session.
+    pub fn update_session_settings(
+        &self,
+        id: &str,
+        model: &str,
+        permission_mode: PermissionMode,
+        effort: EffortLevel,
+    ) -> Result<()> {
+        let conn = self.lock();
+        conn.execute(
+            "UPDATE sessions
+             SET model = ?2, permission_mode = ?3, effort = ?4, updated_at = ?5
+             WHERE id = ?1",
+            (
+                id,
+                model,
+                permission_mode.as_str(),
+                effort.as_str(),
+                now_rfc3339(),
+            ),
+        )?;
+        Ok(())
+    }
+
+    /// User-initiated rename — also locks the title against background naming.
+    pub fn rename_session(&self, id: &str, title: &str) -> Result<()> {
+        let conn = self.lock();
+        conn.execute(
+            "UPDATE sessions SET title = ?2, auto_named = 0, updated_at = ?3 WHERE id = ?1",
+            (id, title, now_rfc3339()),
+        )?;
+        Ok(())
+    }
+
+    /// Apply a background-generated title, but only if the user hasn't named the
+    /// session in the meantime. Returns whether the title was applied.
+    pub fn apply_auto_name(&self, id: &str, title: &str) -> Result<bool> {
+        let conn = self.lock();
+        let changed = conn.execute(
+            "UPDATE sessions SET title = ?2, auto_named = 0, updated_at = ?3
+             WHERE id = ?1 AND auto_named = 1",
+            (id, title, now_rfc3339()),
+        )?;
+        Ok(changed > 0)
+    }
+
+    /// Delete a session. Its events are removed via the `ON DELETE CASCADE`
+    /// foreign key.
+    pub fn delete_session(&self, id: &str) -> Result<()> {
+        let conn = self.lock();
+        conn.execute("DELETE FROM sessions WHERE id = ?1", [id])?;
         Ok(())
     }
 
@@ -249,12 +309,12 @@ impl Store {
 const SESSION_SELECT: &str =
     "SELECT id, workspace_id, title, backend, model, permission_mode, status, role, \
     agent_session_id, working_dir, branch, base_sha, is_isolated, turns, cost_usd, parent_id, \
-    created_at, updated_at FROM sessions WHERE id = ?1";
+    created_at, updated_at, effort, auto_named FROM sessions WHERE id = ?1";
 
 const SESSION_SELECT_ALL: &str =
     "SELECT id, workspace_id, title, backend, model, permission_mode, status, role, \
     agent_session_id, working_dir, branch, base_sha, is_isolated, turns, cost_usd, parent_id, \
-    created_at, updated_at FROM sessions";
+    created_at, updated_at, effort, auto_named FROM sessions";
 
 fn map_workspace(row: &Row<'_>) -> rusqlite::Result<Workspace> {
     Ok(Workspace {
@@ -271,6 +331,7 @@ fn map_session(row: &Row<'_>) -> rusqlite::Result<Session> {
     let pm_str: String = row.get(5)?;
     let status_str: String = row.get(6)?;
     let role_str: String = row.get(7)?;
+    let effort_str: String = row.get(18)?;
     Ok(Session {
         id: row.get(0)?,
         workspace_id: row.get(1)?,
@@ -278,8 +339,10 @@ fn map_session(row: &Row<'_>) -> rusqlite::Result<Session> {
         backend: Backend::parse(&backend_str).unwrap_or(Backend::Claude),
         model: row.get(4)?,
         permission_mode: PermissionMode::parse(&pm_str).unwrap_or(PermissionMode::Default),
+        effort: EffortLevel::parse(&effort_str).unwrap_or(EffortLevel::High),
         status: SessionStatus::parse(&status_str).unwrap_or(SessionStatus::Idle),
         role: SessionRole::parse(&role_str).unwrap_or(SessionRole::Chat),
+        auto_named: row.get::<_, i64>(19)? != 0,
         agent_session_id: row.get(8)?,
         working_dir: row.get(9)?,
         branch: row.get(10)?,

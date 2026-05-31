@@ -9,14 +9,23 @@ use crate::domain::Session;
 use crate::error::{AppError, Result};
 
 /// Locate the `claude` binary on PATH.
-fn resolve_claude() -> Result<PathBuf> {
+pub(crate) fn resolve_claude() -> Result<PathBuf> {
     which::which("claude")
         .map_err(|_| AppError::Agent("claude CLI not found on PATH".to_string()))
 }
 
 /// Assemble the CLI argument vector for a turn. A session's first turn opens a
 /// new conversation via `--session-id`; later turns resume it via `--resume`.
+///
+/// A `-fast` model suffix selects the priority service tier: it is stripped from
+/// the `--model` value and re-applied as `--settings {"fastMode":true}`, matching
+/// how the CLI expects fast mode to be requested.
 pub fn build_args(session: &Session, prompt: &str) -> Vec<String> {
+    let (model, fast) = match session.model.strip_suffix("-fast") {
+        Some(base) => (base.to_string(), true),
+        None => (session.model.clone(), false),
+    };
+
     let mut args = vec![
         "--print".to_string(),
         "--output-format".to_string(),
@@ -24,10 +33,17 @@ pub fn build_args(session: &Session, prompt: &str) -> Vec<String> {
         "--verbose".to_string(),
         "--include-partial-messages".to_string(),
         "--model".to_string(),
-        session.model.clone(),
+        model,
         "--permission-mode".to_string(),
         session.permission_mode.as_cli().to_string(),
+        "--effort".to_string(),
+        session.effort.as_cli().to_string(),
     ];
+
+    if fast {
+        args.push("--settings".to_string());
+        args.push(r#"{"fastMode":true}"#.to_string());
+    }
 
     if session.turns == 0 {
         args.push("--session-id".to_string());

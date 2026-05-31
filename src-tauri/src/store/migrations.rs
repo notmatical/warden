@@ -52,6 +52,15 @@ const MIGRATIONS: &[&str] = &[
     );
     CREATE INDEX idx_events_session ON events(session_id, seq);
     "#,
+    // 0004 — per-session reasoning effort
+    r#"
+    ALTER TABLE sessions ADD COLUMN effort TEXT NOT NULL DEFAULT 'high';
+    "#,
+    // 0005 — whether a session's title is still auto-assigned (eligible for
+    // background auto-naming) vs. set by the user.
+    r#"
+    ALTER TABLE sessions ADD COLUMN auto_named INTEGER NOT NULL DEFAULT 1;
+    "#,
 ];
 
 pub fn run(conn: &Connection) -> Result<()> {

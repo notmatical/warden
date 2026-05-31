@@ -21,6 +21,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_os::init())
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -44,8 +45,10 @@ pub fn run() {
             commands::open_workspace,
             commands::list_sessions,
             commands::get_events,
-            commands::get_diff,
             commands::create_session,
+            commands::update_session,
+            commands::rename_session,
+            commands::delete_session,
             commands::send_message,
             commands::cancel_session,
             commands::run_plan_to_code,

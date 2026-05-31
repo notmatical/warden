@@ -6,7 +6,7 @@ use tauri::AppHandle;
 
 use crate::agent::AgentManager;
 use crate::domain::{
-    AgentEvent, Backend, PermissionMode, Session, SessionRole, Workspace,
+    AgentEvent, Backend, EffortLevel, PermissionMode, Session, SessionRole, Workspace,
 };
 use crate::error::Result;
 use crate::events::{emit_event, emit_session};
@@ -39,7 +39,10 @@ fn session_in_dir(
         backend: Backend::Claude,
         model,
         permission_mode,
+        effort: EffortLevel::High,
         role,
+        // Planner/Coder carry role labels; don't auto-rename them.
+        auto_named: false,
         agent_session_id: uuid(),
         working_dir: dir.working_dir.clone(),
         branch: dir.branch.clone(),
@@ -66,7 +69,9 @@ pub async fn run_plan_to_code(
     coder_model: String,
 ) -> Result<PlanToCodeResult> {
     let workspace: Workspace = store.get_workspace(&workspace_id)?;
-    let dir = provision_working_dir(&app, &workspace)?;
+    // The handoff runs two agents against one shared checkout, so it always
+    // isolates in a worktree.
+    let dir = provision_working_dir(&app, &workspace, true)?;
 
     let planner = store.create_session(session_in_dir(
         &workspace_id,

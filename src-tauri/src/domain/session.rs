@@ -60,6 +60,45 @@ impl PermissionMode {
     }
 }
 
+/// Reasoning effort handed to the agent CLI (`claude --effort`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EffortLevel {
+    Low,
+    Medium,
+    High,
+    Xhigh,
+    Max,
+}
+
+impl EffortLevel {
+    /// The exact token expected by `claude --effort`.
+    pub fn as_cli(self) -> &'static str {
+        match self {
+            EffortLevel::Low => "low",
+            EffortLevel::Medium => "medium",
+            EffortLevel::High => "high",
+            EffortLevel::Xhigh => "xhigh",
+            EffortLevel::Max => "max",
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        self.as_cli()
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "low" => Some(EffortLevel::Low),
+            "medium" => Some(EffortLevel::Medium),
+            "high" => Some(EffortLevel::High),
+            "xhigh" => Some(EffortLevel::Xhigh),
+            "max" => Some(EffortLevel::Max),
+            _ => None,
+        }
+    }
+}
+
 /// Lifecycle state of a session.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -128,8 +167,12 @@ pub struct Session {
     pub backend: Backend,
     pub model: String,
     pub permission_mode: PermissionMode,
+    pub effort: EffortLevel,
     pub status: SessionStatus,
     pub role: SessionRole,
+    /// True while the title is still auto-assigned, so background naming may
+    /// replace it. Set false once the user renames or auto-naming completes.
+    pub auto_named: bool,
     /// The CLI conversation id we own (passed as `--session-id`, then `--resume`).
     pub agent_session_id: String,
     /// Absolute path the agent runs in (an isolated worktree, or the repo root).

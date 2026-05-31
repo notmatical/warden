@@ -2,7 +2,10 @@
 //! persisted events, and tracking which sessions have a turn in flight.
 
 mod claude;
+mod naming;
 mod stream;
+
+pub use naming::generate_session_title;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
