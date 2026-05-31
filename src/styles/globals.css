@@ -2,6 +2,9 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/inter";
+@import "./animation.css";
+
+@plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -25,6 +28,7 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-positive: var(--positive);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -49,6 +53,8 @@
 }
 
 :root {
+  --radius: 0.45rem;
+
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -63,7 +69,8 @@
   --muted-foreground: oklch(0.556 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
+  --destructive: oklch(0.6719 0.215562 25.1161);
+  --positive: oklch(0.7455 0.1948 144.92);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
@@ -72,7 +79,6 @@
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.45rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -84,41 +90,66 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --background: oklch(0.14 0.008 70);
+  --foreground: oklch(0.94 0.018 85);
+  --card: oklch(0.18 0.01 70);
+  --card-foreground: oklch(0.94 0.018 85);
+  --popover: oklch(0.18 0.01 70);
+  --popover-foreground: oklch(0.94 0.018 85);
+  --primary: oklch(0.94 0.018 85);
+  --primary-foreground: oklch(0.18 0.01 70);
+  --secondary: oklch(0.24 0.014 75);
+  --secondary-foreground: oklch(0.94 0.018 85);
+  --muted: oklch(0.2 0.012 70);
+  --muted-foreground: oklch(0.62 0.014 80);
+  --accent: oklch(0.22 0.012 75);
+  --accent-foreground: oklch(0.94 0.018 85);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
+  --positive: oklch(0.7455 0.1948 144.92);
+  --border: oklch(0.94 0.018 85 / 0.1);
+  --input: oklch(0.94 0.018 85 / 0.15);
+  --ring: oklch(0.62 0.014 80);
+  --chart-1: oklch(0.87 0.016 80);
+  --chart-2: oklch(0.62 0.014 80);
+  --chart-3: oklch(0.48 0.012 75);
+  --chart-4: oklch(0.38 0.01 70);
+  --chart-5: oklch(0.28 0.01 70);
+  --sidebar: oklch(0.18 0.01 70);
+  --sidebar-foreground: oklch(0.94 0.018 85);
   --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar-primary-foreground: oklch(0.94 0.018 85);
+  --sidebar-accent: oklch(0.24 0.014 75);
+  --sidebar-accent-foreground: oklch(0.94 0.018 85);
+  --sidebar-border: oklch(0.94 0.018 85 / 0.1);
+  --sidebar-ring: oklch(0.62 0.014 80);
+}
+
+@utility container {
+  max-width: 100%;
+  margin-inline: auto;
+
+  @media (min-width: 1550px) {
+    max-width: 1550px;
+  }
 }
 
 @layer base {
+  ::-webkit-scrollbar {
+    width: 5px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 5px;
+  }
+
   * {
+    scrollbar-color: var(--border) transparent;
+    scrollbar-width: thin;
     @apply border-border outline-ring/50;
   }
 

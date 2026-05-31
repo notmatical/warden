@@ -1,0 +1,21 @@
+/*
+ * Animations
+ * ----------
+ * Central home for keyframes and their animation utilities. Keep all motion
+ * here so it's easy to find, tune, and reuse across the app.
+ */
+
+/* One-shot "pop" for the fast-mode bolt — a quick overshoot on activation. */
+@keyframes zap-pop {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.3);
+  }
+}
+
+@utility zap-pop {
+  animation: zap-pop 0.4s ease-out;
+}
