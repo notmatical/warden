@@ -1,8 +1,9 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react"
-import { AlertTriangle, ChevronRight, Info, Sparkles } from "lucide-react"
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react"
+import { AlertTriangle, Info } from "lucide-react"
 
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { ToolCall } from "@/components/tool-call"
+import { Markdown } from "@/components/ui/markdown"
+import { ToolActivity } from "@/components/tool-activity"
 import { cn } from "@/lib/utils"
 import { formatCost, formatDuration } from "@/lib/format"
 import { useAppStore } from "@/store/app-store"
@@ -11,14 +12,14 @@ import type { EventRecord } from "@/types"
 function UserBubble({ text }: { text: string }) {
   return (
     <div className="flex justify-end">
-      <div className="max-w-[85%] rounded-md bg-primary px-3.5 py-2 text-sm whitespace-pre-wrap text-primary-foreground">
+      <div className="max-w-[85%] rounded-2xl bg-primary px-3.5 py-2 text-sm whitespace-pre-wrap text-primary-foreground">
         {text}
       </div>
     </div>
   )
 }
 
-function AssistantBubble({
+function AssistantMessage({
   text,
   streaming,
 }: {
@@ -26,92 +27,10 @@ function AssistantBubble({
   streaming?: boolean
 }) {
   return (
-    <div className="flex justify-start">
-      <div className="max-w-[85%] rounded-md bg-muted px-3.5 py-2 text-sm whitespace-pre-wrap text-foreground">
-        {text}
-        {streaming && (
-          <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-foreground/60 align-text-bottom" />
-        )}
-      </div>
-    </div>
-  )
-}
-
-function Thinking({ text }: { text: string }) {
-  const [open, setOpen] = useState(false)
-  return (
-    <div className="rounded-sm border border-dashed border-border/70 text-xs">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-muted-foreground"
-        aria-expanded={open}
-      >
-        <Sparkles className="size-3.5" />
-        <span className="italic">Thinking</span>
-        <ChevronRight
-          className={cn(
-            "ml-auto size-3.5 transition-transform",
-            open && "rotate-90"
-          )}
-        />
-      </button>
-      {open && (
-        <p className="border-t border-border/70 px-3 py-2 whitespace-pre-wrap text-muted-foreground italic">
-          {text}
-        </p>
-      )}
-    </div>
-  )
-}
-
-function ToolResult({
-  content,
-  isError,
-}: {
-  content: string
-  isError: boolean
-}) {
-  const [open, setOpen] = useState(isError)
-  return (
-    <div
-      className={cn(
-        "rounded-sm border text-xs",
-        isError
-          ? "border-destructive/40 bg-destructive/10"
-          : "border-border/70 bg-muted/30"
-      )}
-    >
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className={cn(
-          "flex w-full items-center gap-2 px-3 py-1.5 text-left",
-          isError ? "text-destructive" : "text-muted-foreground"
-        )}
-        aria-expanded={open}
-      >
-        <span className="font-medium">
-          {isError ? "Tool error" : "Tool result"}
-        </span>
-        <ChevronRight
-          className={cn(
-            "ml-auto size-3.5 transition-transform",
-            open && "rotate-90"
-          )}
-        />
-      </button>
-      {open && (
-        <pre
-          className={cn(
-            "overflow-x-auto border-t px-3 py-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap",
-            isError
-              ? "border-destructive/40 text-destructive"
-              : "border-border/70 text-muted-foreground"
-          )}
-        >
-          {content}
-        </pre>
+    <div className="text-sm text-foreground">
+      <Markdown>{text}</Markdown>
+      {streaming && (
+        <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-foreground/60 align-text-bottom" />
       )}
     </div>
   )
@@ -119,7 +38,7 @@ function ToolResult({
 
 function Notice({ text }: { text: string }) {
   return (
-    <div className="flex items-center gap-2 rounded-sm bg-muted/50 px-3 py-1.5 text-xs text-muted-foreground">
+    <div className="flex items-center gap-2 rounded-md bg-muted/50 px-3 py-1.5 text-xs text-muted-foreground">
       <Info className="size-3.5 shrink-0" />
       <span>{text}</span>
     </div>
@@ -128,7 +47,7 @@ function Notice({ text }: { text: string }) {
 
 function ErrorRow({ message }: { message: string }) {
   return (
-    <div className="flex items-start gap-2 rounded-sm border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+    <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
       <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
       <span className="whitespace-pre-wrap">{message}</span>
     </div>
@@ -165,7 +84,9 @@ function ResultChip({
   )
 }
 
-function renderEvent(event: EventRecord) {
+const TOOL_TYPES = new Set(["thinking", "tool_use", "tool_result"])
+
+function renderStandalone(event: EventRecord): ReactNode {
   switch (event.type) {
     case "session_init":
       return (
@@ -177,19 +98,7 @@ function renderEvent(event: EventRecord) {
     case "user_message":
       return <UserBubble key={event.id} text={event.text} />
     case "assistant_text":
-      return <AssistantBubble key={event.id} text={event.text} />
-    case "thinking":
-      return <Thinking key={event.id} text={event.text} />
-    case "tool_use":
-      return <ToolCall key={event.id} name={event.name} input={event.input} />
-    case "tool_result":
-      return (
-        <ToolResult
-          key={event.id}
-          content={event.content}
-          isError={event.is_error}
-        />
-      )
+      return <AssistantMessage key={event.id} text={event.text} />
     case "notice":
       return <Notice key={event.id} text={event.text} />
     case "error":
@@ -204,11 +113,38 @@ function renderEvent(event: EventRecord) {
           isError={event.is_error}
         />
       )
-    case "text_delta":
-      return null
     default:
       return null
   }
+}
+
+/** Render the event log, collapsing contiguous tool/thinking events into a
+ *  single `ToolActivity` accordion between assistant/user messages. */
+function renderTimeline(events: EventRecord[]): ReactNode[] {
+  const nodes: ReactNode[] = []
+  let toolRun: EventRecord[] = []
+
+  const flush = () => {
+    if (toolRun.length > 0) {
+      nodes.push(
+        <ToolActivity key={`tools-${toolRun[0].id}`} items={toolRun} />
+      )
+      toolRun = []
+    }
+  }
+
+  for (const event of events) {
+    if (TOOL_TYPES.has(event.type)) {
+      toolRun.push(event)
+      continue
+    }
+    flush()
+    const node = renderStandalone(event)
+    if (node) nodes.push(node)
+  }
+  flush()
+
+  return nodes
 }
 
 export function Transcript({ sessionId }: { sessionId: string }) {
@@ -252,14 +188,14 @@ export function Transcript({ sessionId }: { sessionId: string }) {
       viewportRef={viewportRef}
       onScrollCapture={handleScroll}
     >
-      <div className="flex flex-col gap-3 p-4">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4 pb-32">
         {isEmpty && (
           <p className="py-8 text-center text-sm text-muted-foreground">
             {loading ? "Loading transcript…" : "No messages yet."}
           </p>
         )}
-        {events?.map(renderEvent)}
-        {streaming && <AssistantBubble text={streaming} streaming />}
+        {events && renderTimeline(events)}
+        {streaming && <AssistantMessage text={streaming} streaming />}
       </div>
     </ScrollArea>
   )
