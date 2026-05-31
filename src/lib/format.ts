@@ -58,33 +58,3 @@ export function relativeTime(iso: string): string {
 
   return new Date(iso).toLocaleDateString()
 }
-
-export function shortModel(name: string): string {
-  if (!name) {
-    return "model"
-  }
-
-  const known: Record<string, string> = {
-    "claude-opus-4-8": "Opus 4.8",
-    opus: "Opus",
-    sonnet: "Sonnet",
-    haiku: "Haiku",
-  }
-
-  if (known[name]) {
-    return known[name]
-  }
-
-  const lower = name.toLowerCase()
-  for (const family of ["opus", "sonnet", "haiku"]) {
-    if (lower.includes(family)) {
-      const versionMatch = name.match(/(\d+(?:[-.]\d+)*)/)
-      const label = family.charAt(0).toUpperCase() + family.slice(1)
-      return versionMatch
-        ? `${label} ${versionMatch[1].replace("-", ".")}`
-        : label
-    }
-  }
-
-  return name
-}

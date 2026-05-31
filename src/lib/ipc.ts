@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core"
 
 import type {
-  DiffResult,
+  EffortLevel,
   EventRecord,
   PermissionMode,
   PlanToCodeResult,
@@ -26,16 +26,15 @@ export function getEvents(sessionId: string): Promise<EventRecord[]> {
   return invoke("get_events", { sessionId })
 }
 
-export function getDiff(sessionId: string): Promise<DiffResult> {
-  return invoke("get_diff", { sessionId })
-}
-
 export interface CreateSessionInput {
   workspaceId: string
   title: string
   model: string
   permissionMode: PermissionMode
+  effort?: EffortLevel
   role?: SessionRole
+  /** Run the agent in an isolated git worktree instead of the repo's checkout. */
+  isolate?: boolean
 }
 
 export function createSession(input: CreateSessionInput): Promise<Session> {
@@ -44,8 +43,39 @@ export function createSession(input: CreateSessionInput): Promise<Session> {
     title: input.title,
     model: input.model,
     permissionMode: input.permissionMode,
+    effort: input.effort ?? null,
     role: input.role ?? null,
+    isolate: input.isolate ?? false,
   })
+}
+
+export interface UpdateSessionInput {
+  model?: string
+  permissionMode?: PermissionMode
+  effort?: EffortLevel
+}
+
+export function updateSession(
+  sessionId: string,
+  patch: UpdateSessionInput
+): Promise<Session> {
+  return invoke("update_session", {
+    sessionId,
+    model: patch.model ?? null,
+    permissionMode: patch.permissionMode ?? null,
+    effort: patch.effort ?? null,
+  })
+}
+
+export function renameSession(
+  sessionId: string,
+  title: string
+): Promise<Session> {
+  return invoke("rename_session", { sessionId, title })
+}
+
+export function deleteSession(sessionId: string): Promise<void> {
+  return invoke("delete_session", { sessionId })
 }
 
 export function sendMessage(sessionId: string, text: string): Promise<void> {

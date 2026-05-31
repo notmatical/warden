@@ -6,6 +6,8 @@ export type PermissionMode =
   | "plan"
   | "default"
 
+export type EffortLevel = "low" | "medium" | "high" | "xhigh" | "max"
+
 export type SessionStatus = "idle" | "running" | "error"
 
 export type SessionRole = "chat" | "planner" | "coder"
@@ -25,8 +27,10 @@ export interface Session {
   backend: Backend
   model: string
   permissionMode: PermissionMode
+  effort: EffortLevel
   status: SessionStatus
   role: SessionRole
+  autoNamed: boolean
   agentSessionId: string | null
   workingDir: string
   branch: string | null
@@ -37,20 +41,6 @@ export interface Session {
   parentId: string | null
   createdAt: string
   updatedAt: string
-}
-
-export interface FileChange {
-  path: string
-  additions: number
-  deletions: number
-  binary: boolean
-}
-
-export interface DiffResult {
-  baseSha: string | null
-  unified: string
-  files: FileChange[]
-  truncated: boolean
 }
 
 export interface PlanToCodeResult {

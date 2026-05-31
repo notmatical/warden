@@ -57,7 +57,11 @@ export function PlanToCodeDialog({ disabled }: { disabled?: boolean }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" disabled={disabled}>
+        <Button
+          variant="ghost"
+          disabled={disabled}
+          className="gap-1.5 text-muted-foreground hover:text-foreground"
+        >
           <Workflow />
           Plan → Code
         </Button>

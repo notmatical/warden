@@ -1,26 +1,12 @@
-import { GitBranch, Link2, Square } from "lucide-react"
+import { GitBranch, Link2 } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "@/components/ui/resizable"
 import { Composer } from "@/components/composer"
-import { DiffView } from "@/components/diff-view"
 import { StatusDot } from "@/components/status-dot"
 import { Transcript } from "@/components/transcript"
-import { formatCost, shortModel } from "@/lib/format"
+import { formatCost } from "@/lib/format"
 import { useAppStore } from "@/store/app-store"
-import type { PermissionMode } from "@/types"
-
-const PERMISSION_LABEL: Record<PermissionMode, string> = {
-  acceptEdits: "Accept edits",
-  bypassPermissions: "Bypass",
-  plan: "Plan",
-  default: "Default",
-}
 
 function PartnerLink({ sessionId }: { sessionId: string }) {
   const session = useAppStore((s) => s.sessions[sessionId])
@@ -57,13 +43,10 @@ function PartnerLink({ sessionId }: { sessionId: string }) {
 
 export function SessionView({ sessionId }: { sessionId: string }) {
   const session = useAppStore((s) => s.sessions[sessionId])
-  const cancel = useAppStore((s) => s.cancel)
 
   if (!session) {
     return null
   }
-
-  const running = session.status === "running"
 
   return (
     <div className="flex h-full flex-col">
@@ -84,37 +67,23 @@ export function SessionView({ sessionId }: { sessionId: string }) {
               <span className="max-w-32 truncate">{session.branch}</span>
             </span>
           )}
-          <span>{shortModel(session.model)}</span>
-          <span>{PERMISSION_LABEL[session.permissionMode]}</span>
           <span>{session.turns} turns</span>
           <span>{formatCost(session.costUsd)}</span>
           <PartnerLink sessionId={sessionId} />
-          {running && (
-            <Button
-              variant="destructive"
-              size="xs"
-              onClick={() => void cancel(sessionId)}
-            >
-              <Square />
-              Cancel
-            </Button>
-          )}
         </div>
       </header>
 
-      <div className="min-h-0 flex-1">
-        <ResizablePanelGroup orientation="horizontal">
-          <ResizablePanel defaultSize={55} minSize={30}>
-            <Transcript sessionId={sessionId} />
-          </ResizablePanel>
-          <ResizableHandle withHandle />
-          <ResizablePanel defaultSize={45} minSize={25}>
-            <DiffView sessionId={sessionId} />
-          </ResizablePanel>
-        </ResizablePanelGroup>
+      {/* Chat region: the transcript fills the space and scrolls *under* the
+          floating composer, which fades in over a gradient (no hard footer). */}
+      <div className="relative min-h-0 flex-1">
+        <Transcript sessionId={sessionId} />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0">
+          <div className="h-12 bg-gradient-to-t from-background to-transparent" />
+          <div className="pointer-events-auto bg-background">
+            <Composer sessionId={sessionId} />
+          </div>
+        </div>
       </div>
-
-      <Composer sessionId={sessionId} />
     </div>
   )
 }

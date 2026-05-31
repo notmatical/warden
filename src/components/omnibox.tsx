@@ -1,8 +1,7 @@
 import { useState, type KeyboardEvent } from "react"
-import { Plus } from "lucide-react"
+import { GitBranch, Plus, Sparkles } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import {
   Select,
   SelectContent,
@@ -12,6 +11,7 @@ import {
 } from "@/components/ui/select"
 import { PlanToCodeDialog } from "@/components/plan-to-code-dialog"
 import { DEFAULT_CHAT_MODEL, MODELS } from "@/lib/models"
+import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store/app-store"
 
 function deriveTitle(text: string): string {
@@ -29,6 +29,7 @@ export function Omnibox() {
 
   const [value, setValue] = useState("")
   const [model, setModel] = useState(DEFAULT_CHAT_MODEL)
+  const [isolate, setIsolate] = useState(false)
   const [creating, setCreating] = useState(false)
 
   const disabled = !activeWorkspaceId
@@ -42,8 +43,9 @@ export function Omnibox() {
       const session = await createSession({
         title: deriveTitle(text),
         model,
-        permissionMode: "default",
+        permissionMode: "bypassPermissions",
         role: "chat",
+        isolate,
         firstMessage: text || undefined,
       })
       if (session) {
@@ -62,35 +64,74 @@ export function Omnibox() {
   }
 
   return (
-    <div className="flex flex-1 items-center gap-2">
-      <Input
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={handleKeyDown}
-        disabled={disabled}
-        placeholder={
-          disabled
-            ? "Open a workspace to start a session"
-            : "Start a session… describe the first task"
-        }
-        className="flex-1"
-      />
-      <Select value={model} onValueChange={setModel} disabled={disabled}>
-        <SelectTrigger className="w-32">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {MODELS.map((m) => (
-            <SelectItem key={m.id} value={m.id}>
-              {m.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Button onClick={() => void create()} disabled={!canCreate}>
-        <Plus />
-        New session
-      </Button>
+    <div className="flex items-center gap-2">
+      <div
+        className={cn(
+          "flex h-9 flex-1 items-center gap-1 rounded-lg border border-border/60 bg-card/40 pr-1 pl-3 transition-colors",
+          "focus-within:border-border focus-within:bg-card/70",
+          disabled && "opacity-60"
+        )}
+      >
+        <Sparkles className="size-4 shrink-0 text-muted-foreground" />
+        <input
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+          disabled={disabled}
+          placeholder={
+            disabled
+              ? "Open a workspace to start a session"
+              : "Start a session — describe the first task"
+          }
+          className="h-full min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60 disabled:cursor-not-allowed"
+        />
+
+        <div className="mx-0.5 h-5 w-px shrink-0 bg-border/60" />
+
+        <Select value={model} onValueChange={setModel} disabled={disabled}>
+          <SelectTrigger
+            size="sm"
+            className="h-7 w-auto gap-1 border-0 bg-transparent px-2 text-xs text-muted-foreground shadow-none hover:text-foreground focus-visible:ring-0 data-[state=open]:bg-accent dark:bg-transparent dark:hover:bg-transparent"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent align="end">
+            {MODELS.map((m) => (
+              <SelectItem key={m.id} value={m.id}>
+                {m.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => setIsolate((v) => !v)}
+          disabled={disabled}
+          aria-pressed={isolate}
+          title={
+            isolate
+              ? "Isolating in a git worktree"
+              : "Running in the repo checkout — click to isolate in a worktree"
+          }
+          className={cn(isolate ? "text-primary" : "text-muted-foreground")}
+        >
+          <GitBranch />
+        </Button>
+
+        <Button
+          size="sm"
+          className="h-7 gap-1.5"
+          onClick={() => void create()}
+          disabled={!canCreate}
+        >
+          <Plus className="size-3.5" />
+          New session
+        </Button>
+      </div>
+
       <PlanToCodeDialog disabled={disabled} />
     </div>
   )

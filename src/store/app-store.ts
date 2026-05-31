@@ -5,6 +5,7 @@ import * as ipc from "@/lib/ipc"
 import { onAgentDelta, onAgentEvent, onSessionUpdated } from "@/lib/events"
 import type {
   DeltaPayload,
+  EffortLevel,
   EventRecord,
   PermissionMode,
   Session,
@@ -24,8 +25,16 @@ export interface CreateSessionOptions {
   title: string
   model: string
   permissionMode: PermissionMode
+  effort?: EffortLevel
   role?: SessionRole
+  isolate?: boolean
   firstMessage?: string
+}
+
+export interface SessionSettingsPatch {
+  model?: string
+  permissionMode?: PermissionMode
+  effort?: EffortLevel
 }
 
 export interface RunPlanToCodeOptions {
@@ -53,6 +62,12 @@ interface AppState {
   selectWorkspace: (id: string) => Promise<void>
   loadSessions: (workspaceId: string) => Promise<void>
   createSession: (opts: CreateSessionOptions) => Promise<Session | null>
+  updateSession: (sessionId: string, patch: SessionSettingsPatch) => Promise<void>
+  renameSession: (sessionId: string, title: string) => Promise<void>
+  deleteSessions: (sessionIds: string[]) => Promise<void>
+  deleteSession: (sessionId: string) => Promise<void>
+  deleteOthers: (sessionId: string) => Promise<void>
+  deleteToRight: (sessionId: string) => Promise<void>
   selectSession: (id: string) => void
   closeTab: (id: string) => void
   sendMessage: (sessionId: string, text: string) => Promise<void>
@@ -186,7 +201,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         title: opts.title,
         model: opts.model,
         permissionMode: opts.permissionMode,
+        effort: opts.effort,
         role: opts.role,
+        isolate: opts.isolate,
       })
       set((state) => ({
         sessions: { ...state.sessions, [session.id]: session },
@@ -203,6 +220,27 @@ export const useAppStore = create<AppState>((set, get) => ({
     } catch (error) {
       reportError("Failed to create session", error)
       return null
+    }
+  },
+
+  updateSession: async (sessionId, patch) => {
+    const current = get().sessions[sessionId]
+    if (!current) return
+    // Optimistically apply so the controls feel instant; the backend emits the
+    // authoritative session-updated event which reconciles.
+    set((state) => ({
+      sessions: {
+        ...state.sessions,
+        [sessionId]: { ...current, ...patch },
+      },
+    }))
+    try {
+      await ipc.updateSession(sessionId, patch)
+    } catch (error) {
+      set((state) => ({
+        sessions: { ...state.sessions, [sessionId]: current },
+      }))
+      reportError("Failed to update session", error)
     }
   },
 
@@ -227,6 +265,83 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
       return { sessionOrder: order, activeSessionId }
     })
+  },
+
+  renameSession: async (sessionId, title) => {
+    const trimmed = title.trim()
+    const current = get().sessions[sessionId]
+    if (!current || !trimmed || trimmed === current.title) return
+    set((state) => ({
+      sessions: {
+        ...state.sessions,
+        [sessionId]: { ...current, title: trimmed },
+      },
+    }))
+    try {
+      await ipc.renameSession(sessionId, trimmed)
+    } catch (error) {
+      set((state) => ({
+        sessions: { ...state.sessions, [sessionId]: current },
+      }))
+      reportError("Failed to rename session", error)
+    }
+  },
+
+  deleteSessions: async (sessionIds) => {
+    const deleted = new Set<string>()
+    for (const id of sessionIds) {
+      try {
+        await ipc.deleteSession(id)
+        deleted.add(id)
+      } catch (error) {
+        reportError("Failed to delete session", error)
+      }
+    }
+    if (deleted.size === 0) return
+
+    set((state) => {
+      const order = state.sessionOrder.filter((sid) => !deleted.has(sid))
+
+      let activeSessionId = state.activeSessionId
+      if (activeSessionId && deleted.has(activeSessionId)) {
+        const idx = state.sessionOrder.indexOf(activeSessionId)
+        const surviving = (start: number, step: number) => {
+          for (let i = start; i >= 0 && i < state.sessionOrder.length; i += step) {
+            const sid = state.sessionOrder[i]
+            if (!deleted.has(sid)) return sid
+          }
+          return null
+        }
+        activeSessionId = surviving(idx + 1, 1) ?? surviving(idx - 1, -1)
+      }
+
+      const omit = <T,>(record: Record<string, T>): Record<string, T> =>
+        Object.fromEntries(
+          Object.entries(record).filter(([sid]) => !deleted.has(sid))
+        )
+
+      return {
+        sessionOrder: order,
+        activeSessionId,
+        sessions: omit(state.sessions),
+        eventsBySession: omit(state.eventsBySession),
+        streamingBySession: omit(state.streamingBySession),
+        loadingEventsBySession: omit(state.loadingEventsBySession),
+      }
+    })
+  },
+
+  deleteSession: (sessionId) => get().deleteSessions([sessionId]),
+
+  deleteOthers: (sessionId) =>
+    get().deleteSessions(
+      get().sessionOrder.filter((sid) => sid !== sessionId)
+    ),
+
+  deleteToRight: (sessionId) => {
+    const order = get().sessionOrder
+    const idx = order.indexOf(sessionId)
+    return get().deleteSessions(idx >= 0 ? order.slice(idx + 1) : [])
   },
 
   sendMessage: async (sessionId, text) => {

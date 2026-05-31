@@ -1,4 +1,4 @@
-import { Check, ChevronDown, FolderOpen, Shield } from "lucide-react"
+import { Check, ChevronDown, FolderOpen } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -23,10 +23,15 @@ function WorkspaceSwitcher() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" className="max-w-52">
-          <FolderOpen />
-          <span className="truncate">{active ? active.name : "Workspace"}</span>
-          <ChevronDown className="text-muted-foreground" />
+        <Button
+          variant="ghost"
+          className="h-8 max-w-56 gap-1.5 px-2 font-normal text-muted-foreground hover:text-foreground"
+        >
+          <FolderOpen className="size-4" />
+          <span className="truncate">
+            {active ? active.name : "Open workspace"}
+          </span>
+          <ChevronDown className="size-3.5 opacity-60" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-64">
@@ -63,13 +68,14 @@ function WorkspaceSwitcher() {
 
 export function Topbar() {
   return (
-    <header className="flex items-center gap-3 border-b border-border px-3 py-2">
-      <div className="flex shrink-0 items-center gap-2 pr-1 font-semibold">
-        <Shield className="size-4 text-primary" />
-        <span>Warden</span>
-      </div>
+    <header
+      data-tauri-drag-region
+      className="flex h-14 shrink-0 items-center gap-3 border-b border-border/60 px-4"
+    >
       <WorkspaceSwitcher />
-      <Omnibox />
+      <div className="ml-1 flex-1">
+        <Omnibox />
+      </div>
     </header>
   )
 }
