@@ -1,6 +1,8 @@
 import { useEffect } from "react"
 
+import { cycleMode } from "@/components/controls/mode-menu"
 import { EmptyState } from "@/components/empty-state"
+import { useKeybinding } from "@/components/keybinding-provider"
 import { SessionTabs } from "@/components/session-tabs"
 import { SessionView } from "@/components/session-view"
 import { Topbar } from "@/components/topbar"
@@ -15,6 +17,23 @@ export function AppShell() {
   useEffect(() => {
     void init()
   }, [init])
+
+  // Shift+Tab cycles the active session's mode (Plan → Accept edits → Bypass).
+  useKeybinding({
+    id: "cycle-execution-mode",
+    combo: { key: "Tab", shift: true },
+    allowInInput: true,
+    description: "Cycle execution mode",
+    handler: () => {
+      const { activeSessionId: id, sessions, updateSession } =
+        useAppStore.getState()
+      const session = id ? sessions[id] : undefined
+      if (!session) return
+      void updateSession(session.id, {
+        permissionMode: cycleMode(session.permissionMode),
+      })
+    },
+  })
 
   return (
     <TooltipProvider>
