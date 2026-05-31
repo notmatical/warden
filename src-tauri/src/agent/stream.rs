@@ -1,0 +1,203 @@
+//! Parser for a single line of `claude --output-format stream-json`. Each line
+//! is one JSON object; we translate the backend-specific shapes into the
+//! normalized `AgentEvent` enum the rest of warden speaks.
+
+use serde_json::Value;
+
+use crate::domain::AgentEvent;
+
+/// Tool-result content larger than this is clipped to keep the event log and
+/// the IPC payload bounded.
+const MAX_TOOL_RESULT_CHARS: usize = 16_000;
+const TRUNCATION_NOTE: &str = "… (truncated)";
+
+/// The outcome of parsing one stream-json line: the normalized events it
+/// produced (possibly none) plus any cost reported by a `result` line.
+pub struct ParsedLine {
+    pub events: Vec<AgentEvent>,
+    pub cost_usd: Option<f64>,
+}
+
+impl ParsedLine {
+    fn events(events: Vec<AgentEvent>) -> Self {
+        Self {
+            events,
+            cost_usd: None,
+        }
+    }
+
+    fn empty() -> Self {
+        Self {
+            events: Vec::new(),
+            cost_usd: None,
+        }
+    }
+}
+
+/// Parse one line of stream-json. Returns `None` for blank lines or lines that
+/// aren't JSON; unknown-but-valid shapes yield an empty `ParsedLine`. Never
+/// panics — the agent stream is untrusted input.
+pub fn parse_line(line: &str) -> Option<ParsedLine> {
+    let line = line.trim();
+    if line.is_empty() {
+        return None;
+    }
+    let value: Value = serde_json::from_str(line).ok()?;
+
+    match value.get("type").and_then(Value::as_str) {
+        Some("system") => Some(parse_system(&value)),
+        Some("assistant") => Some(ParsedLine::events(parse_content_blocks(&value, parse_assistant_block))),
+        Some("user") => Some(ParsedLine::events(parse_content_blocks(&value, parse_user_block))),
+        Some("stream_event") => Some(parse_stream_event(&value)),
+        Some("result") => Some(parse_result(&value)),
+        _ => Some(ParsedLine::empty()),
+    }
+}
+
+fn parse_system(value: &Value) -> ParsedLine {
+    if value.get("subtype").and_then(Value::as_str) != Some("init") {
+        return ParsedLine::empty();
+    }
+    let model = value
+        .get("model")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    let tools = value
+        .get("tools")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|t| t.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+    ParsedLine::events(vec![AgentEvent::SessionInit { model, tools }])
+}
+
+/// Iterate `/message/content[]` and map each block via `f`, dropping `None`s.
+fn parse_content_blocks(
+    value: &Value,
+    f: impl Fn(&Value) -> Option<AgentEvent>,
+) -> Vec<AgentEvent> {
+    value
+        .get("message")
+        .and_then(|m| m.get("content"))
+        .and_then(Value::as_array)
+        .map(|blocks| blocks.iter().filter_map(&f).collect())
+        .unwrap_or_default()
+}
+
+fn parse_assistant_block(block: &Value) -> Option<AgentEvent> {
+    match block.get("type").and_then(Value::as_str)? {
+        "text" => {
+            let text = block.get("text").and_then(Value::as_str)?;
+            if text.is_empty() {
+                return None;
+            }
+            Some(AgentEvent::AssistantText {
+                text: text.to_string(),
+            })
+        }
+        "thinking" => {
+            let text = block.get("thinking").and_then(Value::as_str)?;
+            Some(AgentEvent::Thinking {
+                text: text.to_string(),
+            })
+        }
+        "tool_use" => Some(AgentEvent::ToolUse {
+            id: block
+                .get("id")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string(),
+            name: block
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string(),
+            input: block.get("input").cloned().unwrap_or(Value::Null),
+        }),
+        _ => None,
+    }
+}
+
+fn parse_user_block(block: &Value) -> Option<AgentEvent> {
+    if block.get("type").and_then(Value::as_str)? != "tool_result" {
+        return None;
+    }
+    let content = block.get("content").map(stringify_content).unwrap_or_default();
+    Some(AgentEvent::ToolResult {
+        tool_use_id: block
+            .get("tool_use_id")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string(),
+        content: clip(content),
+        is_error: block
+            .get("is_error")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+    })
+}
+
+/// Tool-result content may be a bare string or an array of `{type:"text",text}`
+/// blocks; collapse either into a single string.
+fn stringify_content(content: &Value) -> String {
+    match content {
+        Value::String(s) => s.clone(),
+        Value::Array(blocks) => blocks
+            .iter()
+            .filter_map(|b| b.get("text").and_then(Value::as_str))
+            .collect::<Vec<_>>()
+            .join("\n"),
+        other => other.to_string(),
+    }
+}
+
+fn clip(mut s: String) -> String {
+    if s.chars().count() > MAX_TOOL_RESULT_CHARS {
+        let cutoff = s
+            .char_indices()
+            .nth(MAX_TOOL_RESULT_CHARS)
+            .map(|(i, _)| i)
+            .unwrap_or(s.len());
+        s.truncate(cutoff);
+        s.push_str(TRUNCATION_NOTE);
+    }
+    s
+}
+
+fn parse_stream_event(value: &Value) -> ParsedLine {
+    let event = value.get("event");
+    let is_delta = event
+        .and_then(|e| e.get("type"))
+        .and_then(Value::as_str)
+        == Some("content_block_delta");
+    let delta = event.and_then(|e| e.get("delta"));
+    let is_text = delta.and_then(|d| d.get("type")).and_then(Value::as_str) == Some("text_delta");
+    if is_delta && is_text {
+        if let Some(text) = delta.and_then(|d| d.get("text")).and_then(Value::as_str) {
+            return ParsedLine::events(vec![AgentEvent::TextDelta {
+                text: text.to_string(),
+            }]);
+        }
+    }
+    ParsedLine::empty()
+}
+
+fn parse_result(value: &Value) -> ParsedLine {
+    let cost_usd = value.get("total_cost_usd").and_then(Value::as_f64);
+    let event = AgentEvent::Result {
+        is_error: value
+            .get("is_error")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        cost_usd,
+        duration_ms: value.get("duration_ms").and_then(Value::as_u64),
+        num_turns: value.get("num_turns").and_then(Value::as_u64),
+    };
+    ParsedLine {
+        events: vec![event],
+        cost_usd,
+    }
+}
