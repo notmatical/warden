@@ -1,37 +1,29 @@
-import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from "react"
 import { AlertTriangle, Info } from "lucide-react"
 
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Markdown } from "@/components/ui/markdown"
+import { StreamingStatus } from "@/components/streaming-status"
 import { ToolActivity } from "@/components/tool-activity"
 import { cn } from "@/lib/utils"
-import { formatCost, formatDuration } from "@/lib/format"
+import { formatDuration } from "@/lib/format"
 import { useAppStore } from "@/store/app-store"
 import type { EventRecord } from "@/types"
 
 function UserBubble({ text }: { text: string }) {
   return (
     <div className="flex justify-end">
-      <div className="max-w-[85%] rounded-2xl bg-primary px-3.5 py-2 text-sm whitespace-pre-wrap text-primary-foreground">
+      <div className="max-w-[85%] rounded-2xl bg-secondary px-3.5 py-2 text-sm whitespace-pre-wrap text-secondary-foreground">
         {text}
       </div>
     </div>
   )
 }
 
-function AssistantMessage({
-  text,
-  streaming,
-}: {
-  text: string
-  streaming?: boolean
-}) {
+function AssistantMessage({ text }: { text: string }) {
   return (
     <div className="text-sm text-foreground">
       <Markdown>{text}</Markdown>
-      {streaming && (
-        <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-foreground/60 align-text-bottom" />
-      )}
     </div>
   )
 }
@@ -54,32 +46,26 @@ function ErrorRow({ message }: { message: string }) {
   )
 }
 
-function ResultChip({
-  cost,
+function TurnMeta({
   duration,
-  turns,
   isError,
 }: {
-  cost: number | null
   duration: number | null
-  turns: number | null
   isError: boolean
 }) {
+  const text = duration !== null ? formatDuration(duration) : ""
+
+  // On success, stay silent unless there's something worth showing.
+  if (!isError && !text) return null
+
   return (
-    <div className="flex justify-center">
-      <div
-        className={cn(
-          "flex items-center gap-3 rounded-full border px-3 py-1 text-[11px]",
-          isError
-            ? "border-destructive/40 text-destructive"
-            : "border-border/70 text-muted-foreground"
-        )}
-      >
-        <span>{isError ? "Turn failed" : "Turn complete"}</span>
-        {cost !== null && <span>{formatCost(cost)}</span>}
-        {duration !== null && <span>{formatDuration(duration)}</span>}
-        {turns !== null && <span>{turns} turns</span>}
-      </div>
+    <div
+      className={cn(
+        "text-[11px] text-muted-foreground/50",
+        isError && "text-destructive/80"
+      )}
+    >
+      {isError ? (text ? `Turn failed · ${text}` : "Turn failed") : text}
     </div>
   )
 }
@@ -89,12 +75,8 @@ const TOOL_TYPES = new Set(["thinking", "tool_use", "tool_result"])
 function renderStandalone(event: EventRecord): ReactNode {
   switch (event.type) {
     case "session_init":
-      return (
-        <Notice
-          key={event.id}
-          text={`Session initialized${event.model ? ` · ${event.model}` : ""}`}
-        />
-      )
+      // Internal metadata — not shown in the transcript.
+      return null
     case "user_message":
       return <UserBubble key={event.id} text={event.text} />
     case "assistant_text":
@@ -105,11 +87,9 @@ function renderStandalone(event: EventRecord): ReactNode {
       return <ErrorRow key={event.id} message={event.message} />
     case "result":
       return (
-        <ResultChip
+        <TurnMeta
           key={event.id}
-          cost={event.cost_usd}
           duration={event.duration_ms}
-          turns={event.num_turns}
           isError={event.is_error}
         />
       )
@@ -151,6 +131,13 @@ export function Transcript({ sessionId }: { sessionId: string }) {
   const events = useAppStore((s) => s.eventsBySession[sessionId])
   const streaming = useAppStore((s) => s.streamingBySession[sessionId])
   const loading = useAppStore((s) => s.loadingEventsBySession[sessionId])
+
+  // Memoized so streaming deltas (which only touch `streaming`) don't re-walk
+  // the whole event log every tick.
+  const timeline = useMemo(
+    () => (events ? renderTimeline(events) : null),
+    [events]
+  )
 
   const viewportRef = useRef<HTMLDivElement>(null)
   const pinnedRef = useRef(true)
@@ -194,8 +181,9 @@ export function Transcript({ sessionId }: { sessionId: string }) {
             {loading ? "Loading transcript…" : "No messages yet."}
           </p>
         )}
-        {events && renderTimeline(events)}
-        {streaming && <AssistantMessage text={streaming} streaming />}
+        {timeline}
+        {streaming && <AssistantMessage text={streaming} />}
+        <StreamingStatus sessionId={sessionId} />
       </div>
     </ScrollArea>
   )

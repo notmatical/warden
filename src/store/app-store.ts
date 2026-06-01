@@ -51,6 +51,8 @@ interface AppState {
   activeSessionId: string | null
   eventsBySession: Record<string, EventRecord[]>
   streamingBySession: Record<string, string>
+  /** Wall-clock start of the in-flight turn, for the live elapsed timer. */
+  startedAtBySession: Record<string, number>
 
   initialized: boolean
   loadingWorkspaces: boolean
@@ -90,6 +92,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeSessionId: null,
   eventsBySession: {},
   streamingBySession: {},
+  startedAtBySession: {},
 
   initialized: false,
   loadingWorkspaces: false,
@@ -326,6 +329,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         sessions: omit(state.sessions),
         eventsBySession: omit(state.eventsBySession),
         streamingBySession: omit(state.streamingBySession),
+        startedAtBySession: omit(state.startedAtBySession),
         loadingEventsBySession: omit(state.loadingEventsBySession),
       }
     })
@@ -476,8 +480,20 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   onSessionUpdated: (session) => {
-    set((state) => ({
-      sessions: { ...state.sessions, [session.id]: session },
-    }))
+    set((state) => {
+      const wasRunning = state.sessions[session.id]?.status === "running"
+      const isRunning = session.status === "running"
+      let startedAtBySession = state.startedAtBySession
+      if (isRunning && !wasRunning) {
+        startedAtBySession = { ...startedAtBySession, [session.id]: Date.now() }
+      } else if (!isRunning && wasRunning) {
+        startedAtBySession = { ...startedAtBySession }
+        delete startedAtBySession[session.id]
+      }
+      return {
+        sessions: { ...state.sessions, [session.id]: session },
+        startedAtBySession,
+      }
+    })
   },
 }))
