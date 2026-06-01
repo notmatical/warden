@@ -1,6 +1,7 @@
 //! Data sources for composer mentions: `@` files, `/` commands, and `#` GitHub
 //! issue/PR references.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -92,22 +93,30 @@ fn walk_files(working_dir: &str, max: usize) -> Vec<FileEntry> {
     out
 }
 
-/// List custom slash commands from `.claude/commands` (project, then user).
+/// List `/`-invocable items: custom commands from `.claude/commands` and skills
+/// from `.claude/skills`, both project- and user-level. Names are deduped, with
+/// project entries winning over user entries.
 #[tauri::command]
 pub async fn list_commands(app: AppHandle, working_dir: String) -> Result<Vec<SlashCommand>> {
+    let project = Path::new(&working_dir).join(".claude");
+    let home_claude = app.path().home_dir().ok().map(|h| h.join(".claude"));
+
     let mut out = Vec::new();
-    collect_commands(
-        Path::new(&working_dir).join(".claude").join("commands"),
-        "project",
-        &mut out,
-    );
-    if let Ok(home) = app.path().home_dir() {
-        collect_commands(home.join(".claude").join("commands"), "user", &mut out);
+    let mut seen = HashSet::new();
+
+    collect_commands(project.join("commands"), "project", &mut out, &mut seen);
+    if let Some(claude) = &home_claude {
+        collect_commands(claude.join("commands"), "user", &mut out, &mut seen);
     }
+    collect_skills(project.join("skills"), &mut out, &mut seen);
+    if let Some(claude) = &home_claude {
+        collect_skills(claude.join("skills"), &mut out, &mut seen);
+    }
+
     Ok(out)
 }
 
-fn collect_commands(dir: PathBuf, scope: &str, out: &mut Vec<SlashCommand>) {
+fn collect_commands(dir: PathBuf, scope: &str, out: &mut Vec<SlashCommand>, seen: &mut HashSet<String>) {
     let Ok(entries) = std::fs::read_dir(&dir) else {
         return;
     };
@@ -119,10 +128,38 @@ fn collect_commands(dir: PathBuf, scope: &str, out: &mut Vec<SlashCommand>) {
         let Some(name) = path.file_stem().and_then(|s| s.to_str()) else {
             continue;
         };
+        if !seen.insert(name.to_string()) {
+            continue;
+        }
         out.push(SlashCommand {
             name: name.to_string(),
             description: command_description(&path),
             scope: scope.to_string(),
+        });
+    }
+}
+
+/// Skills are subdirectories containing a `SKILL.md`.
+fn collect_skills(dir: PathBuf, out: &mut Vec<SlashCommand>, seen: &mut HashSet<String>) {
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let skill_md = path.join("SKILL.md");
+        if !path.is_dir() || !skill_md.exists() {
+            continue;
+        }
+        let Some(name) = path.file_name().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        if !seen.insert(name.to_string()) {
+            continue;
+        }
+        out.push(SlashCommand {
+            name: name.to_string(),
+            description: skill_description(&skill_md),
+            scope: "skill".to_string(),
         });
     }
 }
@@ -135,6 +172,31 @@ fn command_description(path: &Path) -> Option<String> {
         .map(str::trim)
         .find(|line| !line.is_empty() && *line != "---" && !line.starts_with('#'))
         .map(|line| line.to_string())
+}
+
+/// The `description:` field from a SKILL.md YAML frontmatter, clipped for display.
+fn skill_description(skill_md: &Path) -> Option<String> {
+    let content = std::fs::read_to_string(skill_md).ok()?;
+    let mut in_frontmatter = false;
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed == "---" {
+            if in_frontmatter {
+                break;
+            }
+            in_frontmatter = true;
+            continue;
+        }
+        if in_frontmatter {
+            if let Some(rest) = trimmed.strip_prefix("description:") {
+                let value = rest.trim().trim_matches(['"', '\'']).trim();
+                if !value.is_empty() {
+                    return Some(value.chars().take(120).collect());
+                }
+            }
+        }
+    }
+    None
 }
 
 /// List open issues and PRs for the repo via the `gh` CLI. Returns an empty
