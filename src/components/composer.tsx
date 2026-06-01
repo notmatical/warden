@@ -10,11 +10,15 @@ import { Button } from "@/components/ui/button"
 import { EffortMenu } from "@/components/controls/effort-menu"
 import { ModeMenu } from "@/components/controls/mode-menu"
 import { ModelMenu } from "@/components/controls/model-menu"
+import { MentionHighlight } from "@/components/mention-highlight"
 import { MentionPopover } from "@/components/mention-popover"
 import { useMentions } from "@/hooks/use-mentions"
+import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store/app-store"
 
 const MAX_TEXTAREA_HEIGHT = 200
+// Shared typography/padding so the highlight backdrop lines up with the textarea.
+const INPUT_BOX = "py-3 pr-1 pl-3.5 text-sm leading-5"
 
 export function Composer({ sessionId }: { sessionId: string }) {
   const session = useAppStore((s) => s.sessions[sessionId])
@@ -31,6 +35,7 @@ export function Composer({ sessionId }: { sessionId: string }) {
     onOpenChange: (open: boolean) => setOpenMenu(open ? id : null),
   })
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const backdropRef = useRef<HTMLDivElement>(null)
 
   const mentions = useMentions({
     value,
@@ -85,26 +90,48 @@ export function Composer({ sessionId }: { sessionId: string }) {
               className="absolute bottom-full left-0 z-20 mb-2 w-full max-w-md"
             />
           )}
-          <textarea
-            ref={textareaRef}
-            value={value}
-            onChange={(e) => {
-              setValue(e.target.value)
-              mentions.handleInput(e.target.value, e.target.selectionStart ?? 0)
-            }}
-            onKeyDown={(e) => {
-              if (mentions.handleKeyDown(e)) return
-              handleKeyDown(e)
-            }}
-            disabled={running}
-            rows={1}
-            placeholder={
-              running
-                ? "Agent is working…"
-                : "Message the agent…  (Enter to send)"
-            }
-            className="block max-h-[200px] min-w-0 flex-1 resize-none bg-transparent py-3 pr-1 pl-3.5 text-sm outline-none placeholder:text-muted-foreground/60 disabled:opacity-60"
-          />
+          {/* Highlight backdrop + transparent textarea: mention tokens are
+              colored on the backdrop and show through the textarea. */}
+          <div className="relative min-w-0 flex-1">
+            <div
+              ref={backdropRef}
+              aria-hidden
+              className={cn(
+                "pointer-events-none absolute inset-0 overflow-hidden break-words whitespace-pre-wrap text-foreground",
+                INPUT_BOX
+              )}
+            >
+              <MentionHighlight value={value} />
+            </div>
+            <textarea
+              ref={textareaRef}
+              value={value}
+              onChange={(e) => {
+                setValue(e.target.value)
+                mentions.handleInput(e.target.value, e.target.selectionStart ?? 0)
+              }}
+              onKeyDown={(e) => {
+                if (mentions.handleKeyDown(e)) return
+                handleKeyDown(e)
+              }}
+              onScroll={(e) => {
+                if (backdropRef.current) {
+                  backdropRef.current.scrollTop = e.currentTarget.scrollTop
+                }
+              }}
+              disabled={running}
+              rows={1}
+              placeholder={
+                running
+                  ? "Agent is working…"
+                  : "Message the agent…  (Enter to send)"
+              }
+              className={cn(
+                "relative block max-h-[200px] w-full resize-none bg-transparent text-transparent caret-foreground outline-none placeholder:text-muted-foreground/60 disabled:opacity-60",
+                INPUT_BOX
+              )}
+            />
+          </div>
           {running ? (
             <Button
               size="icon-sm"
