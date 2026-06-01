@@ -43,8 +43,27 @@ export interface Project {
   createdAt: string
 }
 
+/** A pane layout saved on a group. `panes` maps each grid cell to a session id
+ *  (or null when empty); its length matches the mode's cell count. */
+export type LayoutMode = "single" | "split-2" | "grid-4"
+
+export interface Layout {
+  mode: LayoutMode
+  panes: (string | null)[]
+}
+
+/** The top-level workspace: named set of repo roots + a saved pane layout. */
+export interface Group {
+  id: string
+  name: string
+  /** Serialized {@link Layout}; parse with `parseLayout`. */
+  layout: string
+  createdAt: string
+}
+
 export interface Session {
   id: string
+  groupId: string
   projectId: string
   title: string
   backend: Backend

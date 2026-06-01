@@ -4,6 +4,7 @@ import type {
   EffortLevel,
   EventRecord,
   FileEntry,
+  Group,
   PermissionMode,
   PlanToCodeResult,
   RepoRef,
@@ -27,12 +28,66 @@ export function listSessions(projectId: string): Promise<Session[]> {
   return invoke("list_sessions", { projectId })
 }
 
+// ----- groups --------------------------------------------------------------
+
+export function listGroups(): Promise<Group[]> {
+  return invoke("list_groups")
+}
+
+export function createGroup(name: string): Promise<Group> {
+  return invoke("create_group", { name })
+}
+
+export function renameGroup(groupId: string, name: string): Promise<Group> {
+  return invoke("rename_group", { groupId, name })
+}
+
+export function deleteGroup(groupId: string): Promise<void> {
+  return invoke("delete_group", { groupId })
+}
+
+export function setGroupLayout(groupId: string, layout: string): Promise<void> {
+  return invoke("set_group_layout", { groupId, layout })
+}
+
+export function listGroupRoots(groupId: string): Promise<Project[]> {
+  return invoke("list_group_roots", { groupId })
+}
+
+export function listGroupSessions(groupId: string): Promise<Session[]> {
+  return invoke("list_group_sessions", { groupId })
+}
+
+export function addGroupRoot(groupId: string, path: string): Promise<Project> {
+  return invoke("add_group_root", { groupId, path })
+}
+
+export function removeGroupRoot(
+  groupId: string,
+  projectId: string
+): Promise<void> {
+  return invoke("remove_group_root", { groupId, projectId })
+}
+
+export function listSessionRoots(sessionId: string): Promise<Project[]> {
+  return invoke("list_session_roots", { sessionId })
+}
+
+export function setSessionRoots(
+  sessionId: string,
+  projectIds: string[]
+): Promise<Project[]> {
+  return invoke("set_session_roots", { sessionId, projectIds })
+}
+
 export function getEvents(sessionId: string): Promise<EventRecord[]> {
   return invoke("get_events", { sessionId })
 }
 
 export interface CreateSessionInput {
   projectId: string
+  /** Group to create the session in. Omitted → backend resolves/creates one. */
+  groupId?: string
   title: string
   model: string
   permissionMode: PermissionMode
@@ -46,6 +101,7 @@ export interface CreateSessionInput {
 export function createSession(input: CreateSessionInput): Promise<Session> {
   return invoke("create_session", {
     projectId: input.projectId,
+    groupId: input.groupId ?? null,
     title: input.title,
     model: input.model,
     permissionMode: input.permissionMode,
