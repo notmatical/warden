@@ -1,4 +1,5 @@
 import { Composer } from "@/components/composer"
+import { TerminalView } from "@/components/terminal-view"
 import { Transcript } from "@/components/transcript"
 import { useAppStore } from "@/store/app-store"
 
@@ -7,6 +8,11 @@ export function SessionView({ sessionId }: { sessionId: string }) {
 
   if (!session) {
     return null
+  }
+
+  // Terminal sessions run the native claude TUI in a PTY — no transcript/composer.
+  if (session.kind === "terminal") {
+    return <TerminalView sessionId={sessionId} workingDir={session.workingDir} />
   }
 
   // The transcript fills the space and scrolls *under* the floating composer,

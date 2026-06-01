@@ -33,6 +33,7 @@ export interface RepoRefBody {
 }
 
 export type SessionRole = "chat" | "planner" | "coder"
+export type SessionKind = "agent" | "terminal"
 
 export interface Project {
   id: string
@@ -49,6 +50,7 @@ export interface Session {
   backend: Backend
   model: string
   permissionMode: PermissionMode
+  kind: SessionKind
   effort: EffortLevel
   status: SessionStatus
   role: SessionRole

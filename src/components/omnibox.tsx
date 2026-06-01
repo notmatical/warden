@@ -1,11 +1,19 @@
 import { useState, type KeyboardEvent } from "react"
-import { Plus, Sparkles } from "lucide-react"
+import { ChevronDown, Plus, Sparkles, SquareTerminal } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { ButtonGroup } from "@/components/ui/button-group"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { PlanToCodeDialog } from "@/components/plan-to-code-dialog"
 import { DEFAULT_CHAT_MODEL } from "@/lib/models"
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store/app-store"
+import type { SessionKind } from "@/types"
 
 function deriveTitle(text: string): string {
   const trimmed = text.trim()
@@ -26,17 +34,18 @@ export function Omnibox() {
   const disabled = !activeProjectId
   const canCreate = !disabled && !creating
 
-  const create = async () => {
+  const create = async (kind: SessionKind = "agent") => {
     if (!canCreate) return
     setCreating(true)
     try {
       const text = value.trim()
       const session = await createSession({
-        title: deriveTitle(text),
+        title: kind === "terminal" ? "Terminal" : deriveTitle(text),
         model: DEFAULT_CHAT_MODEL,
         permissionMode: "bypassPermissions",
         role: "chat",
-        firstMessage: text || undefined,
+        kind,
+        firstMessage: kind === "agent" ? text || undefined : undefined,
       })
       if (session) {
         setValue("")
@@ -76,15 +85,38 @@ export function Omnibox() {
           className="h-full min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60 disabled:cursor-not-allowed"
         />
 
-        <Button
-          size="sm"
-          className="h-7 gap-1.5"
-          onClick={() => void create()}
-          disabled={!canCreate}
-        >
-          <Plus className="size-3.5" />
-          New session
-        </Button>
+        <ButtonGroup>
+          <Button
+            size="sm"
+            className="h-7 gap-1.5"
+            onClick={() => void create("agent")}
+            disabled={!canCreate}
+          >
+            <Plus className="size-3.5" />
+            New session
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                size="icon-sm"
+                disabled={!canCreate}
+                aria-label="New session options"
+              >
+                <ChevronDown />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem onSelect={() => void create("agent")}>
+                <Sparkles />
+                Agent session
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => void create("terminal")}>
+                <SquareTerminal />
+                Terminal session
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </ButtonGroup>
       </div>
 
       <PlanToCodeDialog disabled={disabled} />

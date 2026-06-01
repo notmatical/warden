@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core"
+import { Channel, invoke } from "@tauri-apps/api/core"
 
 import type {
   EffortLevel,
@@ -9,6 +9,7 @@ import type {
   RepoRef,
   RepoRefBody,
   Session,
+  SessionKind,
   SessionRole,
   SlashCommand,
   Project,
@@ -37,6 +38,7 @@ export interface CreateSessionInput {
   permissionMode: PermissionMode
   effort?: EffortLevel
   role?: SessionRole
+  kind?: SessionKind
   /** Run the agent in an isolated git worktree instead of the repo's checkout. */
   isolate?: boolean
 }
@@ -49,8 +51,47 @@ export function createSession(input: CreateSessionInput): Promise<Session> {
     permissionMode: input.permissionMode,
     effort: input.effort ?? null,
     role: input.role ?? null,
+    kind: input.kind ?? null,
     isolate: input.isolate ?? false,
   })
+}
+
+export interface TerminalEvent {
+  event: "output" | "exit"
+  data?: string
+  code?: number | null
+}
+
+export function startTerminal(
+  terminalId: string,
+  workingDir: string,
+  cols: number,
+  rows: number,
+  onOutput: Channel<TerminalEvent>
+): Promise<void> {
+  return invoke("start_terminal", {
+    onOutput,
+    terminalId,
+    workingDir,
+    cols,
+    rows,
+  })
+}
+
+export function terminalWrite(terminalId: string, data: string): Promise<void> {
+  return invoke("terminal_write", { terminalId, data })
+}
+
+export function terminalResize(
+  terminalId: string,
+  cols: number,
+  rows: number
+): Promise<void> {
+  return invoke("terminal_resize", { terminalId, cols, rows })
+}
+
+export function stopTerminal(terminalId: string): Promise<void> {
+  return invoke("stop_terminal", { terminalId })
 }
 
 export interface UpdateSessionInput {

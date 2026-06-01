@@ -5,6 +5,8 @@ import {
   FolderPlus,
   Pencil,
   Plus,
+  Sparkles,
+  SquareTerminal,
   Trash2,
 } from "lucide-react"
 
@@ -17,11 +19,17 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { DEFAULT_CHAT_MODEL } from "@/lib/models"
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store/app-store"
-import type { Project } from "@/types"
+import type { Project, SessionKind } from "@/types"
 
 function SessionRow({ sessionId }: { sessionId: string }) {
   const session = useAppStore((s) => s.sessions[sessionId])
@@ -124,13 +132,14 @@ function ProjectRow({
   const selectProject = useAppStore((s) => s.selectProject)
   const createSession = useAppStore((s) => s.createSession)
 
-  const newSession = async () => {
+  const newSession = async (kind: SessionKind) => {
     await selectProject(project.id)
     await createSession({
-      title: "New session",
+      title: kind === "terminal" ? "Terminal" : "New session",
       model: DEFAULT_CHAT_MODEL,
       permissionMode: "bypassPermissions",
       role: "chat",
+      kind,
     })
   }
 
@@ -161,15 +170,28 @@ function ProjectRow({
             {project.name}
           </span>
         </button>
-        <button
-          type="button"
-          onClick={() => void newSession()}
-          aria-label={`New session in ${project.name}`}
-          title="New session"
-          className="absolute right-1 flex size-5 items-center justify-center rounded text-muted-foreground opacity-0 transition hover:bg-muted hover:text-foreground group-hover/row:opacity-100"
-        >
-          <Plus className="size-3.5" />
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label={`New session in ${project.name}`}
+              title="New session"
+              className="absolute right-1 flex size-5 items-center justify-center rounded text-muted-foreground opacity-0 transition hover:bg-muted hover:text-foreground group-hover/row:opacity-100 data-[state=open]:opacity-100"
+            >
+              <Plus className="size-3.5" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-40">
+            <DropdownMenuItem onSelect={() => void newSession("agent")}>
+              <Sparkles />
+              Agent session
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => void newSession("terminal")}>
+              <SquareTerminal />
+              Terminal session
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {expanded && (

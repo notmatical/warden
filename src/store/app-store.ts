@@ -1,24 +1,24 @@
 import { open } from "@tauri-apps/plugin-dialog"
+import { toast } from "sonner"
 import { create } from "zustand"
 
 import * as ipc from "@/lib/ipc"
 import { onAgentDelta, onAgentEvent, onSessionUpdated } from "@/lib/events"
+import * as terminals from "@/lib/terminal-instances"
 import type {
   DeltaPayload,
   EffortLevel,
   EventRecord,
   PermissionMode,
   Session,
+  SessionKind,
   SessionRole,
   Project,
 } from "@/types"
 
 function reportError(scope: string, error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
-  // Lazy import to avoid a hard dependency cycle with the toaster.
-  import("sonner").then(({ toast }) => {
-    toast.error(scope, { description: message })
-  })
+  toast.error(scope, { description: message })
 }
 
 const SIDEBAR_KEY = "warden:sidebar-collapsed"
@@ -37,6 +37,7 @@ export interface CreateSessionOptions {
   permissionMode: PermissionMode
   effort?: EffortLevel
   role?: SessionRole
+  kind?: SessionKind
   isolate?: boolean
   firstMessage?: string
 }
@@ -232,6 +233,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         permissionMode: opts.permissionMode,
         effort: opts.effort,
         role: opts.role,
+        kind: opts.kind,
         isolate: opts.isolate,
       })
       set((state) => ({
@@ -316,6 +318,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   closeTab: (id) => {
+    // Closing a terminal tab kills its PTY (no orphan processes); the session
+    // row survives in the sidebar and reopens fresh.
+    if (get().sessions[id]?.kind === "terminal") {
+      terminals.dispose(id)
+    }
     set((state) => {
       const order = state.sessionOrder.filter((sid) => sid !== id)
       let activeSessionId = state.activeSessionId
@@ -329,11 +336,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   closeOthers: (id) => {
-    set((state) =>
-      state.sessionOrder.includes(id)
-        ? { sessionOrder: [id], activeSessionId: id }
-        : {}
-    )
+    const { sessionOrder, sessions } = get()
+    if (!sessionOrder.includes(id)) return
+    for (const sid of sessionOrder) {
+      if (sid !== id && sessions[sid]?.kind === "terminal") {
+        terminals.dispose(sid)
+      }
+    }
+    set({ sessionOrder: [id], activeSessionId: id })
   },
 
   renameSession: async (sessionId, title) => {
@@ -360,6 +370,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     const deleted = new Set<string>()
     for (const id of sessionIds) {
       try {
+        if (get().sessions[id]?.kind === "terminal") {
+          terminals.dispose(id)
+        }
         await ipc.deleteSession(id)
         deleted.add(id)
       } catch (error) {
