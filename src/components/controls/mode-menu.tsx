@@ -104,8 +104,9 @@ export function ModeMenu({
           return (
             <DropdownMenuItem
               key={mode}
+              variant={meta.danger ? "destructive" : "default"}
               onSelect={() => onChange(mode)}
-              className={cn("gap-2.5 py-2", meta.danger && "text-red-500")}
+              className="gap-2.5 py-2"
             >
               <Check
                 className={cn(
@@ -113,12 +114,7 @@ export function ModeMenu({
                   selected ? "opacity-100" : "opacity-0"
                 )}
               />
-              <Icon
-                className={cn(
-                  "size-4",
-                  meta.danger ? "text-red-500" : "text-muted-foreground"
-                )}
-              />
+              <Icon className={cn("size-4", !meta.danger && "text-muted-foreground")} />
               <div className="flex min-w-0 flex-col">
                 <span className="text-sm leading-tight">{meta.label}</span>
                 <span className="text-xs text-muted-foreground">
