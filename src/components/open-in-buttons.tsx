@@ -41,14 +41,14 @@ export function OpenInButtons({ path }: { path: string | null | undefined }) {
 
   return (
     <ButtonGroup>
-      <Button variant="outline" size="sm" onClick={() => void run("zed")}>
+      <Button variant="secondary" size="sm" onClick={() => void run("zed")}>
         <SquareCode />
         Open in Zed
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
-            variant="outline"
+            variant="secondary"
             size="icon-sm"
             aria-label="More open options"
           >
