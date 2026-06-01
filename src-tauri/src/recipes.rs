@@ -25,6 +25,7 @@ pub struct PlanToCodeResult {
 /// Build a `NewSession` that shares a provisioned worktree, varying only the
 /// per-role fields. Each session still owns a distinct agent conversation id.
 fn session_in_dir(
+    group_id: &str,
     project_id: &str,
     title: &str,
     model: String,
@@ -34,6 +35,7 @@ fn session_in_dir(
     dir: &ProvisionedDir,
 ) -> NewSession {
     NewSession {
+        group_id: group_id.to_string(),
         project_id: project_id.to_string(),
         title: title.to_string(),
         kind: SessionKind::Agent,
@@ -70,11 +72,13 @@ pub async fn run_plan_to_code(
     coder_model: String,
 ) -> Result<PlanToCodeResult> {
     let project: Project = store.get_project(&project_id)?;
+    let group_id = store.ensure_group_for_project(&project_id, &project.name)?;
     // The handoff runs two agents against one shared checkout, so it always
     // isolates in a worktree.
     let dir = provision_working_dir(&app, &project, true)?;
 
     let planner = store.create_session(session_in_dir(
+        &group_id,
         &project_id,
         "Planner",
         planner_model.clone(),
@@ -84,6 +88,7 @@ pub async fn run_plan_to_code(
         &dir,
     ))?;
     let coder = store.create_session(session_in_dir(
+        &group_id,
         &project_id,
         "Coder",
         coder_model.clone(),

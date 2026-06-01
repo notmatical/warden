@@ -188,6 +188,9 @@ impl SessionRole {
 #[serde(rename_all = "camelCase")]
 pub struct Session {
     pub id: String,
+    pub group_id: String,
+    /// The session's primary repo — where its agent runs. Additional roots are
+    /// tracked in `session_roots` and handed to the CLI as extra directories.
     pub project_id: String,
     pub title: String,
     pub kind: SessionKind,

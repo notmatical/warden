@@ -4,29 +4,51 @@ use crate::error::Result;
 
 /// Ordered schema migrations. Each entry is applied exactly once; the database's
 /// `user_version` pragma tracks how many have run. Append new migrations to the
-/// end — never edit or reorder existing ones.
+/// end — never edit or reorder existing ones once the app has shipped.
 const MIGRATIONS: &[&str] = &[
-    // 0001 — workspaces
+    // 0001 — baseline schema.
+    //
+    // A "group" is the top-level workspace: a named set of project roots, a saved
+    // pane layout, and the sessions opened against it. A "project" is a single
+    // repo folder, which can belong to multiple groups. A session keeps a primary
+    // `project_id` (where its agent runs) and a `session_roots` list of every repo
+    // it pulls into context.
     r#"
-    CREATE TABLE workspaces (
+    CREATE TABLE projects (
         id          TEXT PRIMARY KEY,
         name        TEXT NOT NULL,
         path        TEXT NOT NULL UNIQUE,
         is_git      INTEGER NOT NULL,
         created_at  TEXT NOT NULL
     );
-    "#,
-    // 0002 — sessions
-    r#"
+
+    CREATE TABLE groups (
+        id          TEXT PRIMARY KEY,
+        name        TEXT NOT NULL,
+        layout      TEXT NOT NULL,
+        created_at  TEXT NOT NULL
+    );
+
+    CREATE TABLE group_roots (
+        group_id    TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+        project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        position    INTEGER NOT NULL,
+        PRIMARY KEY (group_id, project_id)
+    );
+
     CREATE TABLE sessions (
         id                TEXT PRIMARY KEY,
-        workspace_id      TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+        group_id          TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+        project_id        TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
         title             TEXT NOT NULL,
+        kind              TEXT NOT NULL DEFAULT 'agent',
         backend           TEXT NOT NULL,
         model             TEXT NOT NULL,
         permission_mode   TEXT NOT NULL,
+        effort            TEXT NOT NULL DEFAULT 'high',
         status            TEXT NOT NULL,
         role              TEXT NOT NULL,
+        auto_named        INTEGER NOT NULL DEFAULT 1,
         agent_session_id  TEXT NOT NULL,
         working_dir       TEXT NOT NULL,
         branch            TEXT,
@@ -38,10 +60,18 @@ const MIGRATIONS: &[&str] = &[
         created_at        TEXT NOT NULL,
         updated_at        TEXT NOT NULL
     );
-    CREATE INDEX idx_sessions_workspace ON sessions(workspace_id);
-    "#,
-    // 0003 — append-only event log
-    r#"
+    CREATE INDEX idx_sessions_group ON sessions(group_id);
+    CREATE INDEX idx_sessions_project ON sessions(project_id);
+
+    CREATE TABLE session_roots (
+        session_id  TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+        project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        is_primary  INTEGER NOT NULL DEFAULT 0,
+        position    INTEGER NOT NULL,
+        PRIMARY KEY (session_id, project_id)
+    );
+    CREATE INDEX idx_session_roots_session ON session_roots(session_id);
+
     CREATE TABLE events (
         id          TEXT PRIMARY KEY,
         session_id  TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
@@ -51,26 +81,6 @@ const MIGRATIONS: &[&str] = &[
         UNIQUE(session_id, seq)
     );
     CREATE INDEX idx_events_session ON events(session_id, seq);
-    "#,
-    // 0004 — per-session reasoning effort
-    r#"
-    ALTER TABLE sessions ADD COLUMN effort TEXT NOT NULL DEFAULT 'high';
-    "#,
-    // 0005 — whether a session's title is still auto-assigned (eligible for
-    // background auto-naming) vs. set by the user.
-    r#"
-    ALTER TABLE sessions ADD COLUMN auto_named INTEGER NOT NULL DEFAULT 1;
-    "#,
-    // 0006 — rename "workspace" → "project" terminology (the app is the
-    // workspace; each repo is a project).
-    r#"
-    ALTER TABLE workspaces RENAME TO projects;
-    ALTER TABLE sessions RENAME COLUMN workspace_id TO project_id;
-    "#,
-    // 0007 — session kind: a headless "agent" session vs an interactive
-    // "terminal" (PTY) session.
-    r#"
-    ALTER TABLE sessions ADD COLUMN kind TEXT NOT NULL DEFAULT 'agent';
     "#,
 ];
 

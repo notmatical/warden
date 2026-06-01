@@ -32,6 +32,7 @@ pub async fn create_session(
     project_id: String,
     title: String,
     model: String,
+    group_id: Option<String>,
     permission_mode: Option<String>,
     effort: Option<String>,
     role: Option<String>,
@@ -39,6 +40,12 @@ pub async fn create_session(
     isolate: Option<bool>,
 ) -> Result<Session> {
     let project = state.store.get_project(&project_id)?;
+    let group_id = match group_id {
+        Some(id) => id,
+        None => state
+            .store
+            .ensure_group_for_project(&project_id, &project.name)?,
+    };
     let dir = provision_working_dir(&app, &project, isolate.unwrap_or(false))?;
 
     let permission_mode = permission_mode
@@ -59,6 +66,7 @@ pub async fn create_session(
         .unwrap_or(SessionKind::Agent);
 
     let session = state.store.create_session(NewSession {
+        group_id,
         project_id,
         title,
         kind,
