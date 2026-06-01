@@ -7,6 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { useControllableOpen } from "@/hooks/use-controllable-open"
 import { cn } from "@/lib/utils"
 import type { PermissionMode } from "@/types"
 
@@ -66,13 +67,22 @@ interface ModeMenuProps {
   value: PermissionMode
   onChange: (mode: PermissionMode) => void
   disabled?: boolean
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
-export function ModeMenu({ value, onChange, disabled }: ModeMenuProps) {
+export function ModeMenu({
+  value,
+  onChange,
+  disabled,
+  open: controlledOpen,
+  onOpenChange,
+}: ModeMenuProps) {
+  const [open, setOpen] = useControllableOpen(controlledOpen, onOpenChange)
   const active = MODE_META[value as ExecutionMode] ?? MODE_META.acceptEdits
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"

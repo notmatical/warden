@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
 import { Check, ChevronDown, Gauge } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Kbd } from "@/components/ui/kbd"
+import { useControllableOpen } from "@/hooks/use-controllable-open"
 import { EFFORT_OPTIONS, effortLabel } from "@/lib/models"
 import { cn } from "@/lib/utils"
 import type { EffortLevel } from "@/types"
@@ -26,10 +27,18 @@ interface EffortMenuProps {
   value: EffortLevel
   onChange: (effort: EffortLevel) => void
   disabled?: boolean
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
-export function EffortMenu({ value, onChange, disabled }: EffortMenuProps) {
-  const [open, setOpen] = useState(false)
+export function EffortMenu({
+  value,
+  onChange,
+  disabled,
+  open: controlledOpen,
+  onOpenChange,
+}: EffortMenuProps) {
+  const [open, setOpen] = useControllableOpen(controlledOpen, onOpenChange)
 
   // While the menu is open, the bare number keys pick a level directly.
   useEffect(() => {
@@ -49,7 +58,7 @@ export function EffortMenu({ value, onChange, disabled }: EffortMenuProps) {
   }, [open, onChange])
 
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
+    <DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"

@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Switch } from "@/components/ui/switch"
+import { useControllableOpen } from "@/hooks/use-controllable-open"
 import { cn } from "@/lib/utils"
 import {
   MODEL_PROVIDERS,
@@ -28,15 +29,24 @@ interface ModelMenuProps {
   value: string
   onChange: (model: string) => void
   disabled?: boolean
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
-export function ModelMenu({ value, onChange, disabled }: ModelMenuProps) {
+export function ModelMenu({
+  value,
+  onChange,
+  disabled,
+  open: controlledOpen,
+  onOpenChange,
+}: ModelMenuProps) {
+  const [open, setOpen] = useControllableOpen(controlledOpen, onOpenChange)
   const base = baseModelId(value)
   const fast = isFastModel(value)
   const canFast = supportsFast(base)
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"

@@ -20,6 +20,14 @@ export function Composer({ sessionId }: { sessionId: string }) {
   const cancel = useAppStore((s) => s.cancel)
   const updateSession = useAppStore((s) => s.updateSession)
   const [value, setValue] = useState("")
+  // Only one toolbar menu open at a time.
+  const [openMenu, setOpenMenu] = useState<"model" | "mode" | "effort" | null>(
+    null
+  )
+  const menuProps = (id: "model" | "mode" | "effort") => ({
+    open: openMenu === id,
+    onOpenChange: (open: boolean) => setOpenMenu(open ? id : null),
+  })
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   // Grow the textarea with its content, from a single line up to a cap.
@@ -100,6 +108,7 @@ export function Composer({ sessionId }: { sessionId: string }) {
           <ModelMenu
             value={session.model}
             onChange={(model) => void updateSession(sessionId, { model })}
+            {...menuProps("model")}
           />
           <div className="mx-0.5 h-4 w-px bg-border/60" />
           <ModeMenu
@@ -107,10 +116,12 @@ export function Composer({ sessionId }: { sessionId: string }) {
             onChange={(permissionMode) =>
               void updateSession(sessionId, { permissionMode })
             }
+            {...menuProps("mode")}
           />
           <EffortMenu
             value={session.effort}
             onChange={(effort) => void updateSession(sessionId, { effort })}
+            {...menuProps("effort")}
           />
         </div>
       </div>
