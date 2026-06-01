@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button"
 import { EffortMenu } from "@/components/controls/effort-menu"
 import { ModeMenu } from "@/components/controls/mode-menu"
 import { ModelMenu } from "@/components/controls/model-menu"
+import { MentionPopover } from "@/components/mention-popover"
+import { useMentions } from "@/hooks/use-mentions"
 import { useAppStore } from "@/store/app-store"
 
 const MAX_TEXTAREA_HEIGHT = 200
@@ -29,6 +31,13 @@ export function Composer({ sessionId }: { sessionId: string }) {
     onOpenChange: (open: boolean) => setOpenMenu(open ? id : null),
   })
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  const mentions = useMentions({
+    value,
+    onChange: setValue,
+    textareaRef,
+    workingDir: session?.workingDir ?? null,
+  })
 
   // Grow the textarea with its content, from a single line up to a cap.
   useLayoutEffect(() => {
@@ -65,11 +74,28 @@ export function Composer({ sessionId }: { sessionId: string }) {
         {/* Input card — single, solid surface, on top. Send/stop lives inline
             on the right as a ghost icon. */}
         <div className="relative z-10 flex items-end gap-1 rounded-xl border border-border/60 bg-card pr-1.5 transition-colors focus-within:border-border/80">
+          {mentions.active && (
+            <MentionPopover
+              items={mentions.items}
+              selectedIndex={mentions.selectedIndex}
+              loading={mentions.loading}
+              emptyLabel={mentions.emptyLabel}
+              onSelect={mentions.select}
+              onHighlight={mentions.setSelectedIndex}
+              className="absolute bottom-full left-0 z-20 mb-2 w-full max-w-md"
+            />
+          )}
           <textarea
             ref={textareaRef}
             value={value}
-            onChange={(e) => setValue(e.target.value)}
-            onKeyDown={handleKeyDown}
+            onChange={(e) => {
+              setValue(e.target.value)
+              mentions.handleInput(e.target.value, e.target.selectionStart ?? 0)
+            }}
+            onKeyDown={(e) => {
+              if (mentions.handleKeyDown(e)) return
+              handleKeyDown(e)
+            }}
             disabled={running}
             rows={1}
             placeholder={

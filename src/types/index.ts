@@ -10,6 +10,28 @@ export type EffortLevel = "low" | "medium" | "high" | "xhigh" | "max"
 
 export type SessionStatus = "idle" | "running" | "error"
 
+export interface FileEntry {
+  path: string
+  name: string
+}
+
+export interface SlashCommand {
+  name: string
+  description: string | null
+  scope: string
+}
+
+export interface RepoRef {
+  number: number
+  title: string
+  kind: "issue" | "pr"
+}
+
+export interface RepoRefBody {
+  title: string
+  body: string
+}
+
 export type SessionRole = "chat" | "planner" | "coder"
 
 export interface Workspace {

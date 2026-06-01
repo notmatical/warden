@@ -3,10 +3,14 @@ import { invoke } from "@tauri-apps/api/core"
 import type {
   EffortLevel,
   EventRecord,
+  FileEntry,
   PermissionMode,
   PlanToCodeResult,
+  RepoRef,
+  RepoRefBody,
   Session,
   SessionRole,
+  SlashCommand,
   Workspace,
 } from "@/types"
 
@@ -102,4 +106,27 @@ export function runPlanToCode(
     plannerModel: input.plannerModel,
     coderModel: input.coderModel,
   })
+}
+
+export function listFiles(
+  workingDir: string,
+  max?: number
+): Promise<FileEntry[]> {
+  return invoke("list_files", { workingDir, max: max ?? null })
+}
+
+export function listCommands(workingDir: string): Promise<SlashCommand[]> {
+  return invoke("list_commands", { workingDir })
+}
+
+export function listRepoRefs(workingDir: string): Promise<RepoRef[]> {
+  return invoke("list_repo_refs", { workingDir })
+}
+
+export function fetchRepoRef(
+  workingDir: string,
+  kind: RepoRef["kind"],
+  number: number
+): Promise<RepoRefBody> {
+  return invoke("fetch_repo_ref", { workingDir, kind, number })
 }
