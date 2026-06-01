@@ -80,7 +80,6 @@ const commandProvider: MentionProvider = {
     return commands.map((command) => ({
       id: command.name,
       label: `/${command.name}`,
-      detail: command.description ?? command.scope,
       payload: command.name,
     }))
   },
