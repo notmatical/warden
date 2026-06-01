@@ -34,9 +34,15 @@ export function Composer({ sessionId }: { sessionId: string }) {
   const cancel = useAppStore((s) => s.cancel)
   const updateSession = useAppStore((s) => s.updateSession)
   const setIsolation = useAppStore((s) => s.setIsolation)
-  const projectIsGit = useAppStore(
-    (s) => s.projects.find((p) => p.id === session?.projectId)?.isGit ?? false
-  )
+  const projectIsGit = useAppStore((s) => {
+    const projectId = session?.projectId
+    if (!projectId) return false
+    for (const roots of Object.values(s.rootsByGroup)) {
+      const root = roots.find((p) => p.id === projectId)
+      if (root) return root.isGit
+    }
+    return false
+  })
   const [value, setValue] = useState("")
   // Only one toolbar menu open at a time.
   const [openMenu, setOpenMenu] = useState<"model" | "mode" | "effort" | null>(

@@ -4,11 +4,19 @@ import { create } from "zustand"
 
 import * as ipc from "@/lib/ipc"
 import { onAgentDelta, onAgentEvent, onSessionUpdated } from "@/lib/events"
+import {
+  DEFAULT_LAYOUT,
+  detachSession,
+  parseLayout,
+  serializeLayout,
+} from "@/lib/layout"
 import * as terminals from "@/lib/terminal-instances"
 import type {
   DeltaPayload,
   EffortLevel,
   EventRecord,
+  Group,
+  Layout,
   PermissionMode,
   Session,
   SessionKind,
@@ -32,6 +40,7 @@ function readSidebarCollapsed(): boolean {
 }
 
 export interface CreateSessionOptions {
+  projectId: string
   title: string
   model: string
   permissionMode: PermissionMode
@@ -55,14 +64,19 @@ export interface RunPlanToCodeOptions {
 }
 
 interface AppState {
-  projects: Project[]
-  activeProjectId: string | null
+  groups: Group[]
+  activeGroupId: string | null
+  /** A group's repo roots, ordered. */
+  rootsByGroup: Record<string, Project[]>
+  /** All session ids in a group (for the sidebar tree, not just open tabs). */
+  sessionsByGroup: Record<string, string[]>
+  /** Parsed, editable pane layout per group. */
+  layoutByGroup: Record<string, Layout>
+  /** Open tabs per group, in order — the group owns its tabs. */
+  tabsByGroup: Record<string, string[]>
+  /** The active tab per group. */
+  activeSessionByGroup: Record<string, string | null>
   sessions: Record<string, Session>
-  /** Session ids per project, for the sidebar tree (all sessions, not just open). */
-  sessionsByProject: Record<string, string[]>
-  /** Open tabs, in order — a subset of sessions the user has opened. */
-  sessionOrder: string[]
-  activeSessionId: string | null
   eventsBySession: Record<string, EventRecord[]>
   streamingBySession: Record<string, string>
   /** Wall-clock start of the in-flight turn, for the live elapsed timer. */
@@ -71,15 +85,19 @@ interface AppState {
   sidebarCollapsed: boolean
 
   initialized: boolean
-  loadingProjects: boolean
-  loadingSessions: boolean
+  loadingGroups: boolean
   loadingEventsBySession: Record<string, boolean>
 
   init: () => Promise<void>
   toggleSidebar: () => void
-  openProject: () => Promise<void>
-  selectProject: (id: string) => Promise<void>
-  loadSessions: (projectId: string) => Promise<void>
+  loadGroupData: (groupId: string) => Promise<void>
+  createGroup: (name: string) => Promise<Group | null>
+  selectGroup: (id: string) => Promise<void>
+  renameGroup: (id: string, name: string) => Promise<void>
+  deleteGroup: (id: string) => Promise<void>
+  addRoot: (groupId: string) => Promise<void>
+  removeRoot: (groupId: string, projectId: string) => Promise<void>
+  setLayout: (groupId: string, layout: Layout) => void
   createSession: (opts: CreateSessionOptions) => Promise<Session | null>
   openSession: (id: string) => void
   updateSession: (sessionId: string, patch: SessionSettingsPatch) => Promise<void>
@@ -103,12 +121,14 @@ interface AppState {
 let listenersWired = false
 
 export const useAppStore = create<AppState>((set, get) => ({
-  projects: [],
-  activeProjectId: null,
+  groups: [],
+  activeGroupId: null,
+  rootsByGroup: {},
+  sessionsByGroup: {},
+  layoutByGroup: {},
+  tabsByGroup: {},
+  activeSessionByGroup: {},
   sessions: {},
-  sessionsByProject: {},
-  sessionOrder: [],
-  activeSessionId: null,
   eventsBySession: {},
   streamingBySession: {},
   startedAtBySession: {},
@@ -116,8 +136,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   sidebarCollapsed: readSidebarCollapsed(),
 
   initialized: false,
-  loadingProjects: false,
-  loadingSessions: false,
+  loadingGroups: false,
   loadingEventsBySession: {},
 
   init: async () => {
@@ -133,19 +152,19 @@ export const useAppStore = create<AppState>((set, get) => ({
       onSessionUpdated((session) => get().onSessionUpdated(session))
     }
 
-    set({ loadingProjects: true })
+    set({ loadingGroups: true })
     try {
-      const projects = await ipc.listProjects()
-      set({ projects })
-      const first = projects[0]
+      const groups = await ipc.listGroups()
+      set({ groups })
+      const first = groups[0]
       if (first) {
-        set({ activeProjectId: first.id })
-        await get().loadSessions(first.id)
+        set({ activeGroupId: first.id })
+        await get().loadGroupData(first.id)
       }
     } catch (error) {
-      reportError("Failed to load projects", error)
+      reportError("Failed to load groups", error)
     } finally {
-      set({ loadingProjects: false })
+      set({ loadingGroups: false })
     }
   },
 
@@ -161,73 +180,195 @@ export const useAppStore = create<AppState>((set, get) => ({
     })
   },
 
-  openProject: async () => {
+  // Loads a group's roots and sessions into the store for the sidebar tree.
+  // Does not change which tabs are open — that's driven by openSession.
+  loadGroupData: async (groupId) => {
     try {
-      const selected = await open({ directory: true, multiple: false })
-      if (typeof selected !== "string") {
-        return
-      }
-      const project = await ipc.openProject(selected)
-      set((state) => {
-        const exists = state.projects.some((w) => w.id === project.id)
-        return {
-          projects: exists
-            ? state.projects.map((w) =>
-                w.id === project.id ? project : w
-              )
-            : [...state.projects, project],
-          activeProjectId: project.id,
-        }
-      })
-      await get().loadSessions(project.id)
-    } catch (error) {
-      reportError("Failed to open project", error)
-    }
-  },
-
-  selectProject: async (id) => {
-    if (get().activeProjectId === id) {
-      return
-    }
-    set({ activeProjectId: id })
-    await get().loadSessions(id)
-  },
-
-  // Loads a project's sessions into the store for the sidebar tree. Does not
-  // change which tabs are open — that's driven by openSession.
-  loadSessions: async (projectId) => {
-    set({ loadingSessions: true })
-    try {
-      const sessions = await ipc.listSessions(projectId)
+      const [roots, sessions] = await Promise.all([
+        ipc.listGroupRoots(groupId),
+        ipc.listGroupSessions(groupId),
+      ])
       set((state) => {
         const nextSessions = { ...state.sessions }
         for (const session of sessions) {
           nextSessions[session.id] = session
         }
+        const group = state.groups.find((g) => g.id === groupId)
+        const layout = state.layoutByGroup[groupId]
+          ? state.layoutByGroup[groupId]
+          : parseLayout(group?.layout ?? "")
         return {
           sessions: nextSessions,
-          sessionsByProject: {
-            ...state.sessionsByProject,
-            [projectId]: sessions.map((s) => s.id),
+          rootsByGroup: { ...state.rootsByGroup, [groupId]: roots },
+          sessionsByGroup: {
+            ...state.sessionsByGroup,
+            [groupId]: sessions.map((s) => s.id),
+          },
+          layoutByGroup: { ...state.layoutByGroup, [groupId]: layout },
+          tabsByGroup: {
+            ...state.tabsByGroup,
+            [groupId]: state.tabsByGroup[groupId] ?? [],
+          },
+          activeSessionByGroup: {
+            ...state.activeSessionByGroup,
+            [groupId]: state.activeSessionByGroup[groupId] ?? null,
           },
         }
       })
     } catch (error) {
-      reportError("Failed to load sessions", error)
-    } finally {
-      set({ loadingSessions: false })
+      reportError("Failed to load group", error)
     }
   },
 
+  createGroup: async (name) => {
+    try {
+      const group = await ipc.createGroup(name)
+      set((state) => ({
+        groups: [...state.groups, group],
+        activeGroupId: group.id,
+        rootsByGroup: { ...state.rootsByGroup, [group.id]: [] },
+        sessionsByGroup: { ...state.sessionsByGroup, [group.id]: [] },
+        layoutByGroup: { ...state.layoutByGroup, [group.id]: DEFAULT_LAYOUT },
+        tabsByGroup: { ...state.tabsByGroup, [group.id]: [] },
+        activeSessionByGroup: {
+          ...state.activeSessionByGroup,
+          [group.id]: null,
+        },
+      }))
+      return group
+    } catch (error) {
+      reportError("Failed to create group", error)
+      return null
+    }
+  },
+
+  selectGroup: async (id) => {
+    if (get().activeGroupId === id) {
+      return
+    }
+    set({ activeGroupId: id })
+    if (!get().rootsByGroup[id]) {
+      await get().loadGroupData(id)
+    }
+  },
+
+  renameGroup: async (id, name) => {
+    const trimmed = name.trim()
+    const current = get().groups.find((g) => g.id === id)
+    if (!current || !trimmed || trimmed === current.name) return
+    set((state) => ({
+      groups: state.groups.map((g) =>
+        g.id === id ? { ...g, name: trimmed } : g
+      ),
+    }))
+    try {
+      await ipc.renameGroup(id, trimmed)
+    } catch (error) {
+      set((state) => ({
+        groups: state.groups.map((g) => (g.id === id ? current : g)),
+      }))
+      reportError("Failed to rename group", error)
+    }
+  },
+
+  deleteGroup: async (id) => {
+    const { groups, sessionsByGroup, sessions } = get()
+    const ownedSessions = sessionsByGroup[id] ?? []
+    for (const sid of ownedSessions) {
+      if (sessions[sid]?.kind === "terminal") {
+        terminals.dispose(sid)
+      }
+    }
+    set((state) => {
+      const nextGroups = state.groups.filter((g) => g.id !== id)
+      let activeGroupId = state.activeGroupId
+      if (activeGroupId === id) {
+        activeGroupId = nextGroups[0]?.id ?? null
+      }
+      const omit = <T,>(record: Record<string, T>): Record<string, T> =>
+        Object.fromEntries(
+          Object.entries(record).filter(([gid]) => gid !== id)
+        )
+      return {
+        groups: nextGroups,
+        activeGroupId,
+        rootsByGroup: omit(state.rootsByGroup),
+        sessionsByGroup: omit(state.sessionsByGroup),
+        layoutByGroup: omit(state.layoutByGroup),
+        tabsByGroup: omit(state.tabsByGroup),
+        activeSessionByGroup: omit(state.activeSessionByGroup),
+      }
+    })
+    try {
+      await ipc.deleteGroup(id)
+    } catch (error) {
+      reportError("Failed to delete group", error)
+      set({ groups })
+    }
+  },
+
+  addRoot: async (groupId) => {
+    try {
+      const selected = await open({ directory: true, multiple: false })
+      if (typeof selected !== "string") {
+        return
+      }
+      const project = await ipc.addGroupRoot(groupId, selected)
+      set((state) => {
+        const roots = state.rootsByGroup[groupId] ?? []
+        return {
+          rootsByGroup: {
+            ...state.rootsByGroup,
+            [groupId]: roots.some((p) => p.id === project.id)
+              ? roots.map((p) => (p.id === project.id ? project : p))
+              : [...roots, project],
+          },
+        }
+      })
+    } catch (error) {
+      reportError("Failed to add folder", error)
+    }
+  },
+
+  removeRoot: async (groupId, projectId) => {
+    try {
+      await ipc.removeGroupRoot(groupId, projectId)
+      set((state) => ({
+        rootsByGroup: {
+          ...state.rootsByGroup,
+          [groupId]: (state.rootsByGroup[groupId] ?? []).filter(
+            (p) => p.id !== projectId
+          ),
+        },
+      }))
+    } catch (error) {
+      reportError("Failed to remove folder", error)
+    }
+  },
+
+  setLayout: (groupId, layout) => {
+    set((state) => ({
+      layoutByGroup: { ...state.layoutByGroup, [groupId]: layout },
+    }))
+    void ipc
+      .setGroupLayout(groupId, serializeLayout(layout))
+      .catch((error) => reportError("Failed to save layout", error))
+  },
+
   createSession: async (opts) => {
-    const projectId = get().activeProjectId
-    if (!projectId) {
-      reportError("No project selected", "Open a folder first.")
+    const groupId = get().activeGroupId
+    if (!groupId) {
+      reportError("No group selected", "Create a group first.")
+      return null
+    }
+    if (!opts.projectId) {
+      reportError("No folder selected", "Add a folder to this group first.")
       return null
     }
     try {
       const session = await ipc.createSession({
-        projectId,
+        projectId: opts.projectId,
+        groupId,
         title: opts.title,
         model: opts.model,
         permissionMode: opts.permissionMode,
@@ -238,20 +379,28 @@ export const useAppStore = create<AppState>((set, get) => ({
       })
       set((state) => ({
         sessions: { ...state.sessions, [session.id]: session },
-        sessionsByProject: {
-          ...state.sessionsByProject,
-          [projectId]: [
-            ...(state.sessionsByProject[projectId] ?? []),
+        sessionsByGroup: {
+          ...state.sessionsByGroup,
+          [groupId]: [
+            ...(state.sessionsByGroup[groupId] ?? []),
             session.id,
           ],
         },
-        sessionOrder: state.sessionOrder.includes(session.id)
-          ? state.sessionOrder
-          : [...state.sessionOrder, session.id],
-        activeSessionId: session.id,
+        tabsByGroup: {
+          ...state.tabsByGroup,
+          [groupId]: [...(state.tabsByGroup[groupId] ?? []), session.id],
+        },
+        activeSessionByGroup: {
+          ...state.activeSessionByGroup,
+          [groupId]: session.id,
+        },
         eventsBySession: { ...state.eventsBySession, [session.id]: [] },
       }))
-      if (opts.firstMessage && opts.firstMessage.trim()) {
+      if (
+        opts.kind !== "terminal" &&
+        opts.firstMessage &&
+        opts.firstMessage.trim()
+      ) {
         await get().sendMessage(session.id, opts.firstMessage.trim())
       }
       return session
@@ -293,57 +442,93 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // Open a session into a tab (from the sidebar) and focus it.
   openSession: (id) => {
-    if (!get().sessions[id]) {
+    const session = get().sessions[id]
+    if (!session) {
       return
     }
-    set((state) => ({
-      sessionOrder: state.sessionOrder.includes(id)
-        ? state.sessionOrder
-        : [...state.sessionOrder, id],
-      activeSessionId: id,
-    }))
+    const groupId = session.groupId
+    set((state) => {
+      const tabs = state.tabsByGroup[groupId] ?? []
+      return {
+        activeGroupId: groupId,
+        tabsByGroup: {
+          ...state.tabsByGroup,
+          [groupId]: tabs.includes(id) ? tabs : [...tabs, id],
+        },
+        activeSessionByGroup: {
+          ...state.activeSessionByGroup,
+          [groupId]: id,
+        },
+      }
+    })
     if (!get().eventsBySession[id]) {
       void get().loadEvents(id)
     }
   },
 
   selectSession: (id) => {
-    if (!get().sessions[id]) {
+    const groupId = get().activeGroupId
+    if (!groupId || !get().sessions[id]) {
       return
     }
-    set({ activeSessionId: id })
+    set((state) => ({
+      activeSessionByGroup: { ...state.activeSessionByGroup, [groupId]: id },
+    }))
     if (!get().eventsBySession[id]) {
       void get().loadEvents(id)
     }
   },
 
   closeTab: (id) => {
+    const groupId = get().activeGroupId
+    if (!groupId) return
     // Closing a terminal tab kills its PTY (no orphan processes); the session
     // row survives in the sidebar and reopens fresh.
     if (get().sessions[id]?.kind === "terminal") {
       terminals.dispose(id)
     }
+    let detached: Layout | null = null
     set((state) => {
-      const order = state.sessionOrder.filter((sid) => sid !== id)
-      let activeSessionId = state.activeSessionId
-      if (activeSessionId === id) {
-        const closedIndex = state.sessionOrder.indexOf(id)
-        activeSessionId =
-          order[closedIndex] ?? order[closedIndex - 1] ?? order[0] ?? null
+      const prevTabs = state.tabsByGroup[groupId] ?? []
+      const tabs = prevTabs.filter((sid) => sid !== id)
+      let active = state.activeSessionByGroup[groupId] ?? null
+      if (active === id) {
+        const closedIndex = prevTabs.indexOf(id)
+        active =
+          tabs[closedIndex] ?? tabs[closedIndex - 1] ?? tabs[0] ?? null
       }
-      return { sessionOrder: order, activeSessionId }
+      const layout = state.layoutByGroup[groupId]
+      if (layout && layout.panes.includes(id)) {
+        detached = detachSession(layout, id)
+      }
+      return {
+        tabsByGroup: { ...state.tabsByGroup, [groupId]: tabs },
+        activeSessionByGroup: {
+          ...state.activeSessionByGroup,
+          [groupId]: active,
+        },
+      }
     })
+    if (detached) {
+      get().setLayout(groupId, detached)
+    }
   },
 
   closeOthers: (id) => {
-    const { sessionOrder, sessions } = get()
-    if (!sessionOrder.includes(id)) return
-    for (const sid of sessionOrder) {
+    const groupId = get().activeGroupId
+    if (!groupId) return
+    const { tabsByGroup, sessions } = get()
+    const tabs = tabsByGroup[groupId] ?? []
+    if (!tabs.includes(id)) return
+    for (const sid of tabs) {
       if (sid !== id && sessions[sid]?.kind === "terminal") {
         terminals.dispose(sid)
       }
     }
-    set({ sessionOrder: [id], activeSessionId: id })
+    set((state) => ({
+      tabsByGroup: { ...state.tabsByGroup, [groupId]: [id] },
+      activeSessionByGroup: { ...state.activeSessionByGroup, [groupId]: id },
+    }))
   },
 
   renameSession: async (sessionId, title) => {
@@ -382,38 +567,61 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (deleted.size === 0) return
 
     set((state) => {
-      const order = state.sessionOrder.filter((sid) => !deleted.has(sid))
-
-      let activeSessionId = state.activeSessionId
-      if (activeSessionId && deleted.has(activeSessionId)) {
-        const idx = state.sessionOrder.indexOf(activeSessionId)
-        const surviving = (start: number, step: number) => {
-          for (let i = start; i >= 0 && i < state.sessionOrder.length; i += step) {
-            const sid = state.sessionOrder[i]
-            if (!deleted.has(sid)) return sid
-          }
-          return null
-        }
-        activeSessionId = surviving(idx + 1, 1) ?? surviving(idx - 1, -1)
-      }
-
       const omit = <T,>(record: Record<string, T>): Record<string, T> =>
         Object.fromEntries(
           Object.entries(record).filter(([sid]) => !deleted.has(sid))
         )
 
-      const sessionsByProject = Object.fromEntries(
-        Object.entries(state.sessionsByProject).map(([pid, ids]) => [
-          pid,
+      const sessionsByGroup = Object.fromEntries(
+        Object.entries(state.sessionsByGroup).map(([gid, ids]) => [
+          gid,
           ids.filter((id) => !deleted.has(id)),
         ])
       )
 
+      const tabsByGroup: Record<string, string[]> = {}
+      const activeSessionByGroup: Record<string, string | null> = {}
+      const layoutByGroup = { ...state.layoutByGroup }
+
+      for (const [gid, prevTabs] of Object.entries(state.tabsByGroup)) {
+        const tabs = prevTabs.filter((sid) => !deleted.has(sid))
+        tabsByGroup[gid] = tabs
+
+        let active = state.activeSessionByGroup[gid] ?? null
+        if (active && deleted.has(active)) {
+          const idx = prevTabs.indexOf(active)
+          const surviving = (start: number, step: number) => {
+            for (let i = start; i >= 0 && i < prevTabs.length; i += step) {
+              const sid = prevTabs[i]
+              if (!deleted.has(sid)) return sid
+            }
+            return null
+          }
+          active = surviving(idx + 1, 1) ?? surviving(idx - 1, -1)
+        }
+        activeSessionByGroup[gid] = active
+
+        const layout = state.layoutByGroup[gid]
+        if (layout) {
+          let next = layout
+          for (const sid of deleted) {
+            next = detachSession(next, sid)
+          }
+          if (next !== layout) {
+            layoutByGroup[gid] = next
+            void ipc
+              .setGroupLayout(gid, serializeLayout(next))
+              .catch((error) => reportError("Failed to save layout", error))
+          }
+        }
+      }
+
       return {
-        sessionOrder: order,
-        activeSessionId,
         sessions: omit(state.sessions),
-        sessionsByProject,
+        sessionsByGroup,
+        tabsByGroup,
+        activeSessionByGroup,
+        layoutByGroup,
         eventsBySession: omit(state.eventsBySession),
         streamingBySession: omit(state.streamingBySession),
         startedAtBySession: omit(state.startedAtBySession),
@@ -441,9 +649,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   runPlanToCode: async (opts) => {
-    const projectId = get().activeProjectId
+    const groupId = get().activeGroupId
+    if (!groupId) {
+      reportError("No group selected", "Create a group first.")
+      return
+    }
+    const projectId = get().rootsByGroup[groupId]?.[0]?.id
     if (!projectId) {
-      reportError("No project selected", "Open a folder first.")
+      reportError("No folder in this group", "Add a folder first.")
       return
     }
     try {
@@ -457,25 +670,28 @@ export const useAppStore = create<AppState>((set, get) => ({
         const sessions = { ...state.sessions }
         sessions[result.planner.id] = result.planner
         sessions[result.coder.id] = result.coder
-        const projectSessions = [
-          ...(state.sessionsByProject[projectId] ?? []),
+        const groupSessions = [
+          ...(state.sessionsByGroup[groupId] ?? []),
           result.planner.id,
           result.coder.id,
         ]
-        const order = [...state.sessionOrder]
+        const tabs = [...(state.tabsByGroup[groupId] ?? [])]
         for (const id of [result.planner.id, result.coder.id]) {
-          if (!order.includes(id)) {
-            order.push(id)
+          if (!tabs.includes(id)) {
+            tabs.push(id)
           }
         }
         return {
           sessions,
-          sessionsByProject: {
-            ...state.sessionsByProject,
-            [projectId]: projectSessions,
+          sessionsByGroup: {
+            ...state.sessionsByGroup,
+            [groupId]: groupSessions,
           },
-          sessionOrder: order,
-          activeSessionId: result.coder.id,
+          tabsByGroup: { ...state.tabsByGroup, [groupId]: tabs },
+          activeSessionByGroup: {
+            ...state.activeSessionByGroup,
+            [groupId]: result.coder.id,
+          },
           eventsBySession: {
             ...state.eventsBySession,
             [result.planner.id]: state.eventsBySession[result.planner.id] ?? [],

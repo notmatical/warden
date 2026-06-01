@@ -8,11 +8,16 @@ import { useAppStore } from "@/store/app-store"
 export function Topbar() {
   const toggleSidebar = useAppStore((s) => s.toggleSidebar)
 
-  // The active session's working directory, falling back to the project root.
+  // The active session's working directory, falling back to the group's first
+  // root.
   const openPath = useAppStore((s) => {
-    const session = s.activeSessionId ? s.sessions[s.activeSessionId] : undefined
+    const groupId = s.activeGroupId
+    const activeSessionId = groupId
+      ? s.activeSessionByGroup[groupId] ?? null
+      : null
+    const session = activeSessionId ? s.sessions[activeSessionId] : undefined
     if (session) return session.workingDir
-    return s.projects.find((w) => w.id === s.activeProjectId)?.path ?? null
+    return groupId ? s.rootsByGroup[groupId]?.[0]?.path ?? null : null
   })
 
   return (

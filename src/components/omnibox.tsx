@@ -25,21 +25,24 @@ function deriveTitle(text: string): string {
 }
 
 export function Omnibox() {
-  const activeProjectId = useAppStore((s) => s.activeProjectId)
+  const primaryRootId = useAppStore((s) =>
+    s.activeGroupId ? s.rootsByGroup[s.activeGroupId]?.[0]?.id ?? null : null
+  )
   const createSession = useAppStore((s) => s.createSession)
 
   const [value, setValue] = useState("")
   const [creating, setCreating] = useState(false)
 
-  const disabled = !activeProjectId
+  const disabled = !primaryRootId
   const canCreate = !disabled && !creating
 
   const create = async (kind: SessionKind = "agent") => {
-    if (!canCreate) return
+    if (!canCreate || !primaryRootId) return
     setCreating(true)
     try {
       const text = value.trim()
       const session = await createSession({
+        projectId: primaryRootId,
         title: kind === "terminal" ? "Terminal" : deriveTitle(text),
         model: DEFAULT_CHAT_MODEL,
         permissionMode: "bypassPermissions",
@@ -79,7 +82,7 @@ export function Omnibox() {
           disabled={disabled}
           placeholder={
             disabled
-              ? "Open a project to start a session"
+              ? "Open a folder in this group to start"
               : "Start a session — describe the first task"
           }
           className="h-full min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60 disabled:cursor-not-allowed"

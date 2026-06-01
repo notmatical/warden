@@ -16,8 +16,13 @@ import { useAppStore } from "@/store/app-store"
 
 function Tab({ sessionId }: { sessionId: string }) {
   const session = useAppStore((s) => s.sessions[sessionId])
-  const active = useAppStore((s) => s.activeSessionId === sessionId)
-  const order = useAppStore((s) => s.sessionOrder)
+  const active = useAppStore(
+    (s) =>
+      !!s.activeGroupId && s.activeSessionByGroup[s.activeGroupId] === sessionId
+  )
+  const order = useAppStore((s) =>
+    s.activeGroupId ? s.tabsByGroup[s.activeGroupId] ?? [] : []
+  )
   const selectSession = useAppStore((s) => s.selectSession)
   const closeTab = useAppStore((s) => s.closeTab)
   const closeOthers = useAppStore((s) => s.closeOthers)
@@ -132,7 +137,9 @@ function Tab({ sessionId }: { sessionId: string }) {
 }
 
 export function SessionTabs() {
-  const order = useAppStore((s) => s.sessionOrder)
+  const order = useAppStore((s) =>
+    s.activeGroupId ? s.tabsByGroup[s.activeGroupId] ?? [] : []
+  )
 
   if (order.length === 0) {
     return null

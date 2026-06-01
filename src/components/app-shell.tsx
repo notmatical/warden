@@ -12,8 +12,10 @@ import { useAppStore } from "@/store/app-store"
 
 export function AppShell() {
   const init = useAppStore((s) => s.init)
-  const activeProjectId = useAppStore((s) => s.activeProjectId)
-  const activeSessionId = useAppStore((s) => s.activeSessionId)
+  const activeGroupId = useAppStore((s) => s.activeGroupId)
+  const activeSessionId = useAppStore((s) =>
+    s.activeGroupId ? s.activeSessionByGroup[s.activeGroupId] ?? null : null
+  )
   const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed)
 
   useEffect(() => {
@@ -27,8 +29,9 @@ export function AppShell() {
     allowInInput: true,
     description: "Cycle execution mode",
     handler: () => {
-      const { activeSessionId: id, sessions, updateSession } =
+      const { activeGroupId, activeSessionByGroup, sessions, updateSession } =
         useAppStore.getState()
+      const id = activeGroupId ? activeSessionByGroup[activeGroupId] : null
       const session = id ? sessions[id] : undefined
       if (!session) return
       void updateSession(session.id, {
@@ -54,7 +57,7 @@ export function AppShell() {
           <Topbar />
           <SessionTabs />
           <main className="min-h-0 flex-1">
-            {!activeProjectId ? (
+            {!activeGroupId ? (
               <EmptyState variant="no-project" />
             ) : activeSessionId ? (
               <SessionView key={activeSessionId} sessionId={activeSessionId} />
