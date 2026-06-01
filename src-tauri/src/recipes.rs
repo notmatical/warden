@@ -6,7 +6,7 @@ use tauri::AppHandle;
 
 use crate::agent::AgentManager;
 use crate::domain::{
-    AgentEvent, Backend, EffortLevel, PermissionMode, Session, SessionRole, Project,
+    AgentEvent, Backend, EffortLevel, PermissionMode, Project, Session, SessionKind, SessionRole,
 };
 use crate::error::Result;
 use crate::events::{emit_event, emit_session};
@@ -36,6 +36,7 @@ fn session_in_dir(
     NewSession {
         project_id: project_id.to_string(),
         title: title.to_string(),
+        kind: SessionKind::Agent,
         backend: Backend::Claude,
         model,
         permission_mode,

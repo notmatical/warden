@@ -39,6 +39,8 @@ tokio = { version = "1", features = [
 rusqlite = { version = "0.32", features = ["bundled"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
+# Native PTY for interactive terminal sessions (runs the real `claude` TUI).
+portable-pty = "0.8"
 # Resolves the `claude` CLI on PATH across platforms, including Windows `.cmd`
 # shims that std::process does not find on its own.
 which = "7"

@@ -4,7 +4,7 @@
 use tauri::{AppHandle, State};
 
 use crate::domain::{
-    Backend, EffortLevel, EventRecord, PermissionMode, Session, SessionRole,
+    Backend, EffortLevel, EventRecord, PermissionMode, Session, SessionKind, SessionRole,
 };
 use crate::error::{AppError, Result};
 use crate::git;
@@ -35,6 +35,7 @@ pub async fn create_session(
     permission_mode: Option<String>,
     effort: Option<String>,
     role: Option<String>,
+    kind: Option<String>,
     isolate: Option<bool>,
 ) -> Result<Session> {
     let project = state.store.get_project(&project_id)?;
@@ -52,10 +53,15 @@ pub async fn create_session(
         .as_deref()
         .and_then(SessionRole::parse)
         .unwrap_or(SessionRole::Chat);
+    let kind = kind
+        .as_deref()
+        .and_then(SessionKind::parse)
+        .unwrap_or(SessionKind::Agent);
 
     let session = state.store.create_session(NewSession {
         project_id,
         title,
+        kind,
         backend: Backend::Claude,
         model,
         permission_mode,

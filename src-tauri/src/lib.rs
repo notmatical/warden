@@ -8,6 +8,7 @@ mod provision;
 mod recipes;
 mod state;
 mod store;
+mod terminal;
 mod util;
 
 use tauri::Manager;
@@ -58,7 +59,17 @@ pub fn run() {
             commands::list_repo_refs,
             commands::fetch_repo_ref,
             commands::open_in,
+            commands::start_terminal,
+            commands::terminal_write,
+            commands::terminal_resize,
+            commands::stop_terminal,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app, event| {
+            // Tear down any live PTYs when the app exits.
+            if matches!(event, tauri::RunEvent::Exit) {
+                terminal::kill_all();
+            }
+        });
 }

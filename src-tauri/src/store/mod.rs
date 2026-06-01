@@ -6,8 +6,8 @@ use std::sync::{Arc, Mutex};
 use rusqlite::{Connection, OptionalExtension, Row};
 
 use crate::domain::{
-    AgentEvent, Backend, EffortLevel, EventRecord, PermissionMode, Session, SessionRole,
-    SessionStatus, Project,
+    AgentEvent, Backend, EffortLevel, EventRecord, PermissionMode, Project, Session, SessionKind,
+    SessionRole, SessionStatus,
 };
 use crate::error::{AppError, Result};
 use crate::util::{now_rfc3339, uuid};
@@ -17,6 +17,7 @@ use crate::util::{now_rfc3339, uuid};
 pub struct NewSession {
     pub project_id: String,
     pub title: String,
+    pub kind: SessionKind,
     pub backend: Backend,
     pub model: String,
     pub permission_mode: PermissionMode,
@@ -118,6 +119,7 @@ impl Store {
             id: uuid(),
             project_id: new.project_id,
             title: new.title,
+            kind: new.kind,
             backend: new.backend,
             model: new.model,
             permission_mode: new.permission_mode,
@@ -142,9 +144,9 @@ impl Store {
             "INSERT INTO sessions (
                 id, project_id, title, backend, model, permission_mode, status, role,
                 agent_session_id, working_dir, branch, base_sha, is_isolated, turns, cost_usd,
-                parent_id, created_at, updated_at, effort, auto_named
+                parent_id, created_at, updated_at, effort, auto_named, kind
              ) VALUES (
-                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20
+                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21
              )",
             rusqlite::params![
                 session.id,
@@ -167,6 +169,7 @@ impl Store {
                 session.updated_at,
                 session.effort.as_str(),
                 session.auto_named as i64,
+                session.kind.as_str(),
             ],
         )?;
         Ok(session)
@@ -336,12 +339,12 @@ impl Store {
 const SESSION_SELECT: &str =
     "SELECT id, project_id, title, backend, model, permission_mode, status, role, \
     agent_session_id, working_dir, branch, base_sha, is_isolated, turns, cost_usd, parent_id, \
-    created_at, updated_at, effort, auto_named FROM sessions WHERE id = ?1";
+    created_at, updated_at, effort, auto_named, kind FROM sessions WHERE id = ?1";
 
 const SESSION_SELECT_ALL: &str =
     "SELECT id, project_id, title, backend, model, permission_mode, status, role, \
     agent_session_id, working_dir, branch, base_sha, is_isolated, turns, cost_usd, parent_id, \
-    created_at, updated_at, effort, auto_named FROM sessions";
+    created_at, updated_at, effort, auto_named, kind FROM sessions";
 
 fn map_project(row: &Row<'_>) -> rusqlite::Result<Project> {
     Ok(Project {
@@ -359,10 +362,12 @@ fn map_session(row: &Row<'_>) -> rusqlite::Result<Session> {
     let status_str: String = row.get(6)?;
     let role_str: String = row.get(7)?;
     let effort_str: String = row.get(18)?;
+    let kind_str: String = row.get(20)?;
     Ok(Session {
         id: row.get(0)?,
         project_id: row.get(1)?,
         title: row.get(2)?,
+        kind: SessionKind::parse(&kind_str).unwrap_or(SessionKind::Agent),
         backend: Backend::parse(&backend_str).unwrap_or(Backend::Claude),
         model: row.get(4)?,
         permission_mode: PermissionMode::parse(&pm_str).unwrap_or(PermissionMode::Default),

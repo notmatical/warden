@@ -127,6 +127,32 @@ impl SessionStatus {
     }
 }
 
+/// Whether a session is a headless agent (stream-json adapter) or an
+/// interactive terminal running the native `claude` TUI in a PTY.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionKind {
+    Agent,
+    Terminal,
+}
+
+impl SessionKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            SessionKind::Agent => "agent",
+            SessionKind::Terminal => "terminal",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "agent" => Some(SessionKind::Agent),
+            "terminal" => Some(SessionKind::Terminal),
+            _ => None,
+        }
+    }
+}
+
 /// The role a session plays inside a recipe. Plain sessions are `Chat`; the
 /// plan→code handoff produces a `Planner` and a `Coder`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -164,6 +190,7 @@ pub struct Session {
     pub id: String,
     pub project_id: String,
     pub title: String,
+    pub kind: SessionKind,
     pub backend: Backend,
     pub model: String,
     pub permission_mode: PermissionMode,

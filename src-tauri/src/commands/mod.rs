@@ -6,9 +6,11 @@ mod mentions;
 mod recipe;
 mod session;
 mod project;
+mod terminal;
 
 pub use external::*;
 pub use mentions::*;
 pub use recipe::*;
 pub use session::*;
 pub use project::*;
+pub use terminal::*;

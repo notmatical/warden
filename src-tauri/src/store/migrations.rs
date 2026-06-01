@@ -67,6 +67,11 @@ const MIGRATIONS: &[&str] = &[
     ALTER TABLE workspaces RENAME TO projects;
     ALTER TABLE sessions RENAME COLUMN workspace_id TO project_id;
     "#,
+    // 0007 — session kind: a headless "agent" session vs an interactive
+    // "terminal" (PTY) session.
+    r#"
+    ALTER TABLE sessions ADD COLUMN kind TEXT NOT NULL DEFAULT 'agent';
+    "#,
 ];
 
 pub fn run(conn: &Connection) -> Result<()> {
