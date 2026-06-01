@@ -6,7 +6,7 @@ use tauri::{AppHandle, State};
 use crate::domain::{
     Backend, EffortLevel, EventRecord, PermissionMode, Session, SessionRole,
 };
-use crate::error::Result;
+use crate::error::{AppError, Result};
 use crate::git;
 use crate::provision::provision_working_dir;
 use crate::state::AppState;
@@ -29,7 +29,7 @@ pub async fn get_events(
 pub async fn create_session(
     app: AppHandle,
     state: State<'_, AppState>,
-    workspace_id: String,
+    project_id: String,
     title: String,
     model: String,
     permission_mode: Option<String>,
@@ -37,8 +37,8 @@ pub async fn create_session(
     role: Option<String>,
     isolate: Option<bool>,
 ) -> Result<Session> {
-    let workspace = state.store.get_workspace(&workspace_id)?;
-    let dir = provision_working_dir(&app, &workspace, isolate.unwrap_or(false))?;
+    let project = state.store.get_project(&project_id)?;
+    let dir = provision_working_dir(&app, &project, isolate.unwrap_or(false))?;
 
     let permission_mode = permission_mode
         .as_deref()
@@ -54,7 +54,7 @@ pub async fn create_session(
         .unwrap_or(SessionRole::Chat);
 
     let session = state.store.create_session(NewSession {
-        workspace_id,
+        project_id,
         title,
         backend: Backend::Claude,
         model,
@@ -132,8 +132,8 @@ pub async fn delete_session(
     state.manager.cancel(&app, &state.store, &session_id);
 
     if session.is_isolated {
-        if let Ok(workspace) = state.store.get_workspace(&session.workspace_id) {
-            let repo = std::path::Path::new(&workspace.path);
+        if let Ok(project) = state.store.get_project(&session.project_id) {
+            let repo = std::path::Path::new(&project.path);
             let worktree = std::path::Path::new(&session.working_dir);
             if let Err(e) = git::remove_worktree(repo, worktree) {
                 log::warn!("failed to remove worktree for session {session_id}: {e}");
@@ -143,6 +143,50 @@ pub async fn delete_session(
 
     state.store.delete_session(&session_id)?;
     Ok(())
+}
+
+/// Toggle a session's git-worktree isolation. Only allowed before the first
+/// turn — afterward the agent's conversation is tied to its working directory.
+#[tauri::command]
+pub async fn set_session_isolation(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: String,
+    isolate: bool,
+) -> Result<Session> {
+    let session = state.store.get_session(&session_id)?;
+    if session.turns != 0 {
+        return Err(AppError::Invalid(
+            "isolation can only change before the session's first turn".to_string(),
+        ));
+    }
+    if session.is_isolated == isolate {
+        return Ok(session);
+    }
+
+    let project = state.store.get_project(&session.project_id)?;
+
+    // Tear down the existing worktree when turning isolation off.
+    if session.is_isolated {
+        let repo = std::path::Path::new(&project.path);
+        let worktree = std::path::Path::new(&session.working_dir);
+        if let Err(e) = git::remove_worktree(repo, worktree) {
+            log::warn!("failed to remove worktree for {session_id}: {e}");
+        }
+    }
+
+    let dir = provision_working_dir(&app, &project, isolate)?;
+    state.store.update_session_workdir(
+        &session_id,
+        &dir.working_dir,
+        dir.branch.as_deref(),
+        dir.base_sha.as_deref(),
+        dir.is_isolated,
+    )?;
+
+    let updated = state.store.get_session(&session_id)?;
+    emit_session(&app, &updated);
+    Ok(updated)
 }
 
 #[tauri::command]

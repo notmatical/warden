@@ -5,10 +5,12 @@ import { cn } from "@/lib/utils"
 // `@file`, `/command`, `#ref` at line start or after whitespace.
 const TOKEN_RE = /(^|\s)([@/#][^\s]+)/g
 
-const TOKEN_COLOR: Record<string, string> = {
-  "@": "text-sky-400",
-  "/": "text-violet-400",
-  "#": "text-emerald-400",
+// Background tint + color only — no font-weight or padding, so the highlighted
+// token keeps the exact same width as the plain text in the textarea above it.
+const TOKEN_STYLE: Record<string, string> = {
+  "@": "bg-sky-400/15 text-sky-300",
+  "/": "bg-violet-400/15 text-violet-300",
+  "#": "bg-emerald-400/15 text-emerald-300",
 }
 
 /**
@@ -31,7 +33,7 @@ export function MentionHighlight({ value }: { value: string }) {
     nodes.push(
       <span
         key={key++}
-        className={cn("font-medium", TOKEN_COLOR[token[0]] ?? "text-foreground")}
+        className={cn("rounded", TOKEN_STYLE[token[0]] ?? "text-foreground")}
       >
         {token}
       </span>

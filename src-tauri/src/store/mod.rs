@@ -7,7 +7,7 @@ use rusqlite::{Connection, OptionalExtension, Row};
 
 use crate::domain::{
     AgentEvent, Backend, EffortLevel, EventRecord, PermissionMode, Session, SessionRole,
-    SessionStatus, Workspace,
+    SessionStatus, Project,
 };
 use crate::error::{AppError, Result};
 use crate::util::{now_rfc3339, uuid};
@@ -15,7 +15,7 @@ use crate::util::{now_rfc3339, uuid};
 /// Fields required to create a session row. Keeps the insert call readable
 /// instead of a dozen positional arguments.
 pub struct NewSession {
-    pub workspace_id: String,
+    pub project_id: String,
     pub title: String,
     pub backend: Backend,
     pub model: String,
@@ -54,22 +54,22 @@ impl Store {
         self.conn.lock().unwrap_or_else(|p| p.into_inner())
     }
 
-    // ----- workspaces -------------------------------------------------------
+    // ----- projects -------------------------------------------------------
 
-    pub fn upsert_workspace(&self, name: &str, path: &str, is_git: bool) -> Result<Workspace> {
+    pub fn upsert_project(&self, name: &str, path: &str, is_git: bool) -> Result<Project> {
         let conn = self.lock();
         if let Some(existing) = conn
             .query_row(
-                "SELECT id, name, path, is_git, created_at FROM workspaces WHERE path = ?1",
+                "SELECT id, name, path, is_git, created_at FROM projects WHERE path = ?1",
                 [path],
-                map_workspace,
+                map_project,
             )
             .optional()?
         {
             return Ok(existing);
         }
 
-        let workspace = Workspace {
+        let project = Project {
             id: uuid(),
             name: name.to_string(),
             path: path.to_string(),
@@ -77,37 +77,37 @@ impl Store {
             created_at: now_rfc3339(),
         };
         conn.execute(
-            "INSERT INTO workspaces (id, name, path, is_git, created_at)
+            "INSERT INTO projects (id, name, path, is_git, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5)",
             (
-                &workspace.id,
-                &workspace.name,
-                &workspace.path,
-                workspace.is_git as i64,
-                &workspace.created_at,
+                &project.id,
+                &project.name,
+                &project.path,
+                project.is_git as i64,
+                &project.created_at,
             ),
         )?;
-        Ok(workspace)
+        Ok(project)
     }
 
-    pub fn list_workspaces(&self) -> Result<Vec<Workspace>> {
+    pub fn list_projects(&self) -> Result<Vec<Project>> {
         let conn = self.lock();
         let mut stmt = conn.prepare(
-            "SELECT id, name, path, is_git, created_at FROM workspaces ORDER BY created_at",
+            "SELECT id, name, path, is_git, created_at FROM projects ORDER BY created_at",
         )?;
-        let rows = stmt.query_map([], map_workspace)?;
+        let rows = stmt.query_map([], map_project)?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
-    pub fn get_workspace(&self, id: &str) -> Result<Workspace> {
+    pub fn get_project(&self, id: &str) -> Result<Project> {
         let conn = self.lock();
         conn.query_row(
-            "SELECT id, name, path, is_git, created_at FROM workspaces WHERE id = ?1",
+            "SELECT id, name, path, is_git, created_at FROM projects WHERE id = ?1",
             [id],
-            map_workspace,
+            map_project,
         )
         .optional()?
-        .ok_or_else(|| AppError::NotFound(format!("workspace {id}")))
+        .ok_or_else(|| AppError::NotFound(format!("project {id}")))
     }
 
     // ----- sessions ---------------------------------------------------------
@@ -116,7 +116,7 @@ impl Store {
         let now = now_rfc3339();
         let session = Session {
             id: uuid(),
-            workspace_id: new.workspace_id,
+            project_id: new.project_id,
             title: new.title,
             backend: new.backend,
             model: new.model,
@@ -140,7 +140,7 @@ impl Store {
         let conn = self.lock();
         conn.execute(
             "INSERT INTO sessions (
-                id, workspace_id, title, backend, model, permission_mode, status, role,
+                id, project_id, title, backend, model, permission_mode, status, role,
                 agent_session_id, working_dir, branch, base_sha, is_isolated, turns, cost_usd,
                 parent_id, created_at, updated_at, effort, auto_named
              ) VALUES (
@@ -148,7 +148,7 @@ impl Store {
              )",
             rusqlite::params![
                 session.id,
-                session.workspace_id,
+                session.project_id,
                 session.title,
                 session.backend.as_str(),
                 session.model,
@@ -179,11 +179,11 @@ impl Store {
             .ok_or_else(|| AppError::NotFound(format!("session {id}")))
     }
 
-    pub fn list_sessions(&self, workspace_id: &str) -> Result<Vec<Session>> {
+    pub fn list_sessions(&self, project_id: &str) -> Result<Vec<Session>> {
         let conn = self.lock();
-        let sql = format!("{SESSION_SELECT_ALL} WHERE workspace_id = ?1 ORDER BY created_at");
+        let sql = format!("{SESSION_SELECT_ALL} WHERE project_id = ?1 ORDER BY created_at");
         let mut stmt = conn.prepare(&sql)?;
-        let rows = stmt.query_map([workspace_id], map_session)?;
+        let rows = stmt.query_map([project_id], map_session)?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
@@ -214,6 +214,33 @@ impl Store {
                 model,
                 permission_mode.as_str(),
                 effort.as_str(),
+                now_rfc3339(),
+            ),
+        )?;
+        Ok(())
+    }
+
+    /// Repoint a session's working directory (used when toggling worktree
+    /// isolation before the first turn).
+    pub fn update_session_workdir(
+        &self,
+        id: &str,
+        working_dir: &str,
+        branch: Option<&str>,
+        base_sha: Option<&str>,
+        is_isolated: bool,
+    ) -> Result<()> {
+        let conn = self.lock();
+        conn.execute(
+            "UPDATE sessions
+             SET working_dir = ?2, branch = ?3, base_sha = ?4, is_isolated = ?5, updated_at = ?6
+             WHERE id = ?1",
+            (
+                id,
+                working_dir,
+                branch,
+                base_sha,
+                is_isolated as i64,
                 now_rfc3339(),
             ),
         )?;
@@ -307,17 +334,17 @@ impl Store {
 // ----- row mappers ----------------------------------------------------------
 
 const SESSION_SELECT: &str =
-    "SELECT id, workspace_id, title, backend, model, permission_mode, status, role, \
+    "SELECT id, project_id, title, backend, model, permission_mode, status, role, \
     agent_session_id, working_dir, branch, base_sha, is_isolated, turns, cost_usd, parent_id, \
     created_at, updated_at, effort, auto_named FROM sessions WHERE id = ?1";
 
 const SESSION_SELECT_ALL: &str =
-    "SELECT id, workspace_id, title, backend, model, permission_mode, status, role, \
+    "SELECT id, project_id, title, backend, model, permission_mode, status, role, \
     agent_session_id, working_dir, branch, base_sha, is_isolated, turns, cost_usd, parent_id, \
     created_at, updated_at, effort, auto_named FROM sessions";
 
-fn map_workspace(row: &Row<'_>) -> rusqlite::Result<Workspace> {
-    Ok(Workspace {
+fn map_project(row: &Row<'_>) -> rusqlite::Result<Project> {
+    Ok(Project {
         id: row.get(0)?,
         name: row.get(1)?,
         path: row.get(2)?,
@@ -334,7 +361,7 @@ fn map_session(row: &Row<'_>) -> rusqlite::Result<Session> {
     let effort_str: String = row.get(18)?;
     Ok(Session {
         id: row.get(0)?,
-        workspace_id: row.get(1)?,
+        project_id: row.get(1)?,
         title: row.get(2)?,
         backend: Backend::parse(&backend_str).unwrap_or(Backend::Claude),
         model: row.get(4)?,

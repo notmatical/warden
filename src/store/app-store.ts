@@ -10,7 +10,7 @@ import type {
   PermissionMode,
   Session,
   SessionRole,
-  Workspace,
+  Project,
 } from "@/types"
 
 function reportError(scope: string, error: unknown) {
@@ -19,6 +19,16 @@ function reportError(scope: string, error: unknown) {
   import("sonner").then(({ toast }) => {
     toast.error(scope, { description: message })
   })
+}
+
+const SIDEBAR_KEY = "warden:sidebar-collapsed"
+
+function readSidebarCollapsed(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_KEY) === "1"
+  } catch {
+    return false
+  }
 }
 
 export interface CreateSessionOptions {
@@ -44,9 +54,12 @@ export interface RunPlanToCodeOptions {
 }
 
 interface AppState {
-  workspaces: Workspace[]
-  activeWorkspaceId: string | null
+  projects: Project[]
+  activeProjectId: string | null
   sessions: Record<string, Session>
+  /** Session ids per project, for the sidebar tree (all sessions, not just open). */
+  sessionsByProject: Record<string, string[]>
+  /** Open tabs, in order — a subset of sessions the user has opened. */
   sessionOrder: string[]
   activeSessionId: string | null
   eventsBySession: Record<string, EventRecord[]>
@@ -54,24 +67,28 @@ interface AppState {
   /** Wall-clock start of the in-flight turn, for the live elapsed timer. */
   startedAtBySession: Record<string, number>
 
+  sidebarCollapsed: boolean
+
   initialized: boolean
-  loadingWorkspaces: boolean
+  loadingProjects: boolean
   loadingSessions: boolean
   loadingEventsBySession: Record<string, boolean>
 
   init: () => Promise<void>
-  openWorkspace: () => Promise<void>
-  selectWorkspace: (id: string) => Promise<void>
-  loadSessions: (workspaceId: string) => Promise<void>
+  toggleSidebar: () => void
+  openProject: () => Promise<void>
+  selectProject: (id: string) => Promise<void>
+  loadSessions: (projectId: string) => Promise<void>
   createSession: (opts: CreateSessionOptions) => Promise<Session | null>
+  openSession: (id: string) => void
   updateSession: (sessionId: string, patch: SessionSettingsPatch) => Promise<void>
+  setIsolation: (sessionId: string, isolate: boolean) => Promise<void>
   renameSession: (sessionId: string, title: string) => Promise<void>
   deleteSessions: (sessionIds: string[]) => Promise<void>
   deleteSession: (sessionId: string) => Promise<void>
-  deleteOthers: (sessionId: string) => Promise<void>
-  deleteToRight: (sessionId: string) => Promise<void>
   selectSession: (id: string) => void
   closeTab: (id: string) => void
+  closeOthers: (id: string) => void
   sendMessage: (sessionId: string, text: string) => Promise<void>
   cancel: (sessionId: string) => Promise<void>
   runPlanToCode: (opts: RunPlanToCodeOptions) => Promise<void>
@@ -85,17 +102,20 @@ interface AppState {
 let listenersWired = false
 
 export const useAppStore = create<AppState>((set, get) => ({
-  workspaces: [],
-  activeWorkspaceId: null,
+  projects: [],
+  activeProjectId: null,
   sessions: {},
+  sessionsByProject: {},
   sessionOrder: [],
   activeSessionId: null,
   eventsBySession: {},
   streamingBySession: {},
   startedAtBySession: {},
 
+  sidebarCollapsed: readSidebarCollapsed(),
+
   initialized: false,
-  loadingWorkspaces: false,
+  loadingProjects: false,
   loadingSessions: false,
   loadingEventsBySession: {},
 
@@ -112,79 +132,85 @@ export const useAppStore = create<AppState>((set, get) => ({
       onSessionUpdated((session) => get().onSessionUpdated(session))
     }
 
-    set({ loadingWorkspaces: true })
+    set({ loadingProjects: true })
     try {
-      const workspaces = await ipc.listWorkspaces()
-      set({ workspaces })
-      const first = workspaces[0]
+      const projects = await ipc.listProjects()
+      set({ projects })
+      const first = projects[0]
       if (first) {
-        set({ activeWorkspaceId: first.id })
+        set({ activeProjectId: first.id })
         await get().loadSessions(first.id)
       }
     } catch (error) {
-      reportError("Failed to load workspaces", error)
+      reportError("Failed to load projects", error)
     } finally {
-      set({ loadingWorkspaces: false })
+      set({ loadingProjects: false })
     }
   },
 
-  openWorkspace: async () => {
+  toggleSidebar: () => {
+    set((state) => {
+      const sidebarCollapsed = !state.sidebarCollapsed
+      try {
+        localStorage.setItem(SIDEBAR_KEY, sidebarCollapsed ? "1" : "0")
+      } catch {
+        // ignore storage failures
+      }
+      return { sidebarCollapsed }
+    })
+  },
+
+  openProject: async () => {
     try {
       const selected = await open({ directory: true, multiple: false })
       if (typeof selected !== "string") {
         return
       }
-      const workspace = await ipc.openWorkspace(selected)
+      const project = await ipc.openProject(selected)
       set((state) => {
-        const exists = state.workspaces.some((w) => w.id === workspace.id)
+        const exists = state.projects.some((w) => w.id === project.id)
         return {
-          workspaces: exists
-            ? state.workspaces.map((w) =>
-                w.id === workspace.id ? workspace : w
+          projects: exists
+            ? state.projects.map((w) =>
+                w.id === project.id ? project : w
               )
-            : [...state.workspaces, workspace],
-          activeWorkspaceId: workspace.id,
+            : [...state.projects, project],
+          activeProjectId: project.id,
         }
       })
-      await get().loadSessions(workspace.id)
+      await get().loadSessions(project.id)
     } catch (error) {
-      reportError("Failed to open workspace", error)
+      reportError("Failed to open project", error)
     }
   },
 
-  selectWorkspace: async (id) => {
-    if (get().activeWorkspaceId === id) {
+  selectProject: async (id) => {
+    if (get().activeProjectId === id) {
       return
     }
-    set({ activeWorkspaceId: id })
+    set({ activeProjectId: id })
     await get().loadSessions(id)
   },
 
-  loadSessions: async (workspaceId) => {
+  // Loads a project's sessions into the store for the sidebar tree. Does not
+  // change which tabs are open — that's driven by openSession.
+  loadSessions: async (projectId) => {
     set({ loadingSessions: true })
     try {
-      const sessions = await ipc.listSessions(workspaceId)
+      const sessions = await ipc.listSessions(projectId)
       set((state) => {
         const nextSessions = { ...state.sessions }
         for (const session of sessions) {
           nextSessions[session.id] = session
         }
-        const order = sessions.map((s) => s.id)
-        const activeStillPresent =
-          state.activeSessionId !== null &&
-          order.includes(state.activeSessionId)
         return {
           sessions: nextSessions,
-          sessionOrder: order,
-          activeSessionId: activeStillPresent
-            ? state.activeSessionId
-            : (order[0] ?? null),
+          sessionsByProject: {
+            ...state.sessionsByProject,
+            [projectId]: sessions.map((s) => s.id),
+          },
         }
       })
-      const active = get().activeSessionId
-      if (active && !get().eventsBySession[active]) {
-        await get().loadEvents(active)
-      }
     } catch (error) {
       reportError("Failed to load sessions", error)
     } finally {
@@ -193,14 +219,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   createSession: async (opts) => {
-    const workspaceId = get().activeWorkspaceId
-    if (!workspaceId) {
-      reportError("No workspace selected", "Open a folder first.")
+    const projectId = get().activeProjectId
+    if (!projectId) {
+      reportError("No project selected", "Open a folder first.")
       return null
     }
     try {
       const session = await ipc.createSession({
-        workspaceId,
+        projectId,
         title: opts.title,
         model: opts.model,
         permissionMode: opts.permissionMode,
@@ -210,6 +236,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       })
       set((state) => ({
         sessions: { ...state.sessions, [session.id]: session },
+        sessionsByProject: {
+          ...state.sessionsByProject,
+          [projectId]: [
+            ...(state.sessionsByProject[projectId] ?? []),
+            session.id,
+          ],
+        },
         sessionOrder: state.sessionOrder.includes(session.id)
           ? state.sessionOrder
           : [...state.sessionOrder, session.id],
@@ -247,6 +280,31 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
+  setIsolation: async (sessionId, isolate) => {
+    try {
+      // The backend re-provisions and emits the authoritative session-updated.
+      await ipc.setSessionIsolation(sessionId, isolate)
+    } catch (error) {
+      reportError("Failed to change isolation", error)
+    }
+  },
+
+  // Open a session into a tab (from the sidebar) and focus it.
+  openSession: (id) => {
+    if (!get().sessions[id]) {
+      return
+    }
+    set((state) => ({
+      sessionOrder: state.sessionOrder.includes(id)
+        ? state.sessionOrder
+        : [...state.sessionOrder, id],
+      activeSessionId: id,
+    }))
+    if (!get().eventsBySession[id]) {
+      void get().loadEvents(id)
+    }
+  },
+
   selectSession: (id) => {
     if (!get().sessions[id]) {
       return
@@ -268,6 +326,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
       return { sessionOrder: order, activeSessionId }
     })
+  },
+
+  closeOthers: (id) => {
+    set((state) =>
+      state.sessionOrder.includes(id)
+        ? { sessionOrder: [id], activeSessionId: id }
+        : {}
+    )
   },
 
   renameSession: async (sessionId, title) => {
@@ -323,10 +389,18 @@ export const useAppStore = create<AppState>((set, get) => ({
           Object.entries(record).filter(([sid]) => !deleted.has(sid))
         )
 
+      const sessionsByProject = Object.fromEntries(
+        Object.entries(state.sessionsByProject).map(([pid, ids]) => [
+          pid,
+          ids.filter((id) => !deleted.has(id)),
+        ])
+      )
+
       return {
         sessionOrder: order,
         activeSessionId,
         sessions: omit(state.sessions),
+        sessionsByProject,
         eventsBySession: omit(state.eventsBySession),
         streamingBySession: omit(state.streamingBySession),
         startedAtBySession: omit(state.startedAtBySession),
@@ -336,17 +410,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   deleteSession: (sessionId) => get().deleteSessions([sessionId]),
-
-  deleteOthers: (sessionId) =>
-    get().deleteSessions(
-      get().sessionOrder.filter((sid) => sid !== sessionId)
-    ),
-
-  deleteToRight: (sessionId) => {
-    const order = get().sessionOrder
-    const idx = order.indexOf(sessionId)
-    return get().deleteSessions(idx >= 0 ? order.slice(idx + 1) : [])
-  },
 
   sendMessage: async (sessionId, text) => {
     try {
@@ -365,14 +428,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   runPlanToCode: async (opts) => {
-    const workspaceId = get().activeWorkspaceId
-    if (!workspaceId) {
-      reportError("No workspace selected", "Open a folder first.")
+    const projectId = get().activeProjectId
+    if (!projectId) {
+      reportError("No project selected", "Open a folder first.")
       return
     }
     try {
       const result = await ipc.runPlanToCode({
-        workspaceId,
+        projectId,
         task: opts.task,
         plannerModel: opts.plannerModel,
         coderModel: opts.coderModel,
@@ -381,6 +444,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         const sessions = { ...state.sessions }
         sessions[result.planner.id] = result.planner
         sessions[result.coder.id] = result.coder
+        const projectSessions = [
+          ...(state.sessionsByProject[projectId] ?? []),
+          result.planner.id,
+          result.coder.id,
+        ]
         const order = [...state.sessionOrder]
         for (const id of [result.planner.id, result.coder.id]) {
           if (!order.includes(id)) {
@@ -389,6 +457,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
         return {
           sessions,
+          sessionsByProject: {
+            ...state.sessionsByProject,
+            [projectId]: projectSessions,
+          },
           sessionOrder: order,
           activeSessionId: result.coder.id,
           eventsBySession: {

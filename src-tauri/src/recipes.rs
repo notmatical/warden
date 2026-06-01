@@ -6,7 +6,7 @@ use tauri::AppHandle;
 
 use crate::agent::AgentManager;
 use crate::domain::{
-    AgentEvent, Backend, EffortLevel, PermissionMode, Session, SessionRole, Workspace,
+    AgentEvent, Backend, EffortLevel, PermissionMode, Session, SessionRole, Project,
 };
 use crate::error::Result;
 use crate::events::{emit_event, emit_session};
@@ -25,7 +25,7 @@ pub struct PlanToCodeResult {
 /// Build a `NewSession` that shares a provisioned worktree, varying only the
 /// per-role fields. Each session still owns a distinct agent conversation id.
 fn session_in_dir(
-    workspace_id: &str,
+    project_id: &str,
     title: &str,
     model: String,
     permission_mode: PermissionMode,
@@ -34,7 +34,7 @@ fn session_in_dir(
     dir: &ProvisionedDir,
 ) -> NewSession {
     NewSession {
-        workspace_id: workspace_id.to_string(),
+        project_id: project_id.to_string(),
         title: title.to_string(),
         backend: Backend::Claude,
         model,
@@ -63,18 +63,18 @@ pub async fn run_plan_to_code(
     app: AppHandle,
     store: Store,
     manager: AgentManager,
-    workspace_id: String,
+    project_id: String,
     task: String,
     planner_model: String,
     coder_model: String,
 ) -> Result<PlanToCodeResult> {
-    let workspace: Workspace = store.get_workspace(&workspace_id)?;
+    let project: Project = store.get_project(&project_id)?;
     // The handoff runs two agents against one shared checkout, so it always
     // isolates in a worktree.
-    let dir = provision_working_dir(&app, &workspace, true)?;
+    let dir = provision_working_dir(&app, &project, true)?;
 
     let planner = store.create_session(session_in_dir(
-        &workspace_id,
+        &project_id,
         "Planner",
         planner_model.clone(),
         PermissionMode::Plan,
@@ -83,7 +83,7 @@ pub async fn run_plan_to_code(
         &dir,
     ))?;
     let coder = store.create_session(session_in_dir(
-        &workspace_id,
+        &project_id,
         "Coder",
         coder_model.clone(),
         PermissionMode::BypassPermissions,

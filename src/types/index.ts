@@ -34,7 +34,7 @@ export interface RepoRefBody {
 
 export type SessionRole = "chat" | "planner" | "coder"
 
-export interface Workspace {
+export interface Project {
   id: string
   name: string
   path: string
@@ -44,7 +44,7 @@ export interface Workspace {
 
 export interface Session {
   id: string
-  workspaceId: string
+  projectId: string
   title: string
   backend: Backend
   model: string

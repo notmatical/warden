@@ -1,10 +1,10 @@
 use serde::{Deserialize, Serialize};
 
-/// A workspace is a project root the user has opened. When it is a git
+/// A project is a project root the user has opened. When it is a git
 /// repository, sessions get isolated worktrees; otherwise they run in-place.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Workspace {
+pub struct Project {
     pub id: String,
     pub name: String,
     pub path: String,

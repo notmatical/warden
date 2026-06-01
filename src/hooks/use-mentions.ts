@@ -53,7 +53,7 @@ export function useMentions({
   const cursorRef = useRef(0)
   const cacheRef = useRef(new Map<string, MentionItem[]>())
 
-  // Load the candidate pool when the trigger char (or workspace) changes; the
+  // Load the candidate pool when the trigger char (or project) changes; the
   // per-keystroke query is applied by `filterMentions` below.
   useEffect(() => {
     if (!active || !workingDir) {
@@ -83,7 +83,7 @@ export function useMentions({
     return () => {
       cancelled = true
     }
-    // Only re-load when the trigger char or workspace changes.
+    // Only re-load when the trigger char or project changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?.char, workingDir])
 

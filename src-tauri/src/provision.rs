@@ -1,12 +1,12 @@
 //! Decides where a session's agent runs: an isolated git worktree when the
-//! caller asks for one, or the workspace's own checkout otherwise.
+//! caller asks for one, or the project's own checkout otherwise.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use tauri::{AppHandle, Manager};
 
-use crate::domain::Workspace;
+use crate::domain::Project;
 use crate::error::Result;
 use crate::git;
 use crate::util::{short_id, uuid};
@@ -41,14 +41,14 @@ fn sanitize(name: &str) -> String {
 
 /// Provision a working directory for a new session.
 ///
-/// - Non-git workspace → runs in place, no diff base.
-/// - Git workspace, `isolate = false` → runs in the repo's main checkout, but
+/// - Non-git project → runs in place, no diff base.
+/// - Git project, `isolate = false` → runs in the repo's main checkout, but
 ///   still records the current HEAD so the UI can show a read-only diff.
-/// - Git workspace, `isolate = true` → a fresh worktree on a `warden/<short>`
+/// - Git project, `isolate = true` → a fresh worktree on a `warden/<short>`
 ///   branch under `~/warden/<repo>/<short>`, rooted at the current HEAD.
 pub fn provision_working_dir(
     app: &AppHandle,
-    ws: &Workspace,
+    ws: &Project,
     isolate: bool,
 ) -> Result<ProvisionedDir> {
     let repo = Path::new(&ws.path);

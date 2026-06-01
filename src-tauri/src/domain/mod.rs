@@ -1,9 +1,9 @@
 mod event;
 mod session;
-mod workspace;
+mod project;
 
 pub use event::{AgentEvent, EventRecord};
 pub use session::{
     Backend, EffortLevel, PermissionMode, Session, SessionRole, SessionStatus,
 };
-pub use workspace::Workspace;
+pub use project::Project;

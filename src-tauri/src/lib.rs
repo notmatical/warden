@@ -41,12 +41,13 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            commands::list_workspaces,
-            commands::open_workspace,
+            commands::list_projects,
+            commands::open_project,
             commands::list_sessions,
             commands::get_events,
             commands::create_session,
             commands::update_session,
+            commands::set_session_isolation,
             commands::rename_session,
             commands::delete_session,
             commands::send_message,
@@ -56,6 +57,7 @@ pub fn run() {
             commands::list_commands,
             commands::list_repo_refs,
             commands::fetch_repo_ref,
+            commands::open_in,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

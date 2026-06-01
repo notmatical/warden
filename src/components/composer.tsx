@@ -4,9 +4,14 @@ import {
   useState,
   type KeyboardEvent,
 } from "react"
-import { CornerDownLeft, Square } from "lucide-react"
+import { CornerDownLeft, GitBranch, Square } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { EffortMenu } from "@/components/controls/effort-menu"
 import { ModeMenu } from "@/components/controls/mode-menu"
 import { ModelMenu } from "@/components/controls/model-menu"
@@ -18,13 +23,20 @@ import { useAppStore } from "@/store/app-store"
 
 const MAX_TEXTAREA_HEIGHT = 200
 // Shared typography/padding so the highlight backdrop lines up with the textarea.
-const INPUT_BOX = "py-3 pr-1 pl-3.5 text-sm leading-5"
+// Shared box + typography + wrapping so the backdrop and textarea lay text out
+// identically (any divergence shifts the caret off the highlighted token).
+const INPUT_BOX =
+  "py-3 pr-1 pl-3.5 text-sm leading-5 tracking-normal break-words whitespace-pre-wrap"
 
 export function Composer({ sessionId }: { sessionId: string }) {
   const session = useAppStore((s) => s.sessions[sessionId])
   const sendMessage = useAppStore((s) => s.sendMessage)
   const cancel = useAppStore((s) => s.cancel)
   const updateSession = useAppStore((s) => s.updateSession)
+  const setIsolation = useAppStore((s) => s.setIsolation)
+  const projectIsGit = useAppStore(
+    (s) => s.projects.find((p) => p.id === session?.projectId)?.isGit ?? false
+  )
   const [value, setValue] = useState("")
   // Only one toolbar menu open at a time.
   const [openMenu, setOpenMenu] = useState<"model" | "mode" | "effort" | null>(
@@ -58,6 +70,17 @@ export function Composer({ sessionId }: { sessionId: string }) {
   if (!session) {
     return null
   }
+
+  const isolated = session.isIsolated
+  const started = session.turns > 0
+  const canToggleIsolation = projectIsGit && !started
+  const isolationTip = !projectIsGit
+    ? "Worktree isolation needs a git repository."
+    : started
+      ? `This session runs in ${isolated ? "an isolated worktree" : "the project checkout"} — fixed once it has started.`
+      : isolated
+        ? "Isolated in a git worktree. Click to run in the project checkout instead."
+        : "Runs in the project checkout. Click to isolate in a git worktree so the agent's changes stay on a separate branch."
 
   const submit = () => {
     if (!canSend) return
@@ -97,7 +120,7 @@ export function Composer({ sessionId }: { sessionId: string }) {
               ref={backdropRef}
               aria-hidden
               className={cn(
-                "pointer-events-none absolute inset-0 overflow-hidden break-words whitespace-pre-wrap text-foreground",
+                "pointer-events-none absolute inset-0 overflow-hidden text-foreground",
                 INPUT_BOX
               )}
             >
@@ -176,6 +199,27 @@ export function Composer({ sessionId }: { sessionId: string }) {
             onChange={(effort) => void updateSession(sessionId, { effort })}
             {...menuProps("effort")}
           />
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="ml-auto inline-flex">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  disabled={!canToggleIsolation}
+                  aria-pressed={isolated}
+                  onClick={() => void setIsolation(sessionId, !isolated)}
+                  className={cn(
+                    isolated ? "text-primary" : "text-muted-foreground"
+                  )}
+                >
+                  <GitBranch />
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-56">{isolationTip}</TooltipContent>
+          </Tooltip>
         </div>
       </div>
     </div>

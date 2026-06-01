@@ -1,4 +1,10 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from "react"
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  type ReactNode,
+} from "react"
 import { AlertTriangle, Info } from "lucide-react"
 
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -13,7 +19,7 @@ import type { EventRecord } from "@/types"
 function UserBubble({ text }: { text: string }) {
   return (
     <div className="flex justify-end">
-      <div className="max-w-[85%] rounded-2xl bg-secondary px-3.5 py-2 text-sm whitespace-pre-wrap text-secondary-foreground">
+      <div className="max-w-[85%] rounded-md bg-secondary px-3.5 py-2 text-sm whitespace-pre-wrap text-secondary-foreground">
         {text}
       </div>
     </div>

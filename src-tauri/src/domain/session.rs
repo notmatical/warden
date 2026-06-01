@@ -162,7 +162,7 @@ impl SessionRole {
 #[serde(rename_all = "camelCase")]
 pub struct Session {
     pub id: String,
-    pub workspace_id: String,
+    pub project_id: String,
     pub title: String,
     pub backend: Backend,
     pub model: String,

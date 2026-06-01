@@ -1,16 +1,9 @@
 import { useState, type KeyboardEvent } from "react"
-import { GitBranch, Plus, Sparkles } from "lucide-react"
+import { Plus, Sparkles } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { PlanToCodeDialog } from "@/components/plan-to-code-dialog"
-import { DEFAULT_CHAT_MODEL, MODELS } from "@/lib/models"
+import { DEFAULT_CHAT_MODEL } from "@/lib/models"
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store/app-store"
 
@@ -24,15 +17,13 @@ function deriveTitle(text: string): string {
 }
 
 export function Omnibox() {
-  const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId)
+  const activeProjectId = useAppStore((s) => s.activeProjectId)
   const createSession = useAppStore((s) => s.createSession)
 
   const [value, setValue] = useState("")
-  const [model, setModel] = useState(DEFAULT_CHAT_MODEL)
-  const [isolate, setIsolate] = useState(false)
   const [creating, setCreating] = useState(false)
 
-  const disabled = !activeWorkspaceId
+  const disabled = !activeProjectId
   const canCreate = !disabled && !creating
 
   const create = async () => {
@@ -42,10 +33,9 @@ export function Omnibox() {
       const text = value.trim()
       const session = await createSession({
         title: deriveTitle(text),
-        model,
+        model: DEFAULT_CHAT_MODEL,
         permissionMode: "bypassPermissions",
         role: "chat",
-        isolate,
         firstMessage: text || undefined,
       })
       if (session) {
@@ -80,46 +70,11 @@ export function Omnibox() {
           disabled={disabled}
           placeholder={
             disabled
-              ? "Open a workspace to start a session"
+              ? "Open a project to start a session"
               : "Start a session — describe the first task"
           }
           className="h-full min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60 disabled:cursor-not-allowed"
         />
-
-        <div className="mx-0.5 h-5 w-px shrink-0 bg-border/60" />
-
-        <Select value={model} onValueChange={setModel} disabled={disabled}>
-          <SelectTrigger
-            size="sm"
-            className="h-7 w-auto gap-1 border-0 bg-transparent px-2 text-xs text-muted-foreground shadow-none hover:text-foreground focus-visible:ring-0 data-[state=open]:bg-accent dark:bg-transparent dark:hover:bg-transparent"
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent align="end">
-            {MODELS.map((m) => (
-              <SelectItem key={m.id} value={m.id}>
-                {m.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => setIsolate((v) => !v)}
-          disabled={disabled}
-          aria-pressed={isolate}
-          title={
-            isolate
-              ? "Isolating in a git worktree"
-              : "Running in the repo checkout — click to isolate in a worktree"
-          }
-          className={cn(isolate ? "text-primary" : "text-muted-foreground")}
-        >
-          <GitBranch />
-        </Button>
 
         <Button
           size="sm"

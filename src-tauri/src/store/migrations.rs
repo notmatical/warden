@@ -61,6 +61,12 @@ const MIGRATIONS: &[&str] = &[
     r#"
     ALTER TABLE sessions ADD COLUMN auto_named INTEGER NOT NULL DEFAULT 1;
     "#,
+    // 0006 — rename "workspace" → "project" terminology (the app is the
+    // workspace; each repo is a project).
+    r#"
+    ALTER TABLE workspaces RENAME TO projects;
+    ALTER TABLE sessions RENAME COLUMN workspace_id TO project_id;
+    "#,
 ];
 
 pub fn run(conn: &Connection) -> Result<()> {

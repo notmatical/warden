@@ -10,7 +10,7 @@ use crate::state::AppState;
 pub async fn run_plan_to_code(
     app: AppHandle,
     state: State<'_, AppState>,
-    workspace_id: String,
+    project_id: String,
     task: String,
     planner_model: String,
     coder_model: String,
@@ -21,7 +21,7 @@ pub async fn run_plan_to_code(
         app,
         store,
         manager,
-        workspace_id,
+        project_id,
         task,
         planner_model,
         coder_model,

@@ -1,5 +1,5 @@
 import { useState, type KeyboardEvent } from "react"
-import { Pencil, Trash2, X } from "lucide-react"
+import { Pencil, X } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import {
@@ -20,10 +20,8 @@ function Tab({ sessionId }: { sessionId: string }) {
   const order = useAppStore((s) => s.sessionOrder)
   const selectSession = useAppStore((s) => s.selectSession)
   const closeTab = useAppStore((s) => s.closeTab)
+  const closeOthers = useAppStore((s) => s.closeOthers)
   const renameSession = useAppStore((s) => s.renameSession)
-  const deleteSession = useAppStore((s) => s.deleteSession)
-  const deleteOthers = useAppStore((s) => s.deleteOthers)
-  const deleteToRight = useAppStore((s) => s.deleteToRight)
 
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState("")
@@ -32,9 +30,7 @@ function Tab({ sessionId }: { sessionId: string }) {
     return null
   }
 
-  const index = order.indexOf(sessionId)
   const hasOthers = order.length > 1
-  const hasRight = index >= 0 && index < order.length - 1
 
   const startRename = () => {
     setDraft(session.title)
@@ -120,25 +116,15 @@ function Tab({ sessionId }: { sessionId: string }) {
           Rename
         </ContextMenuItem>
         <ContextMenuSeparator />
-        <ContextMenuItem
-          disabled={!hasRight}
-          onSelect={() => void deleteToRight(sessionId)}
-        >
-          Delete to the right
+        <ContextMenuItem onSelect={() => closeTab(sessionId)}>
+          <X />
+          Close
         </ContextMenuItem>
         <ContextMenuItem
           disabled={!hasOthers}
-          onSelect={() => void deleteOthers(sessionId)}
+          onSelect={() => closeOthers(sessionId)}
         >
-          Delete others
-        </ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuItem
-          variant="destructive"
-          onSelect={() => void deleteSession(sessionId)}
-        >
-          <Trash2 />
-          Delete
+          Close others
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

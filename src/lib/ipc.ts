@@ -11,19 +11,19 @@ import type {
   Session,
   SessionRole,
   SlashCommand,
-  Workspace,
+  Project,
 } from "@/types"
 
-export function listWorkspaces(): Promise<Workspace[]> {
-  return invoke("list_workspaces")
+export function listProjects(): Promise<Project[]> {
+  return invoke("list_projects")
 }
 
-export function openWorkspace(path: string): Promise<Workspace> {
-  return invoke("open_workspace", { path })
+export function openProject(path: string): Promise<Project> {
+  return invoke("open_project", { path })
 }
 
-export function listSessions(workspaceId: string): Promise<Session[]> {
-  return invoke("list_sessions", { workspaceId })
+export function listSessions(projectId: string): Promise<Session[]> {
+  return invoke("list_sessions", { projectId })
 }
 
 export function getEvents(sessionId: string): Promise<EventRecord[]> {
@@ -31,7 +31,7 @@ export function getEvents(sessionId: string): Promise<EventRecord[]> {
 }
 
 export interface CreateSessionInput {
-  workspaceId: string
+  projectId: string
   title: string
   model: string
   permissionMode: PermissionMode
@@ -43,7 +43,7 @@ export interface CreateSessionInput {
 
 export function createSession(input: CreateSessionInput): Promise<Session> {
   return invoke("create_session", {
-    workspaceId: input.workspaceId,
+    projectId: input.projectId,
     title: input.title,
     model: input.model,
     permissionMode: input.permissionMode,
@@ -82,6 +82,19 @@ export function deleteSession(sessionId: string): Promise<void> {
   return invoke("delete_session", { sessionId })
 }
 
+export function setSessionIsolation(
+  sessionId: string,
+  isolate: boolean
+): Promise<Session> {
+  return invoke("set_session_isolation", { sessionId, isolate })
+}
+
+export type OpenTarget = "folder" | "terminal" | "zed" | "vscode"
+
+export function openIn(target: OpenTarget, path: string): Promise<void> {
+  return invoke("open_in", { target, path })
+}
+
 export function sendMessage(sessionId: string, text: string): Promise<void> {
   return invoke("send_message", { sessionId, text })
 }
@@ -91,7 +104,7 @@ export function cancelSession(sessionId: string): Promise<void> {
 }
 
 export interface RunPlanToCodeInput {
-  workspaceId: string
+  projectId: string
   task: string
   plannerModel: string
   coderModel: string
@@ -101,7 +114,7 @@ export function runPlanToCode(
   input: RunPlanToCodeInput
 ): Promise<PlanToCodeResult> {
   return invoke("run_plan_to_code", {
-    workspaceId: input.workspaceId,
+    projectId: input.projectId,
     task: input.task,
     plannerModel: input.plannerModel,
     coderModel: input.coderModel,
