@@ -150,7 +150,7 @@ function SessionRow({ sessionId }: { sessionId: string }) {
             <SidebarMenuSubButton
               asChild
               isActive={active}
-              className="cursor-default text-sidebar-foreground/70 hover:bg-transparent hover:text-sidebar-foreground data-[active=true]:bg-transparent data-[active=true]:font-medium data-[active=true]:text-sidebar-foreground"
+              className="w-full cursor-default text-sidebar-foreground/70 hover:bg-transparent hover:text-sidebar-foreground data-[active=true]:bg-transparent data-[active=true]:font-medium data-[active=true]:text-sidebar-foreground"
             >
               <button
                 type="button"
@@ -220,7 +220,7 @@ function RootRow({
         <ContextMenuTrigger asChild>
           <SidebarMenuSubButton
             asChild
-            className="cursor-default text-sidebar-foreground/70 hover:bg-transparent hover:text-sidebar-foreground"
+            className="w-full cursor-default text-sidebar-foreground/70 hover:bg-transparent hover:text-sidebar-foreground"
           >
             <button type="button" onClick={onToggle} title={project.path}>
               <ChevronRight
