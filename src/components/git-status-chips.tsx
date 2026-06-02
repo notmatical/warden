@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback } from "react"
 import { ArrowDown, ArrowUp, GitBranch, Plus, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -18,8 +18,7 @@ import type { Project, RepoStatus } from "@/types"
 const EMPTY: Project[] = []
 
 function Counter({ added, removed }: { added: number; removed: number }) {
-  const hasChanges = added > 0 || removed > 0
-  if (!hasChanges) return null
+  if (added === 0 && removed === 0) return null
   return (
     <span className="inline-flex items-center gap-1 tabular-nums">
       <span className={cn(added > 0 ? "text-emerald-500" : "text-muted-foreground/60")}>
@@ -32,11 +31,17 @@ function Counter({ added, removed }: { added: number; removed: number }) {
   )
 }
 
-function StatusChip({ status }: { status: RepoStatus }) {
+function StatusChip({
+  status,
+  onRemove,
+}: {
+  status: RepoStatus
+  onRemove?: () => void
+}) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs text-muted-foreground",
+        "group/chip inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs text-muted-foreground",
         status.isPrimary ? "bg-muted/60" : "bg-muted/30"
       )}
       title={status.path}
@@ -63,71 +68,52 @@ function StatusChip({ status }: { status: RepoStatus }) {
           {status.behind}
         </span>
       ) : null}
+      {onRemove ? (
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label={`Remove ${status.name} from this session`}
+          className="-mr-0.5 ml-0.5 hidden size-4 items-center justify-center rounded text-muted-foreground/70 transition hover:bg-muted hover:text-foreground group-hover/chip:inline-flex"
+        >
+          <X className="size-3" />
+        </button>
+      ) : null}
     </span>
   )
 }
 
-interface RootsControlProps {
+// The session's roots are exactly the git-status rows; non-primary project ids
+// are the editable set handed to `set_session_roots`.
+function nonPrimaryIds(statuses: RepoStatus[]): string[] {
+  return statuses.filter((s) => !s.isPrimary).map((s) => s.projectId)
+}
+
+function AddRootControl({
+  sessionId,
+  statuses,
+  refresh,
+}: {
   sessionId: string
   statuses: RepoStatus[]
   refresh: () => void
-}
-
-function RootsControl({ sessionId, statuses, refresh }: RootsControlProps) {
-  const groupRoots = useAppStore((s) => {
-    const groupId = s.activeGroupId
-    return groupId ? (s.rootsByGroup[groupId] ?? EMPTY) : EMPTY
-  })
-  // Session roots are seeded from the backend and kept locally so add/remove
-  // feels instant; the git-status hook reconciles the chips on next refresh.
-  const [sessionRoots, setSessionRoots] = useState<Project[]>([])
-
-  useEffect(() => {
-    let active = true
-    ipc
-      .listSessionRoots(sessionId)
-      .then((roots) => {
-        if (active) setSessionRoots(roots)
-      })
-      .catch(() => {})
-    return () => {
-      active = false
-    }
-  }, [sessionId])
-
-  const apply = useCallback(
-    (projectIds: string[]) => {
-      ipc
-        .setSessionRoots(sessionId, projectIds)
-        .then((roots) => {
-          setSessionRoots(roots)
-          refresh()
-        })
-        .catch(() => {})
-    },
-    [sessionId, refresh]
+}) {
+  const groupRoots = useAppStore((s) =>
+    s.activeGroupId ? s.rootsByGroup[s.activeGroupId] ?? EMPTY : EMPTY
   )
-
-  const onSessionIds = new Set(sessionRoots.map((p) => p.id))
-  const available = groupRoots.filter((p) => !onSessionIds.has(p.id))
-  const primaryId = statuses.find((s) => s.isPrimary)?.projectId
-  const removable = sessionRoots.filter((p) => p.id !== primaryId)
 
   const add = useCallback(
     (projectId: string) => {
-      apply([...sessionRoots.map((p) => p.id), projectId])
+      void ipc
+        .setSessionRoots(sessionId, [...nonPrimaryIds(statuses), projectId])
+        .then(refresh)
+        .catch(() => {})
     },
-    [apply, sessionRoots]
+    [sessionId, statuses, refresh]
   )
 
-  const remove = useCallback(
-    (projectId: string) => {
-      apply(sessionRoots.filter((p) => p.id !== projectId).map((p) => p.id))
-    },
-    [apply, sessionRoots]
-  )
-
-  if (available.length === 0 && removable.length === 0) return null
+  const onSession = new Set(statuses.map((s) => s.projectId))
+  const available = groupRoots.filter((p) => !onSession.has(p.id))
+  if (available.length === 0) return null
 
   return (
     <DropdownMenu modal={false}>
@@ -135,44 +121,24 @@ function RootsControl({ sessionId, statuses, refresh }: RootsControlProps) {
         <Button
           variant="ghost"
           size="icon-xs"
-          title="Add or remove roots for this session"
+          title="Add a repository to this session"
           className="text-muted-foreground hover:text-foreground"
         >
           <Plus />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-56">
-        {available.length > 0 ? (
-          <>
-            <DropdownMenuLabel>Add a root</DropdownMenuLabel>
-            {available.map((project) => (
-              <DropdownMenuItem
-                key={project.id}
-                onSelect={() => add(project.id)}
-                className="gap-2"
-              >
-                <Plus className="size-3.5 text-muted-foreground" />
-                <span className="truncate">{project.name}</span>
-              </DropdownMenuItem>
-            ))}
-          </>
-        ) : null}
-        {removable.length > 0 ? (
-          <>
-            <DropdownMenuLabel>Remove a root</DropdownMenuLabel>
-            {removable.map((project) => (
-              <DropdownMenuItem
-                key={project.id}
-                variant="destructive"
-                onSelect={() => remove(project.id)}
-                className="gap-2"
-              >
-                <X className="size-3.5" />
-                <span className="truncate">{project.name}</span>
-              </DropdownMenuItem>
-            ))}
-          </>
-        ) : null}
+        <DropdownMenuLabel>Add a root</DropdownMenuLabel>
+        {available.map((project) => (
+          <DropdownMenuItem
+            key={project.id}
+            onSelect={() => add(project.id)}
+            className="gap-2"
+          >
+            <Plus className="size-3.5 text-muted-foreground" />
+            <span className="truncate">{project.name}</span>
+          </DropdownMenuItem>
+        ))}
       </DropdownMenuContent>
     </DropdownMenu>
   )
@@ -189,6 +155,19 @@ export function GitStatusChips({
   sessionId,
   refresh,
 }: GitStatusChipsProps) {
+  const remove = useCallback(
+    (projectId: string) => {
+      void ipc
+        .setSessionRoots(
+          sessionId,
+          nonPrimaryIds(statuses).filter((id) => id !== projectId)
+        )
+        .then(refresh)
+        .catch(() => {})
+    },
+    [sessionId, statuses, refresh]
+  )
+
   return (
     <div
       className={cn(
@@ -197,9 +176,13 @@ export function GitStatusChips({
       )}
     >
       {statuses.map((status) => (
-        <StatusChip key={status.projectId} status={status} />
+        <StatusChip
+          key={status.projectId}
+          status={status}
+          onRemove={status.isPrimary ? undefined : () => remove(status.projectId)}
+        />
       ))}
-      <RootsControl sessionId={sessionId} statuses={statuses} refresh={refresh} />
+      <AddRootControl sessionId={sessionId} statuses={statuses} refresh={refresh} />
     </div>
   )
 }
