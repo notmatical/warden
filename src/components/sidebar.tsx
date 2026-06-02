@@ -54,8 +54,9 @@ import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store/app-store"
 import type { Group, Project, SessionKind } from "@/types"
 
-// Keep shadcn's left connector line; just tighten the vertical rhythm.
-const SUB_CLASS = "gap-0.5"
+// Keep shadcn's left connector line; tighten the rhythm and drop the right
+// padding (pl only) to reclaim width for long names.
+const SUB_CLASS = "gap-0.5 pr-0"
 
 // A plain icon with a hover tint — no button chrome.
 const ROW_ICON =
@@ -153,7 +154,7 @@ function SessionRow({ sessionId }: { sessionId: string }) {
                 title={session.title}
               >
                 <StatusDot status={session.status} />
-                <span>{session.title}</span>
+                <span className="min-w-0 flex-1 truncate">{session.title}</span>
               </button>
             </SidebarMenuSubButton>
           )}
@@ -224,7 +225,7 @@ function RootRow({
                   className={cn("transition-transform", expanded && "rotate-90")}
                 />
                 <FolderGit2 className="opacity-70" />
-                <span>{project.name}</span>
+                <span className="min-w-0 flex-1 truncate">{project.name}</span>
               </button>
             </SidebarMenuSubButton>
           </ContextMenuTrigger>
@@ -363,7 +364,10 @@ function GroupRow({
                   className={cn("transition-transform", expanded && "rotate-90")}
                 />
                 <Layers className="opacity-70" />
-                <span className="font-medium" onDoubleClick={startRename}>
+                <span
+                  className="min-w-0 flex-1 truncate font-medium"
+                  onDoubleClick={startRename}
+                >
                   {group.name}
                 </span>
               </SidebarMenuButton>
