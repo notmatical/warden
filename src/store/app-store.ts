@@ -30,12 +30,31 @@ function reportError(scope: string, error: unknown) {
 }
 
 const SIDEBAR_KEY = "warden:sidebar-collapsed"
+const SIDEBAR_WIDTH_KEY = "warden:sidebar-width"
+const DEFAULT_SIDEBAR_WIDTH = 256
+const MIN_SIDEBAR_WIDTH = 208
+const MAX_SIDEBAR_WIDTH = 420
 
 function readSidebarCollapsed(): boolean {
   try {
     return localStorage.getItem(SIDEBAR_KEY) === "1"
   } catch {
     return false
+  }
+}
+
+function clampWidth(px: number): number {
+  return Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, Math.round(px)))
+}
+
+function readSidebarWidth(): number {
+  try {
+    const stored = Number(localStorage.getItem(SIDEBAR_WIDTH_KEY))
+    return Number.isFinite(stored) && stored > 0
+      ? clampWidth(stored)
+      : DEFAULT_SIDEBAR_WIDTH
+  } catch {
+    return DEFAULT_SIDEBAR_WIDTH
   }
 }
 
@@ -83,6 +102,7 @@ interface AppState {
   startedAtBySession: Record<string, number>
 
   sidebarCollapsed: boolean
+  sidebarWidth: number
 
   initialized: boolean
   loadingGroups: boolean
@@ -90,6 +110,7 @@ interface AppState {
 
   init: () => Promise<void>
   setSidebarCollapsed: (collapsed: boolean) => void
+  setSidebarWidth: (width: number) => void
   loadGroupData: (groupId: string) => Promise<void>
   createGroup: (name: string) => Promise<Group | null>
   selectGroup: (id: string) => Promise<void>
@@ -134,6 +155,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   startedAtBySession: {},
 
   sidebarCollapsed: readSidebarCollapsed(),
+  sidebarWidth: readSidebarWidth(),
 
   initialized: false,
   loadingGroups: false,
@@ -175,6 +197,16 @@ export const useAppStore = create<AppState>((set, get) => ({
       // ignore storage failures
     }
     set({ sidebarCollapsed: collapsed })
+  },
+
+  setSidebarWidth: (width) => {
+    const clamped = clampWidth(width)
+    try {
+      localStorage.setItem(SIDEBAR_WIDTH_KEY, String(clamped))
+    } catch {
+      // ignore storage failures
+    }
+    set({ sidebarWidth: clamped })
   },
 
   // Loads a group's roots and sessions into the store for the sidebar tree.

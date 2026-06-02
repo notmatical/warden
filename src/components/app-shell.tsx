@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react"
+import { useCallback, useEffect, type CSSProperties } from "react"
 import {
   DndContext,
   PointerSensor,
@@ -13,6 +13,7 @@ import { useKeybinding } from "@/components/keybinding-provider"
 import { PaneGrid } from "@/components/pane-grid"
 import { SessionTabs } from "@/components/session-tabs"
 import { Sidebar } from "@/components/sidebar"
+import { SidebarResizer } from "@/components/sidebar-resizer"
 import { Topbar } from "@/components/topbar"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -37,6 +38,7 @@ export function AppShell() {
   )
   const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed)
   const setSidebarCollapsed = useAppStore((s) => s.setSidebarCollapsed)
+  const sidebarWidth = useAppStore((s) => s.sidebarWidth)
 
   const onOpenChange = useCallback(
     (open: boolean) => setSidebarCollapsed(!open),
@@ -90,9 +92,11 @@ export function AppShell() {
         <SidebarProvider
           open={!sidebarCollapsed}
           onOpenChange={onOpenChange}
-          className="h-svh min-h-0 overflow-hidden bg-background text-foreground"
+          style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
+          className="relative h-svh min-h-0 overflow-hidden bg-background text-foreground"
         >
           <Sidebar />
+          {sidebarCollapsed ? null : <SidebarResizer />}
           <SidebarInset className="min-w-0">
             <Topbar />
             <SessionTabs />
