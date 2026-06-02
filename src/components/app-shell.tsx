@@ -21,6 +21,11 @@ import { useAppStore } from "@/store/app-store"
 export function AppShell() {
   const init = useAppStore((s) => s.init)
   const hasGroup = useAppStore((s) => s.activeGroupId !== null)
+  const hasRoots = useAppStore((s) =>
+    s.activeGroupId
+      ? (s.rootsByGroup[s.activeGroupId]?.length ?? 0) > 0
+      : false
+  )
   const hasTabs = useAppStore((s) =>
     s.activeGroupId
       ? (s.tabsByGroup[s.activeGroupId]?.length ?? 0) > 0
@@ -92,6 +97,8 @@ export function AppShell() {
             <main className="min-h-0 flex-1">
               {!hasGroup ? (
                 <EmptyState variant="no-project" />
+              ) : !hasRoots ? (
+                <EmptyState variant="no-root" />
               ) : hasTabs && layout ? (
                 <PaneGrid layout={layout} />
               ) : (
