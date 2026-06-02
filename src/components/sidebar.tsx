@@ -77,14 +77,15 @@ function RowAction({
   return (
     <div
       className={cn(
-        // Solid row-colored backing cleanly hides the name's tail; a short
-        // gradient strip on its left edge softens the cut-off.
-        "absolute inset-y-0 right-0 flex items-center gap-0.5 bg-sidebar pr-1 pl-1.5 opacity-0 transition-opacity",
+        // Anchored to the row's top with the row's height so it stays on the
+        // name row even when the item is expanded. Solid row-colored backing
+        // hides the name's tail; a short gradient strip softens the cut-off.
+        "absolute top-0 right-0 flex items-center gap-0.5 bg-sidebar pr-1 pl-1.5 opacity-0 transition-opacity",
         "before:pointer-events-none before:absolute before:inset-y-0 before:right-full before:w-8 before:bg-gradient-to-l before:from-sidebar before:to-transparent",
         "has-data-[state=open]:opacity-100",
         scope === "item"
-          ? "group-hover/menu-item:opacity-100 group-focus-within/menu-item:opacity-100"
-          : "group-hover/menu-sub-item:opacity-100 group-focus-within/menu-sub-item:opacity-100"
+          ? "h-8 group-hover/menu-item:opacity-100 group-focus-within/menu-item:opacity-100"
+          : "h-7 group-hover/menu-sub-item:opacity-100 group-focus-within/menu-sub-item:opacity-100"
       )}
     >
       {children}
@@ -215,63 +216,59 @@ function RootRow({
 
   return (
     <SidebarMenuSubItem>
-      {/* Row-height wrapper so the absolute "+" stays on the name row even when
-          the root is expanded (the expanded list lives outside it). */}
-      <div className="relative">
-        <ContextMenu>
-          <ContextMenuTrigger asChild>
-            <SidebarMenuSubButton
-              asChild
-              className="cursor-default text-sidebar-foreground/70 hover:bg-transparent hover:text-sidebar-foreground"
-            >
-              <button type="button" onClick={onToggle} title={project.path}>
-                <ChevronRight
-                  className={cn("transition-transform", expanded && "rotate-90")}
-                />
-                <FolderGit2 className="opacity-70" />
-                <span className="min-w-0 flex-1 truncate">{project.name}</span>
-              </button>
-            </SidebarMenuSubButton>
-          </ContextMenuTrigger>
-          <ContextMenuContent className="w-44">
-            <ContextMenuItem
-              variant="destructive"
-              onSelect={() => void removeRoot(groupId, project.id)}
-            >
-              <Trash2 />
-              Remove from group
-            </ContextMenuItem>
-          </ContextMenuContent>
-        </ContextMenu>
-        <DropdownMenu>
-          <RowAction scope="sub-item">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label={`New session in ${project.name}`}
-                    className={ROW_ICON}
-                  >
-                    <Plus />
-                  </button>
-                </DropdownMenuTrigger>
-              </TooltipTrigger>
-              <TooltipContent side="right">New session</TooltipContent>
-            </Tooltip>
-          </RowAction>
-          <DropdownMenuContent align="start" className="w-40">
-            <DropdownMenuItem onSelect={() => void newSession("agent")}>
-              <Sparkles />
-              Agent session
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => void newSession("terminal")}>
-              <SquareTerminal />
-              Terminal session
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <SidebarMenuSubButton
+            asChild
+            className="cursor-default text-sidebar-foreground/70 hover:bg-transparent hover:text-sidebar-foreground"
+          >
+            <button type="button" onClick={onToggle} title={project.path}>
+              <ChevronRight
+                className={cn("transition-transform", expanded && "rotate-90")}
+              />
+              <FolderGit2 className="opacity-70" />
+              <span className="min-w-0 flex-1 truncate">{project.name}</span>
+            </button>
+          </SidebarMenuSubButton>
+        </ContextMenuTrigger>
+        <ContextMenuContent className="w-44">
+          <ContextMenuItem
+            variant="destructive"
+            onSelect={() => void removeRoot(groupId, project.id)}
+          >
+            <Trash2 />
+            Remove from group
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
+      <DropdownMenu>
+        <RowAction scope="sub-item">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={`New session in ${project.name}`}
+                  className={ROW_ICON}
+                >
+                  <Plus />
+                </button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="right">New session</TooltipContent>
+          </Tooltip>
+        </RowAction>
+        <DropdownMenuContent align="start" className="w-40">
+          <DropdownMenuItem onSelect={() => void newSession("agent")}>
+            <Sparkles />
+            Agent session
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => void newSession("terminal")}>
+            <SquareTerminal />
+            Terminal session
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       {expanded ? (
         <SidebarMenuSub className={SUB_CLASS}>
@@ -340,76 +337,72 @@ function GroupRow({
 
   return (
     <SidebarMenuItem>
-      {/* Row-height wrapper so the absolute add-folder action stays on the name
-          row even when the group is expanded. */}
-      <div className="relative">
-        <ContextMenu>
-          <ContextMenuTrigger asChild>
-            {editing ? (
-              <div className="flex h-7 items-center gap-2 px-2">
-                <Layers className="size-4 shrink-0 opacity-70" />
-                <Input
-                  autoFocus
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  onKeyDown={onEditKeyDown}
-                  onBlur={commitRename}
-                  onFocus={(e) => e.target.select()}
-                  className="h-5 min-w-0 flex-1 px-1 py-0 text-sm"
-                />
-              </div>
-            ) : (
-              <SidebarMenuButton
-                isActive={active}
-                onClick={onToggle}
-                className="cursor-default hover:bg-transparent hover:text-sidebar-foreground data-[active=true]:bg-transparent data-[active=true]:font-medium data-[active=true]:text-sidebar-foreground"
-              >
-                <ChevronRight
-                  className={cn("transition-transform", expanded && "rotate-90")}
-                />
-                <Layers className="opacity-70" />
-                <span
-                  className="min-w-0 flex-1 truncate font-medium"
-                  onDoubleClick={startRename}
-                >
-                  {group.name}
-                </span>
-              </SidebarMenuButton>
-            )}
-          </ContextMenuTrigger>
-          <ContextMenuContent className="w-40">
-            <ContextMenuItem onSelect={() => startRename()}>
-              <Pencil />
-              Rename
-            </ContextMenuItem>
-            <ContextMenuSeparator />
-            <ContextMenuItem
-              variant="destructive"
-              onSelect={() => void deleteGroup(group.id)}
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          {editing ? (
+            <div className="flex h-7 items-center gap-2 px-2">
+              <Layers className="size-4 shrink-0 opacity-70" />
+              <Input
+                autoFocus
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={onEditKeyDown}
+                onBlur={commitRename}
+                onFocus={(e) => e.target.select()}
+                className="h-5 min-w-0 flex-1 px-1 py-0 text-sm"
+              />
+            </div>
+          ) : (
+            <SidebarMenuButton
+              isActive={active}
+              onClick={onToggle}
+              className="cursor-default hover:bg-transparent hover:text-sidebar-foreground data-[active=true]:bg-transparent data-[active=true]:font-medium data-[active=true]:text-sidebar-foreground"
             >
-              <Trash2 />
-              Delete
-            </ContextMenuItem>
-          </ContextMenuContent>
-        </ContextMenu>
-        {editing ? null : (
-          <RowAction scope="item">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  aria-label={`Add folder to ${group.name}`}
-                  onClick={() => void addRoot(group.id)}
-                  className={ROW_ICON}
-                >
-                  <FolderPlus />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right">Add folder</TooltipContent>
-            </Tooltip>
-          </RowAction>
-        )}
-      </div>
+              <ChevronRight
+                className={cn("transition-transform", expanded && "rotate-90")}
+              />
+              <Layers className="opacity-70" />
+              <span
+                className="min-w-0 flex-1 truncate font-medium"
+                onDoubleClick={startRename}
+              >
+                {group.name}
+              </span>
+            </SidebarMenuButton>
+          )}
+        </ContextMenuTrigger>
+        <ContextMenuContent className="w-40">
+          <ContextMenuItem onSelect={() => startRename()}>
+            <Pencil />
+            Rename
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuItem
+            variant="destructive"
+            onSelect={() => void deleteGroup(group.id)}
+          >
+            <Trash2 />
+            Delete
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
+      {editing ? null : (
+        <RowAction scope="item">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label={`Add folder to ${group.name}`}
+                onClick={() => void addRoot(group.id)}
+                className={ROW_ICON}
+              >
+                <FolderPlus />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">Add folder</TooltipContent>
+          </Tooltip>
+        </RowAction>
+      )}
 
       {expanded ? (
         <SidebarMenuSub className={SUB_CLASS}>
