@@ -97,6 +97,11 @@ export function attach(id: string, container: HTMLElement, workingDir: string) {
   })
 }
 
+/** Whether a live instance exists for this session (its PTY is still alive). */
+export function has(id: string): boolean {
+  return instances.has(id)
+}
+
 /** Remove the terminal from the DOM but keep the instance (and PTY) alive. */
 export function detach(id: string) {
   instances.get(id)?.el.remove()

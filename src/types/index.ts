@@ -79,11 +79,25 @@ export interface Session {
   branch: string | null
   baseSha: string | null
   isIsolated: boolean
+  ptyStarted: boolean
   turns: number
   costUsd: number
   parentId: string | null
   createdAt: string
   updatedAt: string
+}
+
+export interface RepoStatus {
+  projectId: string
+  name: string
+  path: string
+  isPrimary: boolean
+  isGit: boolean
+  branch: string | null
+  ahead: number
+  behind: number
+  uncommittedAdded: number
+  uncommittedRemoved: number
 }
 
 export interface PlanToCodeResult {

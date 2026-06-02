@@ -80,7 +80,15 @@ impl AgentManager {
         session: &Session,
         prompt: &str,
     ) -> Result<TurnOutput> {
-        let mut child = claude::command(session, prompt)?.spawn()?;
+        // Hand every non-primary root to the CLI as an extra directory.
+        let add_dirs: Vec<String> = store
+            .list_session_root_projects(&session.id)
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|p| p.id != session.project_id)
+            .map(|p| p.path)
+            .collect();
+        let mut child = claude::command(session, prompt, &add_dirs)?.spawn()?;
 
         let stdout = child
             .stdout

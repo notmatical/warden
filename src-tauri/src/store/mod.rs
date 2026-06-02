@@ -292,6 +292,7 @@ impl Store {
             branch: new.branch,
             base_sha: new.base_sha,
             is_isolated: new.is_isolated,
+            pty_started: false,
             turns: 0,
             cost_usd: 0.0,
             parent_id: new.parent_id,
@@ -303,10 +304,10 @@ impl Store {
         conn.execute(
             "INSERT INTO sessions (
                 id, group_id, project_id, title, backend, model, permission_mode, status, role,
-                agent_session_id, working_dir, branch, base_sha, is_isolated, turns, cost_usd,
-                parent_id, created_at, updated_at, effort, auto_named, kind
+                agent_session_id, working_dir, branch, base_sha, is_isolated, pty_started, turns,
+                cost_usd, parent_id, created_at, updated_at, effort, auto_named, kind
              ) VALUES (
-                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22
+                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23
              )",
             rusqlite::params![
                 session.id,
@@ -323,6 +324,7 @@ impl Store {
                 session.branch,
                 session.base_sha,
                 session.is_isolated as i64,
+                session.pty_started as i64,
                 session.turns,
                 session.cost_usd,
                 session.parent_id,
@@ -447,6 +449,30 @@ impl Store {
         Ok(())
     }
 
+    /// Mark a terminal session's PTY conversation as opened, so reopening it
+    /// resumes the existing CLI conversation rather than starting a new one.
+    pub fn mark_pty_started(&self, id: &str) -> Result<()> {
+        let conn = self.lock();
+        conn.execute(
+            "UPDATE sessions SET pty_started = 1, updated_at = ?2 WHERE id = ?1",
+            (id, now_rfc3339()),
+        )?;
+        Ok(())
+    }
+
+    /// Point a terminal session at a fresh CLI conversation (new id, not yet
+    /// started), abandoning the previous one.
+    pub fn reset_terminal_session(&self, id: &str, agent_session_id: &str) -> Result<()> {
+        let conn = self.lock();
+        conn.execute(
+            "UPDATE sessions
+             SET agent_session_id = ?2, pty_started = 0, updated_at = ?3
+             WHERE id = ?1",
+            (id, agent_session_id, now_rfc3339()),
+        )?;
+        Ok(())
+    }
+
     /// Record the outcome of a completed turn: bump turn count and accrue cost.
     pub fn record_turn(&self, id: &str, added_cost: f64) -> Result<()> {
         let conn = self.lock();
@@ -505,13 +531,13 @@ impl Store {
 
 const SESSION_SELECT: &str =
     "SELECT id, group_id, project_id, title, backend, model, permission_mode, status, role, \
-    agent_session_id, working_dir, branch, base_sha, is_isolated, turns, cost_usd, parent_id, \
-    created_at, updated_at, effort, auto_named, kind FROM sessions WHERE id = ?1";
+    agent_session_id, working_dir, branch, base_sha, is_isolated, pty_started, turns, cost_usd, \
+    parent_id, created_at, updated_at, effort, auto_named, kind FROM sessions WHERE id = ?1";
 
 const SESSION_SELECT_ALL: &str =
     "SELECT id, group_id, project_id, title, backend, model, permission_mode, status, role, \
-    agent_session_id, working_dir, branch, base_sha, is_isolated, turns, cost_usd, parent_id, \
-    created_at, updated_at, effort, auto_named, kind FROM sessions";
+    agent_session_id, working_dir, branch, base_sha, is_isolated, pty_started, turns, cost_usd, \
+    parent_id, created_at, updated_at, effort, auto_named, kind FROM sessions";
 
 fn map_project(row: &Row<'_>) -> rusqlite::Result<Project> {
     Ok(Project {
@@ -537,8 +563,8 @@ fn map_session(row: &Row<'_>) -> rusqlite::Result<Session> {
     let pm_str: String = row.get(6)?;
     let status_str: String = row.get(7)?;
     let role_str: String = row.get(8)?;
-    let effort_str: String = row.get(19)?;
-    let kind_str: String = row.get(21)?;
+    let effort_str: String = row.get(20)?;
+    let kind_str: String = row.get(22)?;
     Ok(Session {
         id: row.get(0)?,
         group_id: row.get(1)?,
@@ -551,17 +577,18 @@ fn map_session(row: &Row<'_>) -> rusqlite::Result<Session> {
         effort: EffortLevel::parse(&effort_str).unwrap_or(EffortLevel::High),
         status: SessionStatus::parse(&status_str).unwrap_or(SessionStatus::Idle),
         role: SessionRole::parse(&role_str).unwrap_or(SessionRole::Chat),
-        auto_named: row.get::<_, i64>(20)? != 0,
+        auto_named: row.get::<_, i64>(21)? != 0,
         agent_session_id: row.get(9)?,
         working_dir: row.get(10)?,
         branch: row.get(11)?,
         base_sha: row.get(12)?,
         is_isolated: row.get::<_, i64>(13)? != 0,
-        turns: row.get(14)?,
-        cost_usd: row.get(15)?,
-        parent_id: row.get(16)?,
-        created_at: row.get(17)?,
-        updated_at: row.get(18)?,
+        pty_started: row.get::<_, i64>(14)? != 0,
+        turns: row.get(15)?,
+        cost_usd: row.get(16)?,
+        parent_id: row.get(17)?,
+        created_at: row.get(18)?,
+        updated_at: row.get(19)?,
     })
 }
 

@@ -13,7 +13,7 @@ use crate::error::{AppError, Result};
 
 /// Build the command the PTY runs. On Windows `claude` is a `.cmd` shim, which
 /// ConPTY can't exec directly, so go through `cmd /c`.
-fn build_command(cwd: &str) -> Result<CommandBuilder> {
+fn build_command(cwd: &str, extra_args: &[String]) -> Result<CommandBuilder> {
     let mut cmd = if cfg!(windows) {
         let mut c = CommandBuilder::new("cmd");
         c.args(["/c", "claude"]);
@@ -23,6 +23,9 @@ fn build_command(cwd: &str) -> Result<CommandBuilder> {
             .map_err(|_| AppError::NotFound("`claude` was not found on PATH".to_string()))?;
         CommandBuilder::new(bin)
     };
+    for arg in extra_args {
+        cmd.arg(arg);
+    }
     cmd.cwd(cwd);
     cmd.env("TERM", "xterm-256color");
     Ok(cmd)
@@ -34,6 +37,7 @@ pub fn spawn(
     working_dir: String,
     cols: u16,
     rows: u16,
+    extra_args: Vec<String>,
 ) -> Result<()> {
     let pty_system = native_pty_system();
     let pair = pty_system
@@ -47,7 +51,7 @@ pub fn spawn(
 
     let child = pair
         .slave
-        .spawn_command(build_command(&working_dir)?)
+        .spawn_command(build_command(&working_dir, &extra_args)?)
         .map_err(|e| AppError::Agent(format!("failed to launch claude: {e}")))?;
     // Drop the slave in the parent so EOF is observed when the child exits.
     drop(pair.slave);

@@ -8,6 +8,7 @@ import type {
   PermissionMode,
   PlanToCodeResult,
   RepoRef,
+  RepoStatus,
   RepoRefBody,
   Session,
   SessionKind,
@@ -80,6 +81,10 @@ export function setSessionRoots(
   return invoke("set_session_roots", { sessionId, projectIds })
 }
 
+export function sessionGitStatus(sessionId: string): Promise<RepoStatus[]> {
+  return invoke("session_git_status", { sessionId })
+}
+
 export function getEvents(sessionId: string): Promise<EventRecord[]> {
   return invoke("get_events", { sessionId })
 }
@@ -148,6 +153,11 @@ export function terminalResize(
 
 export function stopTerminal(terminalId: string): Promise<void> {
   return invoke("stop_terminal", { terminalId })
+}
+
+/** Abandon a terminal's CLI conversation so the next start opens a fresh one. */
+export function resetTerminalSession(terminalId: string): Promise<void> {
+  return invoke("reset_terminal_session", { terminalId })
 }
 
 export interface UpdateSessionInput {

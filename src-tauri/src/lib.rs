@@ -56,6 +56,7 @@ pub fn run() {
             commands::remove_group_root,
             commands::list_session_roots,
             commands::set_session_roots,
+            commands::session_git_status,
             commands::get_events,
             commands::create_session,
             commands::update_session,
@@ -74,6 +75,7 @@ pub fn run() {
             commands::terminal_write,
             commands::terminal_resize,
             commands::stop_terminal,
+            commands::reset_terminal_session,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

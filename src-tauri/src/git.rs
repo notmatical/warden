@@ -52,3 +52,57 @@ pub fn remove_worktree(repo: &Path, dest: &Path) -> Result<()> {
     run(repo, &["worktree", "remove", "--force", &dest])?;
     Ok(())
 }
+
+/// The current branch name of a working tree, or `None` on a detached HEAD.
+pub fn current_branch(cwd: &Path) -> Option<String> {
+    if let Ok(out) = run(cwd, &["symbolic-ref", "--short", "HEAD"]) {
+        let name = out.trim();
+        if !name.is_empty() {
+            return Some(name.to_string());
+        }
+    }
+    let out = run(cwd, &["rev-parse", "--abbrev-ref", "HEAD"]).ok()?;
+    let name = out.trim();
+    if name.is_empty() || name == "HEAD" {
+        None
+    } else {
+        Some(name.to_string())
+    }
+}
+
+/// Total added/removed lines across the working tree and the index, summed from
+/// `diff --numstat` plus `diff --cached --numstat`.
+pub fn uncommitted_lines(cwd: &Path) -> (u32, u32) {
+    let mut added = 0u32;
+    let mut removed = 0u32;
+    let diff_sets: [&[&str]; 2] = [&["diff", "--numstat"], &["diff", "--cached", "--numstat"]];
+    for args in diff_sets {
+        if let Ok(out) = run(cwd, args) {
+            for line in out.lines() {
+                let mut cols = line.split('\t');
+                // Binary files report `-` for both counts; skip those entries.
+                if let (Some(a), Some(r)) = (cols.next(), cols.next()) {
+                    added += a.trim().parse::<u32>().unwrap_or(0);
+                    removed += r.trim().parse::<u32>().unwrap_or(0);
+                }
+            }
+        }
+    }
+    (added, removed)
+}
+
+/// Commits ahead/behind the configured upstream. `(0, 0)` when there is no
+/// upstream — never an error, so a fresh branch reads as in sync.
+pub fn ahead_behind(cwd: &Path) -> (u32, u32) {
+    let out = match run(
+        cwd,
+        &["rev-list", "--count", "--left-right", "@{upstream}...HEAD"],
+    ) {
+        Ok(out) => out,
+        Err(_) => return (0, 0),
+    };
+    let mut cols = out.split_whitespace();
+    let behind = cols.next().and_then(|c| c.parse().ok()).unwrap_or(0);
+    let ahead = cols.next().and_then(|c| c.parse().ok()).unwrap_or(0);
+    (ahead, behind)
+}

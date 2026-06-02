@@ -483,7 +483,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const groupId = get().activeGroupId
     if (!groupId) return
     // Closing a terminal tab kills its PTY (no orphan processes); the session
-    // row survives in the sidebar and reopens fresh.
+    // row survives in the sidebar and reopens to a resume prompt.
     if (get().sessions[id]?.kind === "terminal") {
       terminals.dispose(id)
     }

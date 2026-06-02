@@ -2,6 +2,7 @@
 //! re-exports them all for the invoke handler.
 
 mod external;
+mod git;
 mod group;
 mod mentions;
 mod recipe;
@@ -10,6 +11,7 @@ mod project;
 mod terminal;
 
 pub use external::*;
+pub use git::*;
 pub use group::*;
 pub use mentions::*;
 pub use recipe::*;

@@ -20,7 +20,7 @@ pub(crate) fn resolve_claude() -> Result<PathBuf> {
 /// A `-fast` model suffix selects the priority service tier: it is stripped from
 /// the `--model` value and re-applied as `--settings {"fastMode":true}`, matching
 /// how the CLI expects fast mode to be requested.
-pub fn build_args(session: &Session, prompt: &str) -> Vec<String> {
+pub fn build_args(session: &Session, prompt: &str, add_dirs: &[String]) -> Vec<String> {
     let (model, fast) = match session.model.strip_suffix("-fast") {
         Some(base) => (base.to_string(), true),
         None => (session.model.clone(), false),
@@ -45,6 +45,14 @@ pub fn build_args(session: &Session, prompt: &str) -> Vec<String> {
         args.push(r#"{"fastMode":true}"#.to_string());
     }
 
+    for dir in add_dirs {
+        if dir.is_empty() {
+            continue;
+        }
+        args.push("--add-dir".to_string());
+        args.push(dir.clone());
+    }
+
     if session.turns == 0 {
         args.push("--session-id".to_string());
     } else {
@@ -58,10 +66,10 @@ pub fn build_args(session: &Session, prompt: &str) -> Vec<String> {
 
 /// Build a ready-to-spawn `tokio` command for a turn: piped stdout/stderr, no
 /// stdin, killed if the handle is dropped (so cancellation tears down the CLI).
-pub fn command(session: &Session, prompt: &str) -> Result<Command> {
+pub fn command(session: &Session, prompt: &str, add_dirs: &[String]) -> Result<Command> {
     let bin = resolve_claude()?;
     let mut cmd = Command::new(bin);
-    cmd.args(build_args(session, prompt))
+    cmd.args(build_args(session, prompt, add_dirs))
         .current_dir(&session.working_dir)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())

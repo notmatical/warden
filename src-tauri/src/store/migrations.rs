@@ -54,6 +54,7 @@ const MIGRATIONS: &[&str] = &[
         branch            TEXT,
         base_sha          TEXT,
         is_isolated       INTEGER NOT NULL,
+        pty_started       INTEGER NOT NULL DEFAULT 0,
         turns             INTEGER NOT NULL DEFAULT 0,
         cost_usd          REAL NOT NULL DEFAULT 0,
         parent_id         TEXT REFERENCES sessions(id) ON DELETE SET NULL,

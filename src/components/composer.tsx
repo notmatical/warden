@@ -15,8 +15,10 @@ import {
 import { EffortMenu } from "@/components/controls/effort-menu"
 import { ModeMenu } from "@/components/controls/mode-menu"
 import { ModelMenu } from "@/components/controls/model-menu"
+import { GitStatusChips } from "@/components/git-status-chips"
 import { MentionHighlight } from "@/components/mention-highlight"
 import { MentionPopover } from "@/components/mention-popover"
+import { useGitStatus } from "@/hooks/use-git-status"
 import { useMentions } from "@/hooks/use-mentions"
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store/app-store"
@@ -62,6 +64,8 @@ export function Composer({ sessionId }: { sessionId: string }) {
     workingDir: session?.workingDir ?? null,
   })
 
+  const { statuses, refresh } = useGitStatus(sessionId)
+
   // Grow the textarea with its content, from a single line up to a cap.
   useLayoutEffect(() => {
     const el = textareaRef.current
@@ -105,6 +109,11 @@ export function Composer({ sessionId }: { sessionId: string }) {
   return (
     <div className="mx-auto w-full max-w-6xl px-3 pb-3">
       <div className="flex flex-col">
+        <GitStatusChips
+          statuses={statuses}
+          sessionId={sessionId}
+          refresh={refresh}
+        />
         {/* Input card — single, solid surface, on top. Send/stop lives inline
             on the right as a ghost icon. */}
         <div className="relative z-10 flex items-end gap-1 rounded-xl border border-border/60 bg-card pr-1.5 transition-colors focus-within:border-border/80">
