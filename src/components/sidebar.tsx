@@ -347,6 +347,7 @@ function GroupRow({
           aria-label={`Add folder to ${group.name}`}
           title="Add folder"
           onClick={() => void addRoot(group.id)}
+          className="text-muted-foreground"
         >
           <FolderPlus />
         </SidebarMenuAction>
