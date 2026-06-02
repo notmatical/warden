@@ -14,6 +14,7 @@ import { PaneGrid } from "@/components/pane-grid"
 import { SessionTabs } from "@/components/session-tabs"
 import { Sidebar } from "@/components/sidebar"
 import { Topbar } from "@/components/topbar"
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { assignPane } from "@/lib/layout"
 import { useAppStore } from "@/store/app-store"
@@ -35,6 +36,12 @@ export function AppShell() {
     s.activeGroupId ? s.layoutByGroup[s.activeGroupId] ?? null : null
   )
   const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed)
+  const setSidebarCollapsed = useAppStore((s) => s.setSidebarCollapsed)
+
+  const onOpenChange = useCallback(
+    (open: boolean) => setSidebarCollapsed(!open),
+    [setSidebarCollapsed]
+  )
 
   useEffect(() => {
     void init()
@@ -56,15 +63,6 @@ export function AppShell() {
         permissionMode: cycleMode(session.permissionMode),
       })
     },
-  })
-
-  // Ctrl/⌘+B toggles the project sidebar.
-  useKeybinding({
-    id: "toggle-sidebar",
-    combo: { key: "b", mod: true },
-    allowInInput: true,
-    description: "Toggle the sidebar",
-    handler: () => useAppStore.getState().toggleSidebar(),
   })
 
   // A small activation distance lets a plain click still select the tab while a
@@ -89,9 +87,13 @@ export function AppShell() {
   return (
     <TooltipProvider>
       <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-        <div className="flex h-svh overflow-hidden bg-background text-foreground">
-          {!sidebarCollapsed && <Sidebar />}
-          <div className="flex min-w-0 flex-1 flex-col">
+        <SidebarProvider
+          open={!sidebarCollapsed}
+          onOpenChange={onOpenChange}
+          className="h-svh min-h-0 overflow-hidden bg-background text-foreground"
+        >
+          <Sidebar />
+          <SidebarInset className="min-w-0">
             <Topbar />
             <SessionTabs />
             <main className="min-h-0 flex-1">
@@ -105,8 +107,8 @@ export function AppShell() {
                 <EmptyState variant="no-session" />
               )}
             </main>
-          </div>
-        </div>
+          </SidebarInset>
+        </SidebarProvider>
       </DndContext>
     </TooltipProvider>
   )

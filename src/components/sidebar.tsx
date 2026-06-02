@@ -12,7 +12,6 @@ import {
 } from "lucide-react"
 
 import { StatusDot } from "@/components/status-dot"
-import { Button } from "@/components/ui/button"
 import {
   ContextMenu,
   ContextMenuContent,
@@ -26,11 +25,27 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { ScrollArea } from "@/components/ui/scroll-area"
+import { Input } from "@/components/ui/input"
+import {
+  Sidebar as SidebarRoot,
+  SidebarContent,
+  SidebarGroup,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuAction,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
+} from "@/components/ui/sidebar"
+import { Button } from "@/components/ui/button"
 import { DEFAULT_CHAT_MODEL } from "@/lib/models"
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store/app-store"
 import type { Group, Project, SessionKind } from "@/types"
+
+const SUB_CLASS = "ml-0 gap-0.5 border-l-0 px-1.5"
 
 function SessionRow({ sessionId }: { sessionId: string }) {
   const session = useAppStore((s) => s.sessions[sessionId])
@@ -71,37 +86,39 @@ function SessionRow({ sessionId }: { sessionId: string }) {
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
-        <div
-          className={cn(
-            "flex w-full items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors",
-            active
-              ? "bg-muted text-foreground"
-              : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-          )}
-        >
-          <StatusDot status={session.status} />
+        <SidebarMenuSubItem>
           {editing ? (
-            <input
-              autoFocus
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={onEditKeyDown}
-              onBlur={commitRename}
-              onFocus={(e) => e.target.select()}
-              className="min-w-0 flex-1 rounded-sm bg-background px-1 text-sm outline-none ring-1 ring-border"
-            />
+            <div className="flex h-7 items-center gap-2 px-1.5">
+              <StatusDot status={session.status} />
+              <Input
+                autoFocus
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={onEditKeyDown}
+                onBlur={commitRename}
+                onFocus={(e) => e.target.select()}
+                className="h-5 min-w-0 flex-1 px-1 py-0 text-xs"
+              />
+            </div>
           ) : (
-            <button
-              type="button"
-              onClick={() => openSession(sessionId)}
-              onDoubleClick={startRename}
-              className="min-w-0 flex-1 truncate text-left"
-              title={session.title}
+            <SidebarMenuSubButton
+              asChild
+              size="sm"
+              isActive={active}
+              className="cursor-default"
             >
-              {session.title}
-            </button>
+              <button
+                type="button"
+                onClick={() => openSession(sessionId)}
+                onDoubleClick={startRename}
+                title={session.title}
+              >
+                <StatusDot status={session.status} />
+                <span>{session.title}</span>
+              </button>
+            </SidebarMenuSubButton>
           )}
-        </div>
+        </SidebarMenuSubItem>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-40">
         <ContextMenuItem onSelect={() => startRename()}>
@@ -153,49 +170,22 @@ function RootRow({
   }
 
   return (
-    <div>
+    <SidebarMenuSubItem>
       <ContextMenu>
         <ContextMenuTrigger asChild>
-          <div className="group/row relative flex items-center rounded-md hover:bg-muted/50">
-            <button
-              type="button"
-              onClick={onToggle}
-              className="flex min-w-0 flex-1 items-center gap-1.5 py-1 pr-7 pl-2 text-left text-sm text-muted-foreground transition-colors"
-            >
+          <SidebarMenuSubButton
+            asChild
+            size="sm"
+            className="cursor-default pr-7 text-muted-foreground"
+          >
+            <button type="button" onClick={onToggle} title={project.path}>
               <ChevronRight
-                className={cn(
-                  "size-3.5 shrink-0 transition-transform",
-                  expanded && "rotate-90"
-                )}
+                className={cn("transition-transform", expanded && "rotate-90")}
               />
-              <FolderGit2 className="size-3.5 shrink-0 opacity-70" />
-              <span className="truncate" title={project.path}>
-                {project.name}
-              </span>
+              <FolderGit2 className="opacity-70" />
+              <span>{project.name}</span>
             </button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  aria-label={`New session in ${project.name}`}
-                  title="New session"
-                  className="absolute right-1 flex size-5 items-center justify-center rounded text-muted-foreground opacity-0 transition hover:bg-muted hover:text-foreground group-hover/row:opacity-100 data-[state=open]:opacity-100"
-                >
-                  <Plus className="size-3.5" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-40">
-                <DropdownMenuItem onSelect={() => void newSession("agent")}>
-                  <Sparkles />
-                  Agent session
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => void newSession("terminal")}>
-                  <SquareTerminal />
-                  Terminal session
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+          </SidebarMenuSubButton>
         </ContextMenuTrigger>
         <ContextMenuContent className="w-44">
           <ContextMenuItem
@@ -207,9 +197,31 @@ function RootRow({
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            aria-label={`New session in ${project.name}`}
+            title="New session"
+            className="absolute top-1 right-1 flex size-5 items-center justify-center rounded-md text-sidebar-foreground opacity-0 transition group-focus-within/menu-sub-item:opacity-100 group-hover/menu-sub-item:opacity-100 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:opacity-100 [&>svg]:size-4"
+          >
+            <Plus />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-40">
+          <DropdownMenuItem onSelect={() => void newSession("agent")}>
+            <Sparkles />
+            Agent session
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => void newSession("terminal")}>
+            <SquareTerminal />
+            Terminal session
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
-      {expanded && (
-        <div className="mt-0.5 ml-3 flex flex-col gap-0.5 border-l border-border/50 pl-2">
+      {expanded ? (
+        <SidebarMenuSub className={SUB_CLASS}>
           {rootSessions.length > 0 ? (
             rootSessions.map((id) => <SessionRow key={id} sessionId={id} />)
           ) : (
@@ -217,9 +229,9 @@ function RootRow({
               No sessions yet
             </p>
           )}
-        </div>
-      )}
-    </div>
+        </SidebarMenuSub>
+      ) : null}
+    </SidebarMenuSubItem>
   )
 }
 
@@ -274,64 +286,38 @@ function GroupRow({
   }
 
   return (
-    <div>
+    <SidebarMenuItem>
       <ContextMenu>
         <ContextMenuTrigger asChild>
-          <div
-            className={cn(
-              "group/row relative flex items-center rounded-md",
-              active ? "bg-muted/40" : "hover:bg-muted/50"
-            )}
-          >
-            <button
-              type="button"
+          {editing ? (
+            <div className="flex h-7 items-center gap-2 px-2">
+              <Layers className="size-4 shrink-0 opacity-70" />
+              <Input
+                autoFocus
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={onEditKeyDown}
+                onBlur={commitRename}
+                onFocus={(e) => e.target.select()}
+                className="h-5 min-w-0 flex-1 px-1 py-0 text-sm"
+              />
+            </div>
+          ) : (
+            <SidebarMenuButton
+              size="sm"
+              isActive={active}
               onClick={onToggle}
-              className={cn(
-                "flex min-w-0 flex-1 items-center gap-1.5 py-1.5 pr-7 pl-2 text-left text-sm transition-colors",
-                active ? "text-foreground" : "text-muted-foreground"
-              )}
+              className="cursor-default"
             >
               <ChevronRight
-                className={cn(
-                  "size-3.5 shrink-0 transition-transform",
-                  expanded && "rotate-90"
-                )}
+                className={cn("transition-transform", expanded && "rotate-90")}
               />
-              <Layers className="size-3.5 shrink-0 opacity-70" />
-              {editing ? (
-                <input
-                  autoFocus
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  onKeyDown={onEditKeyDown}
-                  onBlur={commitRename}
-                  onClick={(e) => e.stopPropagation()}
-                  onFocus={(e) => e.target.select()}
-                  className="min-w-0 flex-1 rounded-sm bg-background px-1 text-sm outline-none ring-1 ring-border"
-                />
-              ) : (
-                <span
-                  className="truncate font-medium"
-                  onDoubleClick={startRename}
-                  title={group.name}
-                >
-                  {group.name}
-                </span>
-              )}
-            </button>
-            <button
-              type="button"
-              aria-label={`Add folder to ${group.name}`}
-              title="Add folder"
-              onClick={(e) => {
-                e.stopPropagation()
-                void addRoot(group.id)
-              }}
-              className="absolute right-1 flex size-5 items-center justify-center rounded text-muted-foreground opacity-0 transition hover:bg-muted hover:text-foreground group-hover/row:opacity-100"
-            >
-              <FolderPlus className="size-3.5" />
-            </button>
-          </div>
+              <Layers className="opacity-70" />
+              <span className="font-medium" onDoubleClick={startRename}>
+                {group.name}
+              </span>
+            </SidebarMenuButton>
+          )}
         </ContextMenuTrigger>
         <ContextMenuContent className="w-40">
           <ContextMenuItem onSelect={() => startRename()}>
@@ -348,9 +334,19 @@ function GroupRow({
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
+      {editing ? null : (
+        <SidebarMenuAction
+          showOnHover
+          aria-label={`Add folder to ${group.name}`}
+          title="Add folder"
+          onClick={() => void addRoot(group.id)}
+        >
+          <FolderPlus />
+        </SidebarMenuAction>
+      )}
 
-      {expanded && (
-        <div className="mt-0.5 ml-3 flex flex-col gap-0.5 border-l border-border/50 pl-2">
+      {expanded ? (
+        <SidebarMenuSub className={SUB_CLASS}>
           {roots && roots.length > 0 ? (
             roots.map((root) => (
               <RootRow
@@ -371,9 +367,9 @@ function GroupRow({
               Add folder
             </button>
           )}
-        </div>
-      )}
-    </div>
+        </SidebarMenuSub>
+      ) : null}
+    </SidebarMenuItem>
   )
 }
 
@@ -407,41 +403,44 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="flex h-full w-60 shrink-0 flex-col border-r border-border/60 bg-sidebar">
-      <div className="flex h-14 shrink-0 items-center justify-between px-3">
-        <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-          Groups
-        </span>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => void createGroup("New group")}
-          title="New group"
-          aria-label="New group"
-        >
-          <Plus />
-        </Button>
-      </div>
-
-      <ScrollArea className="min-h-0 flex-1">
-        <div className="flex flex-col gap-0.5 px-2 pb-3">
-          {groups.length === 0 ? (
-            <p className="px-2 py-4 text-xs text-muted-foreground">
-              No groups yet — create one to start.
-            </p>
-          ) : (
-            groups.map((group) => (
-              <GroupRow
-                key={group.id}
-                group={group}
-                active={group.id === activeGroupId}
-                expanded={expanded.has(group.id)}
-                onToggle={() => toggle(group.id)}
-              />
-            ))
-          )}
+    <SidebarRoot variant="floating" collapsible="offcanvas">
+      <SidebarHeader className="p-2">
+        <div className="flex items-center justify-between gap-2 pl-2">
+          <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+            Groups
+          </span>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => void createGroup("New group")}
+            title="New group"
+            aria-label="New group"
+          >
+            <Plus />
+          </Button>
         </div>
-      </ScrollArea>
-    </aside>
+      </SidebarHeader>
+      <SidebarContent>
+        <SidebarGroup className="p-2 pt-0">
+          <SidebarMenu>
+            {groups.length === 0 ? (
+              <p className="px-2 py-4 text-xs text-muted-foreground">
+                No groups yet — create one to start.
+              </p>
+            ) : (
+              groups.map((group) => (
+                <GroupRow
+                  key={group.id}
+                  group={group}
+                  active={group.id === activeGroupId}
+                  expanded={expanded.has(group.id)}
+                  onToggle={() => toggle(group.id)}
+                />
+              ))
+            )}
+          </SidebarMenu>
+        </SidebarGroup>
+      </SidebarContent>
+    </SidebarRoot>
   )
 }

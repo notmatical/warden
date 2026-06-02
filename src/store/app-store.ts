@@ -89,7 +89,7 @@ interface AppState {
   loadingEventsBySession: Record<string, boolean>
 
   init: () => Promise<void>
-  toggleSidebar: () => void
+  setSidebarCollapsed: (collapsed: boolean) => void
   loadGroupData: (groupId: string) => Promise<void>
   createGroup: (name: string) => Promise<Group | null>
   selectGroup: (id: string) => Promise<void>
@@ -168,16 +168,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  toggleSidebar: () => {
-    set((state) => {
-      const sidebarCollapsed = !state.sidebarCollapsed
-      try {
-        localStorage.setItem(SIDEBAR_KEY, sidebarCollapsed ? "1" : "0")
-      } catch {
-        // ignore storage failures
-      }
-      return { sidebarCollapsed }
-    })
+  setSidebarCollapsed: (collapsed) => {
+    try {
+      localStorage.setItem(SIDEBAR_KEY, collapsed ? "1" : "0")
+    } catch {
+      // ignore storage failures
+    }
+    set({ sidebarCollapsed: collapsed })
   },
 
   // Loads a group's roots and sessions into the store for the sidebar tree.
