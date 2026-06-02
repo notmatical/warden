@@ -1,5 +1,6 @@
 import { PanelLeft } from "lucide-react"
 
+import { LayoutSwitcher } from "@/components/layout-switcher"
 import { Omnibox } from "@/components/omnibox"
 import { OpenInButtons } from "@/components/open-in-buttons"
 import { Button } from "@/components/ui/button"
@@ -38,6 +39,7 @@ export function Topbar() {
       <div className="flex-1">
         <Omnibox />
       </div>
+      <LayoutSwitcher />
       <OpenInButtons path={openPath} />
     </header>
   )

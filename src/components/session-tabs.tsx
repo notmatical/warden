@@ -1,4 +1,5 @@
 import { useState, type KeyboardEvent } from "react"
+import { useDraggable } from "@dnd-kit/core"
 import { Pencil, X } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
@@ -14,31 +15,42 @@ import { StatusDot } from "@/components/status-dot"
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store/app-store"
 
+// Stable empty reference so the `?? EMPTY` fallback doesn't allocate a new array
+// each selector run (the store has no shallow-equality middleware).
+const EMPTY: string[] = []
+
 function Tab({ sessionId }: { sessionId: string }) {
-  const session = useAppStore((s) => s.sessions[sessionId])
+  // Narrow primitive selectors — re-render only when the rendered fields change.
+  const title = useAppStore((s) => s.sessions[sessionId]?.title)
+  const status = useAppStore((s) => s.sessions[sessionId]?.status)
+  const role = useAppStore((s) => s.sessions[sessionId]?.role)
   const active = useAppStore(
     (s) =>
       !!s.activeGroupId && s.activeSessionByGroup[s.activeGroupId] === sessionId
   )
-  const order = useAppStore((s) =>
-    s.activeGroupId ? s.tabsByGroup[s.activeGroupId] ?? [] : []
+  const hasOthers = useAppStore(
+    (s) =>
+      (s.activeGroupId ? s.tabsByGroup[s.activeGroupId]?.length ?? 0 : 0) > 1
   )
   const selectSession = useAppStore((s) => s.selectSession)
   const closeTab = useAppStore((s) => s.closeTab)
   const closeOthers = useAppStore((s) => s.closeOthers)
   const renameSession = useAppStore((s) => s.renameSession)
 
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `tab:${sessionId}`,
+    data: { sessionId },
+  })
+
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState("")
 
-  if (!session) {
+  if (title === undefined || status === undefined) {
     return null
   }
 
-  const hasOthers = order.length > 1
-
   const startRename = () => {
-    setDraft(session.title)
+    setDraft(title)
     setEditing(true)
   }
 
@@ -62,6 +74,9 @@ function Tab({ sessionId }: { sessionId: string }) {
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <div
+          ref={setNodeRef}
+          {...attributes}
+          {...listeners}
           role="tab"
           aria-selected={active}
           tabIndex={0}
@@ -77,10 +92,11 @@ function Tab({ sessionId }: { sessionId: string }) {
             "group flex h-9 max-w-56 min-w-36 shrink-0 cursor-pointer items-center gap-2 rounded-sm border px-3 text-sm transition-colors",
             active
               ? "border-border bg-card text-foreground"
-              : "border-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+              : "border-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+            isDragging ? "opacity-50" : null
           )}
         >
-          <StatusDot status={session.status} />
+          <StatusDot status={status} />
           {editing ? (
             <input
               autoFocus
@@ -93,15 +109,15 @@ function Tab({ sessionId }: { sessionId: string }) {
               className="min-w-0 flex-1 rounded-sm bg-background px-1 text-sm outline-none ring-1 ring-border"
             />
           ) : (
-            <span className="truncate" title={session.title}>
-              {session.title}
+            <span className="truncate" title={title}>
+              {title}
             </span>
           )}
-          {session.role !== "chat" && (
+          {role !== "chat" ? (
             <Badge variant="outline" className="capitalize">
-              {session.role === "planner" ? "plan" : "code"}
+              {role === "planner" ? "plan" : "code"}
             </Badge>
-          )}
+          ) : null}
           <button
             type="button"
             aria-label="Close tab"
@@ -138,7 +154,7 @@ function Tab({ sessionId }: { sessionId: string }) {
 
 export function SessionTabs() {
   const order = useAppStore((s) =>
-    s.activeGroupId ? s.tabsByGroup[s.activeGroupId] ?? [] : []
+    s.activeGroupId ? s.tabsByGroup[s.activeGroupId] ?? EMPTY : EMPTY
   )
 
   if (order.length === 0) {
