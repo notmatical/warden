@@ -84,15 +84,16 @@ export function PaneGrid({ layout }: { layout: Layout }) {
     s.activeGroupId ? s.activeSessionByGroup[s.activeGroupId] ?? null : null
   )
 
-  const count = PANE_COUNT[layout.mode]
-  const cells: (string | null)[] = []
-  for (let i = 0; i < count; i++) {
-    const assigned = layout.panes[i] ?? null
-    // single mode with no explicit assignment falls back to the active session
-    cells.push(
-      assigned ?? (layout.mode === "single" ? activeSessionId : null)
-    )
-  }
+  // Single mode is the classic tabbed view: the one pane always follows the
+  // active session, ignoring any pane assignment left over from a multi-pane
+  // layout. Multi-pane modes render their explicit assignments.
+  const cells: (string | null)[] =
+    layout.mode === "single"
+      ? [activeSessionId]
+      : Array.from(
+          { length: PANE_COUNT[layout.mode] },
+          (_, i) => layout.panes[i] ?? null
+        )
 
   return (
     <div className={cn("grid h-full gap-2 p-2", GRID_CLASS[layout.mode])}>
