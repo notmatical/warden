@@ -27,6 +27,11 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import {
   Sidebar as SidebarRoot,
   SidebarContent,
   SidebarGroup,
@@ -197,16 +202,20 @@ function RootRow({
         </ContextMenuContent>
       </ContextMenu>
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            aria-label={`New session in ${project.name}`}
-            title="New session"
-            className="absolute top-1.5 right-1 flex size-5 items-center justify-center rounded-md text-sidebar-foreground/60 opacity-0 transition group-focus-within/menu-sub-item:opacity-100 group-hover/menu-sub-item:opacity-100 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:opacity-100 [&>svg]:size-4"
-          >
-            <Plus />
-          </button>
-        </DropdownMenuTrigger>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label={`New session in ${project.name}`}
+                className="absolute top-1/2 right-1 flex size-5 -translate-y-1/2 items-center justify-center rounded-md text-sidebar-foreground/60 opacity-0 transition group-focus-within/menu-sub-item:opacity-100 group-hover/menu-sub-item:opacity-100 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:opacity-100 [&>svg]:size-4"
+              >
+                <Plus />
+              </button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="right">New session</TooltipContent>
+        </Tooltip>
         <DropdownMenuContent align="start" className="w-40">
           <DropdownMenuItem onSelect={() => void newSession("agent")}>
             <Sparkles />
