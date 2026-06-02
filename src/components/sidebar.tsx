@@ -1,4 +1,9 @@
-import { useEffect, useState, type KeyboardEvent } from "react"
+import {
+  useEffect,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react"
 import {
   ChevronRight,
   FolderGit2,
@@ -37,7 +42,6 @@ import {
   SidebarGroup,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
@@ -52,6 +56,36 @@ import type { Group, Project, SessionKind } from "@/types"
 
 // Keep shadcn's left connector line; just tighten the vertical rhythm.
 const SUB_CLASS = "gap-0.5"
+
+// A plain icon with a hover tint — no button chrome.
+const ROW_ICON =
+  "flex size-5 items-center justify-center text-sidebar-foreground/50 transition-colors hover:text-sidebar-foreground [&>svg]:size-4"
+
+/**
+ * A right-aligned row action that reveals on hover. It fades in a gradient over
+ * the row so the icon stays legible even when the name is long, and stays
+ * visible while a menu it triggers is open.
+ */
+function RowAction({
+  scope,
+  children,
+}: {
+  scope: "item" | "sub-item"
+  children: ReactNode
+}) {
+  return (
+    <div
+      className={cn(
+        "absolute inset-y-0 right-0 flex items-center bg-gradient-to-l from-sidebar from-45% to-transparent pr-1 pl-8 opacity-0 transition-opacity has-data-[state=open]:opacity-100",
+        scope === "item"
+          ? "group-hover/menu-item:opacity-100 group-focus-within/menu-item:opacity-100"
+          : "group-hover/menu-sub-item:opacity-100 group-focus-within/menu-sub-item:opacity-100"
+      )}
+    >
+      {children}
+    </div>
+  )
+}
 
 function SessionRow({ sessionId }: { sessionId: string }) {
   const session = useAppStore((s) => s.sessions[sessionId])
@@ -205,20 +239,22 @@ function RootRow({
           </ContextMenuContent>
         </ContextMenu>
         <DropdownMenu>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  aria-label={`New session in ${project.name}`}
-                  className="absolute top-1/2 right-1 flex size-5 -translate-y-1/2 items-center justify-center rounded-md text-sidebar-foreground/60 opacity-0 transition group-focus-within/menu-sub-item:opacity-100 group-hover/menu-sub-item:opacity-100 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:opacity-100 [&>svg]:size-4"
-                >
-                  <Plus />
-                </button>
-              </DropdownMenuTrigger>
-            </TooltipTrigger>
-            <TooltipContent side="right">New session</TooltipContent>
-          </Tooltip>
+          <RowAction scope="sub-item">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label={`New session in ${project.name}`}
+                    className={ROW_ICON}
+                  >
+                    <Plus />
+                  </button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent side="right">New session</TooltipContent>
+            </Tooltip>
+          </RowAction>
           <DropdownMenuContent align="start" className="w-40">
             <DropdownMenuItem onSelect={() => void newSession("agent")}>
               <Sparkles />
@@ -349,15 +385,21 @@ function GroupRow({
           </ContextMenuContent>
         </ContextMenu>
         {editing ? null : (
-          <SidebarMenuAction
-            showOnHover
-            aria-label={`Add folder to ${group.name}`}
-            title="Add folder"
-            onClick={() => void addRoot(group.id)}
-            className="text-muted-foreground"
-          >
-            <FolderPlus />
-          </SidebarMenuAction>
+          <RowAction scope="item">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={`Add folder to ${group.name}`}
+                  onClick={() => void addRoot(group.id)}
+                  className={ROW_ICON}
+                >
+                  <FolderPlus />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">Add folder</TooltipContent>
+            </Tooltip>
+          </RowAction>
         )}
       </div>
 
