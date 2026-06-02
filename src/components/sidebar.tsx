@@ -150,7 +150,7 @@ function SessionRow({ sessionId }: { sessionId: string }) {
             <SidebarMenuSubButton
               asChild
               isActive={active}
-              className="w-full cursor-default text-left text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground active:bg-sidebar-accent/50 data-[active=true]:bg-transparent data-[active=true]:font-medium data-[active=true]:text-sidebar-foreground"
+              className="w-full cursor-default text-left text-sidebar-foreground/70 hover:bg-transparent hover:text-sidebar-foreground active:bg-transparent data-[active=true]:bg-transparent data-[active=true]:font-medium data-[active=true]:text-sidebar-foreground"
             >
               <button
                 type="button"
