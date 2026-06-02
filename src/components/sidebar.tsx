@@ -77,7 +77,11 @@ function RowAction({
   return (
     <div
       className={cn(
-        "absolute inset-y-0 right-0 flex items-center bg-gradient-to-l from-sidebar from-45% to-transparent pr-1 pl-8 opacity-0 transition-opacity has-data-[state=open]:opacity-100",
+        // Solid row-colored backing cleanly hides the name's tail; a short
+        // gradient strip on its left edge softens the cut-off.
+        "absolute inset-y-0 right-0 flex items-center gap-0.5 bg-sidebar pr-1 pl-1.5 opacity-0 transition-opacity",
+        "before:pointer-events-none before:absolute before:inset-y-0 before:right-full before:w-8 before:bg-gradient-to-l before:from-sidebar before:to-transparent",
+        "has-data-[state=open]:opacity-100",
         scope === "item"
           ? "group-hover/menu-item:opacity-100 group-focus-within/menu-item:opacity-100"
           : "group-hover/menu-sub-item:opacity-100 group-focus-within/menu-sub-item:opacity-100"
@@ -218,7 +222,7 @@ function RootRow({
           <ContextMenuTrigger asChild>
             <SidebarMenuSubButton
               asChild
-              className="cursor-default pr-7 text-sidebar-foreground/70 hover:bg-transparent hover:text-sidebar-foreground"
+              className="cursor-default text-sidebar-foreground/70 hover:bg-transparent hover:text-sidebar-foreground"
             >
               <button type="button" onClick={onToggle} title={project.path}>
                 <ChevronRight
@@ -358,7 +362,7 @@ function GroupRow({
               <SidebarMenuButton
                 isActive={active}
                 onClick={onToggle}
-                className="cursor-default pr-7 hover:bg-transparent hover:text-sidebar-foreground data-[active=true]:bg-transparent data-[active=true]:font-medium data-[active=true]:text-sidebar-foreground"
+                className="cursor-default hover:bg-transparent hover:text-sidebar-foreground data-[active=true]:bg-transparent data-[active=true]:font-medium data-[active=true]:text-sidebar-foreground"
               >
                 <ChevronRight
                   className={cn("transition-transform", expanded && "rotate-90")}
