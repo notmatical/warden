@@ -220,7 +220,7 @@ function RootRow({
         <ContextMenuTrigger asChild>
           <SidebarMenuSubButton
             asChild
-            className="w-full cursor-default text-left text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground active:bg-sidebar-accent/50 active:text-sidebar-foreground"
+            className="w-full cursor-default text-left text-sidebar-foreground/70 hover:bg-transparent hover:text-sidebar-foreground active:bg-transparent active:text-sidebar-foreground"
           >
             <button type="button" onClick={onToggle} title={project.path}>
               <ChevronRight
