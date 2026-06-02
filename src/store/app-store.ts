@@ -362,6 +362,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       reportError("No folder selected", "Add a folder to this group first.")
       return null
     }
+    const wasEmpty = (get().tabsByGroup[groupId]?.length ?? 0) === 0
     try {
       const session = await ipc.createSession({
         projectId: opts.projectId,
@@ -374,6 +375,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         kind: opts.kind,
         isolate: opts.isolate,
       })
+      if (wasEmpty) {
+        get().setLayout(groupId, DEFAULT_LAYOUT)
+      }
       set((state) => ({
         sessions: { ...state.sessions, [session.id]: session },
         sessionsByGroup: {
@@ -444,6 +448,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       return
     }
     const groupId = session.groupId
+    // Opening into an empty workspace shows the session full-screen; a
+    // multi-pane layout is something the user opts into explicitly.
+    const wasEmpty = (get().tabsByGroup[groupId]?.length ?? 0) === 0
     set((state) => {
       const tabs = state.tabsByGroup[groupId] ?? []
       return {
@@ -458,6 +465,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         },
       }
     })
+    if (wasEmpty) {
+      get().setLayout(groupId, DEFAULT_LAYOUT)
+    }
     if (!get().eventsBySession[id]) {
       void get().loadEvents(id)
     }

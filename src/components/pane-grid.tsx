@@ -1,4 +1,4 @@
-import { memo, type ReactNode } from "react"
+import { memo } from "react"
 import { useDroppable } from "@dnd-kit/core"
 import { LayoutGrid, X } from "lucide-react"
 
@@ -116,21 +116,16 @@ export function PaneGrid({ layout }: { layout: Layout }) {
   const gid = (suffix: string) =>
     `warden:panes:${activeGroupId ?? "none"}:${layout.mode}:${suffix}`
 
-  const frame = (children: ReactNode) => (
-    <div className="h-full p-2">
-      <div className="h-full overflow-hidden rounded-md border border-border">
-        {children}
-      </div>
-    </div>
-  )
-
+  // Single pane is a bare, full-bleed session — no pane chrome, no padding.
   if (layout.mode === "single") {
-    return frame(cell(0))
+    return activeSessionId ? (
+      <SessionView key={activeSessionId} sessionId={activeSessionId} />
+    ) : null
   }
 
   if (layout.mode === "cols-2" || layout.mode === "rows-2") {
     const orientation = layout.mode === "cols-2" ? "horizontal" : "vertical"
-    return frame(
+    return (
       <ResizablePanelGroup orientation={orientation} id={gid("root")}>
         <ResizablePanel id="a" defaultSize={50} minSize={20}>
           {cell(0)}
@@ -144,7 +139,7 @@ export function PaneGrid({ layout }: { layout: Layout }) {
   }
 
   if (layout.mode === "three") {
-    return frame(
+    return (
       <ResizablePanelGroup orientation="vertical" id={gid("root")}>
         <ResizablePanel id="top" defaultSize={60} minSize={20}>
           <ResizablePanelGroup orientation="horizontal" id={gid("top")}>
@@ -166,7 +161,7 @@ export function PaneGrid({ layout }: { layout: Layout }) {
   }
 
   // grid-4
-  return frame(
+  return (
     <ResizablePanelGroup orientation="vertical" id={gid("root")}>
       <ResizablePanel id="top" defaultSize={50} minSize={20}>
         <ResizablePanelGroup orientation="horizontal" id={gid("top")}>
