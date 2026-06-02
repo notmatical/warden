@@ -45,7 +45,8 @@ import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store/app-store"
 import type { Group, Project, SessionKind } from "@/types"
 
-const SUB_CLASS = "ml-0 gap-0.5 border-l-0 px-1.5"
+// Keep shadcn's left connector line; just tighten the vertical rhythm.
+const SUB_CLASS = "gap-0.5"
 
 function SessionRow({ sessionId }: { sessionId: string }) {
   const session = useAppStore((s) => s.sessions[sessionId])
@@ -103,9 +104,8 @@ function SessionRow({ sessionId }: { sessionId: string }) {
           ) : (
             <SidebarMenuSubButton
               asChild
-              size="sm"
               isActive={active}
-              className="cursor-default"
+              className="cursor-default text-sidebar-foreground/70 hover:bg-transparent hover:text-sidebar-foreground data-[active=true]:bg-transparent data-[active=true]:font-medium data-[active=true]:text-sidebar-foreground"
             >
               <button
                 type="button"
@@ -175,8 +175,7 @@ function RootRow({
         <ContextMenuTrigger asChild>
           <SidebarMenuSubButton
             asChild
-            size="sm"
-            className="cursor-default pr-7 text-muted-foreground"
+            className="cursor-default pr-7 text-sidebar-foreground/70 hover:bg-transparent hover:text-sidebar-foreground"
           >
             <button type="button" onClick={onToggle} title={project.path}>
               <ChevronRight
@@ -203,7 +202,7 @@ function RootRow({
             type="button"
             aria-label={`New session in ${project.name}`}
             title="New session"
-            className="absolute top-1 right-1 flex size-5 items-center justify-center rounded-md text-sidebar-foreground opacity-0 transition group-focus-within/menu-sub-item:opacity-100 group-hover/menu-sub-item:opacity-100 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:opacity-100 [&>svg]:size-4"
+            className="absolute top-1.5 right-1 flex size-5 items-center justify-center rounded-md text-sidebar-foreground/60 opacity-0 transition group-focus-within/menu-sub-item:opacity-100 group-hover/menu-sub-item:opacity-100 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:opacity-100 [&>svg]:size-4"
           >
             <Plus />
           </button>
@@ -304,10 +303,9 @@ function GroupRow({
             </div>
           ) : (
             <SidebarMenuButton
-              size="sm"
               isActive={active}
               onClick={onToggle}
-              className="cursor-default"
+              className="cursor-default hover:bg-transparent hover:text-sidebar-foreground data-[active=true]:bg-transparent data-[active=true]:font-medium data-[active=true]:text-sidebar-foreground"
             >
               <ChevronRight
                 className={cn("transition-transform", expanded && "rotate-90")}
