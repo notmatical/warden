@@ -3,13 +3,15 @@ import type { Layout, LayoutMode } from "@/types"
 /** Number of panes each layout mode renders. */
 export const PANE_COUNT: Record<LayoutMode, number> = {
   single: 1,
-  "split-2": 2,
+  "cols-2": 2,
+  "rows-2": 2,
+  three: 3,
   "grid-4": 4,
 }
 
 export const DEFAULT_LAYOUT: Layout = { mode: "single", panes: [null] }
 
-const MODES: LayoutMode[] = ["single", "split-2", "grid-4"]
+const MODES: LayoutMode[] = ["single", "cols-2", "rows-2", "three", "grid-4"]
 
 /** Coerce a panes array to exactly `count` cells (pad with null / truncate). */
 function fitPanes(panes: (string | null)[], count: number): (string | null)[] {

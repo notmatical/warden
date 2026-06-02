@@ -45,7 +45,7 @@ export interface Project {
 
 /** A pane layout saved on a group. `panes` maps each grid cell to a session id
  *  (or null when empty); its length matches the mode's cell count. */
-export type LayoutMode = "single" | "split-2" | "grid-4"
+export type LayoutMode = "single" | "cols-2" | "rows-2" | "three" | "grid-4"
 
 export interface Layout {
   mode: LayoutMode
