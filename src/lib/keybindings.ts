@@ -64,14 +64,19 @@ export function isEditableTarget(target: EventTarget | null): boolean {
   return EDITABLE_TAGS.has(target.tagName) || target.isContentEditable
 }
 
-/** A single display label for a combo, e.g. "CMD+E" (mac) or "CTRL+E". */
+/** A single display label for a combo, e.g. "Cmd+E" (mac) or "Ctrl+E". */
 export function comboLabel(combo: KeyCombo): string {
   const parts: string[] = []
-  if (combo.mod) parts.push(isMac ? "CMD" : "CTRL")
-  if (combo.ctrl) parts.push("CTRL")
-  if (combo.meta) parts.push("CMD")
-  if (combo.alt) parts.push(isMac ? "OPT" : "ALT")
-  if (combo.shift) parts.push("SHIFT")
-  parts.push(combo.key === " " ? "SPACE" : combo.key.toUpperCase())
+  if (combo.mod) parts.push(isMac ? "Cmd" : "Ctrl")
+  if (combo.ctrl) parts.push("Ctrl")
+  if (combo.meta) parts.push("Cmd")
+  if (combo.alt) parts.push(isMac ? "Opt" : "Alt")
+  if (combo.shift) parts.push("Shift")
+  if (combo.key === " ") {
+    parts.push("Space")
+  } else {
+    // Single keys read nicest uppercased ("E"); named keys keep their casing.
+    parts.push(combo.key.length === 1 ? combo.key.toUpperCase() : combo.key)
+  }
   return parts.join("+")
 }
