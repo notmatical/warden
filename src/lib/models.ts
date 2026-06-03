@@ -20,7 +20,6 @@ export const MODELS: ModelOption[] = [
   { id: "haiku", label: "Haiku", provider: "Anthropic" },
   { id: "claude-opus-4-8[1m]", label: "Opus 4.8 (1M)", provider: "Anthropic" },
   { id: "claude-sonnet-4-6[1m]", label: "Sonnet 4.6 (1M)", provider: "Anthropic" },
-  { id: "gpt-5.1-codex", label: "GPT-5.1 Codex", provider: "OpenAI" },
   { id: "gpt-5.5", label: "GPT-5.5", provider: "OpenAI" },
   { id: "gpt-5.4-mini", label: "GPT-5.4 Mini", provider: "OpenAI" },
 ]
@@ -73,8 +72,8 @@ export function withFast(id: string, fast: boolean): string {
 export const DEFAULT_CHAT_MODEL = "claude-opus-4-8"
 export const DEFAULT_PLANNER_MODEL = "claude-sonnet-4-6"
 export const DEFAULT_CODER_MODEL = "claude-opus-4-8"
-/** Placeholder model for Codex sessions; the backend uses Codex's own default. */
-export const DEFAULT_CODEX_MODEL = "gpt-5.1-codex"
+/** Default model shown for Codex sessions (Codex's current default). */
+export const DEFAULT_CODEX_MODEL = "gpt-5.5"
 
 const MODEL_ALIASES: Record<string, string> = {
   opus: "Opus",

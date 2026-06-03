@@ -74,6 +74,8 @@ export function ModelMenu({
 	const base = baseModelId(value);
 	const fast = isFastModel(value);
 	const canFast = supportsFast(base);
+	// Fast mode is a Claude service tier; Codex has no equivalent toggle.
+	const showFast = backendForModel(base) === "claude";
 
 	const activeProvider =
 		MODELS.find((m) => m.id === base)?.provider ?? PROVIDER_ENTRIES[0].name;
@@ -184,28 +186,34 @@ export function ModelMenu({
 					</div>
 				</div>
 
-				<DropdownMenuSeparator className="mx-0 my-0" />
-				<div className="p-1">
-					<DropdownMenuLabel className="text-xs text-muted-foreground">
-						Fast mode
-					</DropdownMenuLabel>
-					<div className="flex items-center justify-between gap-3 px-2 pt-0.5 pb-1.5">
-						<span
-							className={cn(
-								"flex items-center gap-2 text-sm",
-								!canFast && "text-muted-foreground",
-							)}
-						>
-							<AnimatedZap active={fast && canFast} className="size-4" />
-							Enable fast mode
-						</span>
-						<Switch
-							checked={fast}
-							disabled={!canFast}
-							onCheckedChange={(checked) => onChange(withFast(base, checked))}
-						/>
-					</div>
-				</div>
+				{showFast ? (
+					<>
+						<DropdownMenuSeparator className="mx-0 my-0" />
+						<div className="p-1">
+							<DropdownMenuLabel className="text-xs text-muted-foreground">
+								Fast mode
+							</DropdownMenuLabel>
+							<div className="flex items-center justify-between gap-3 px-2 pt-0.5 pb-1.5">
+								<span
+									className={cn(
+										"flex items-center gap-2 text-sm",
+										!canFast && "text-muted-foreground",
+									)}
+								>
+									<AnimatedZap active={fast && canFast} className="size-4" />
+									Enable fast mode
+								</span>
+								<Switch
+									checked={fast}
+									disabled={!canFast}
+									onCheckedChange={(checked) =>
+										onChange(withFast(base, checked))
+									}
+								/>
+							</div>
+						</div>
+					</>
+				) : null}
 			</DropdownMenuContent>
 		</DropdownMenu>
 	);
