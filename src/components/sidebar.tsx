@@ -17,6 +17,7 @@ import {
   Trash2,
 } from "lucide-react"
 
+import { useConfirm } from "@/components/confirm-dialog"
 import { StatusDot } from "@/components/status-dot"
 import {
   ContextMenu,
@@ -104,6 +105,7 @@ function SessionRow({ sessionId }: { sessionId: string }) {
   const openSession = useAppStore((s) => s.openSession)
   const renameSession = useAppStore((s) => s.renameSession)
   const deleteSession = useAppStore((s) => s.deleteSession)
+  const confirm = useConfirm()
 
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState("")
@@ -175,7 +177,18 @@ function SessionRow({ sessionId }: { sessionId: string }) {
         <ContextMenuSeparator />
         <ContextMenuItem
           variant="destructive"
-          onSelect={() => void deleteSession(sessionId)}
+          onSelect={async () => {
+            if (
+              await confirm({
+                title: "Delete session?",
+                description: `"${session.title}" and its history will be permanently deleted.`,
+                confirmLabel: "Delete",
+                destructive: true,
+              })
+            ) {
+              void deleteSession(sessionId)
+            }
+          }}
         >
           <Trash2 />
           Delete
@@ -335,6 +348,7 @@ function GroupRow({
   const addRoot = useAppStore((s) => s.addRoot)
   const renameGroup = useAppStore((s) => s.renameGroup)
   const deleteGroup = useAppStore((s) => s.deleteGroup)
+  const confirm = useConfirm()
 
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState("")
@@ -414,7 +428,18 @@ function GroupRow({
           <ContextMenuSeparator />
           <ContextMenuItem
             variant="destructive"
-            onSelect={() => void deleteGroup(group.id)}
+            onSelect={async () => {
+              if (
+                await confirm({
+                  title: "Delete group?",
+                  description: `"${group.name}" and all of its sessions will be permanently deleted.`,
+                  confirmLabel: "Delete",
+                  destructive: true,
+                })
+              ) {
+                void deleteGroup(group.id)
+              }
+            }}
           >
             <Trash2 />
             Delete
