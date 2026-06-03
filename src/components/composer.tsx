@@ -68,7 +68,7 @@ export function Composer({ sessionId }: { sessionId: string }) {
       modelMenuSignal.nonce !== lastModelNonce.current
     ) {
       lastModelNonce.current = modelMenuSignal.nonce
-      setOpenMenu("model")
+      setOpenMenu((current) => (current === "model" ? null : "model"))
     }
   }, [modelMenuSignal, sessionId])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
