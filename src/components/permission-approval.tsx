@@ -78,7 +78,7 @@ export function PermissionApproval({
         </div>
       </div>
       {expanded ? (
-        <ul className="space-y-1 border-t border-border/60 px-2.5 py-2">
+        <ul className="space-y-1 border-t border-border/60 bg-foreground/[0.04] px-2.5 py-2">
           {denials.map((denial, i) => (
             <li
               key={i}
