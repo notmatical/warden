@@ -4,6 +4,7 @@ mod domain;
 mod error;
 mod events;
 mod git;
+mod providers;
 mod provision;
 mod recipes;
 mod state;
@@ -72,6 +73,9 @@ pub fn run() {
             commands::list_repo_refs,
             commands::fetch_repo_ref,
             commands::open_in,
+            commands::list_provider_status,
+            commands::install_provider,
+            commands::update_provider,
             commands::start_terminal,
             commands::terminal_write,
             commands::terminal_resize,

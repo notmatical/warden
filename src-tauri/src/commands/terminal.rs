@@ -5,17 +5,19 @@ use tauri::ipc::Channel;
 use crate::error::Result;
 use crate::terminal::{self, TerminalEvent};
 
-/// Spawn the user's shell in `working_dir` (the session's root) and stream its
-/// output over `on_output`. The terminal id is the session id.
+/// Spawn a PTY in `working_dir` (the session's root) and stream its output over
+/// `on_output`. The terminal id is the session id. With no `command` the user's
+/// shell runs; with one (a provider's CLI) that program runs natively instead.
 #[tauri::command]
 pub async fn start_terminal(
     on_output: Channel<TerminalEvent>,
     terminal_id: String,
     working_dir: String,
+    command: Option<String>,
     cols: u16,
     rows: u16,
 ) -> Result<()> {
-    terminal::spawn(on_output, terminal_id, working_dir, cols, rows)
+    terminal::spawn(on_output, terminal_id, working_dir, command, cols, rows)
 }
 
 #[tauri::command]

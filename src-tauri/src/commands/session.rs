@@ -17,6 +17,17 @@ use crate::events::emit_session;
 /// Default reasoning effort for a new session.
 const DEFAULT_EFFORT: EffortLevel = EffortLevel::High;
 
+/// Infer the backend that runs a given model id. Codex/GPT ids run on Codex;
+/// everything else runs on Claude.
+fn backend_for_model(model: &str) -> Backend {
+    let id = model.to_ascii_lowercase();
+    if id.starts_with("gpt") || id.starts_with("codex") {
+        Backend::Codex
+    } else {
+        Backend::Claude
+    }
+}
+
 #[tauri::command]
 pub async fn get_events(
     state: State<'_, AppState>,
@@ -65,10 +76,12 @@ pub async fn create_session(
         .as_deref()
         .and_then(SessionKind::parse)
         .unwrap_or(SessionKind::Agent);
+    // An explicit backend wins; otherwise it follows from the model id, since
+    // the model picks its own backend (codex/gpt ids run on Codex).
     let backend = backend
         .as_deref()
         .and_then(Backend::parse)
-        .unwrap_or(Backend::Claude);
+        .unwrap_or_else(|| backend_for_model(&model));
 
     let session = state.store.create_session(NewSession {
         group_id,

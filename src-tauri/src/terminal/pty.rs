@@ -11,14 +11,18 @@ use super::registry::{self, Session};
 use super::TerminalEvent;
 use crate::error::{AppError, Result};
 
-/// Build the shell command the PTY runs, started in `cwd`. Windows uses
-/// PowerShell; elsewhere the user's `$SHELL` (falling back to bash).
-fn build_command(cwd: &str) -> CommandBuilder {
-    let mut cmd = if cfg!(windows) {
-        CommandBuilder::new("powershell.exe")
-    } else {
-        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
-        CommandBuilder::new(shell)
+/// Build the PTY command, started in `cwd`. With no `program`, runs the user's
+/// default shell — Windows uses PowerShell; elsewhere `$SHELL` (falling back to
+/// bash). When `program` is set (e.g. a provider's `claude`/`codex` CLI), it is
+/// launched directly instead of the shell.
+fn build_command(cwd: &str, program: Option<&str>) -> CommandBuilder {
+    let mut cmd = match program {
+        Some(program) => CommandBuilder::new(program),
+        None if cfg!(windows) => CommandBuilder::new("powershell.exe"),
+        None => {
+            let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
+            CommandBuilder::new(shell)
+        }
     };
     cmd.cwd(cwd);
     cmd.env("TERM", "xterm-256color");
@@ -30,6 +34,7 @@ pub fn spawn(
     on_output: Channel<TerminalEvent>,
     terminal_id: String,
     working_dir: String,
+    command: Option<String>,
     cols: u16,
     rows: u16,
 ) -> Result<()> {
@@ -45,7 +50,7 @@ pub fn spawn(
 
     let child = pair
         .slave
-        .spawn_command(build_command(&working_dir))
+        .spawn_command(build_command(&working_dir, command.as_deref()))
         .map_err(|e| AppError::Agent(format!("failed to launch terminal: {e}")))?;
     // Drop the slave in the parent so EOF is observed when the child exits.
     drop(pair.slave);
