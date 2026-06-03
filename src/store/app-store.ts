@@ -134,6 +134,7 @@ interface AppState {
   closeOthers: (id: string) => void
   sendMessage: (sessionId: string, text: string) => Promise<void>
   cancel: (sessionId: string) => Promise<void>
+  approveTools: (sessionId: string, patterns: string[]) => Promise<void>
   runPlanToCode: (opts: RunPlanToCodeOptions) => Promise<void>
   loadEvents: (sessionId: string) => Promise<void>
 
@@ -727,6 +728,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       await ipc.cancelSession(sessionId)
     } catch (error) {
       reportError("Failed to cancel session", error)
+    }
+  },
+
+  approveTools: async (sessionId, patterns) => {
+    try {
+      await ipc.approveTools(sessionId, patterns)
+    } catch (error) {
+      reportError("Failed to approve tools", error)
     }
   },
 

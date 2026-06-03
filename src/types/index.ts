@@ -88,6 +88,7 @@ export interface Session {
   branch: string | null
   baseSha: string | null
   isIsolated: boolean
+  allowedTools: string[]
   turns: number
   costUsd: number
   parentId: string | null
@@ -133,8 +134,16 @@ export type AgentEvent =
       duration_ms: number | null
       num_turns: number | null
     }
+  | { type: "permission_request"; denials: ToolDenial[] }
   | { type: "notice"; text: string }
   | { type: "error"; message: string }
+
+/** A tool call the CLI denied; `pattern` is the allowlist token that permits it. */
+export interface ToolDenial {
+  toolName: string
+  pattern: string
+  input: unknown
+}
 
 export interface EventEnvelope {
   id: string

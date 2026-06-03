@@ -205,6 +205,13 @@ export function cancelSession(sessionId: string): Promise<void> {
   return invoke("cancel_session", { sessionId })
 }
 
+export function approveTools(
+  sessionId: string,
+  patterns: string[]
+): Promise<void> {
+  return invoke("approve_tools", { sessionId, patterns })
+}
+
 export interface RunPlanToCodeInput {
   projectId: string
   task: string
