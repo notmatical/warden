@@ -10,7 +10,6 @@ import { AlertTriangle, Check, Copy, Info } from "lucide-react"
 
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Markdown } from "@/components/ui/markdown"
-import { PermissionApproval } from "@/components/permission-approval"
 import { StreamingStatus } from "@/components/streaming-status"
 import { ToolActivity } from "@/components/tool-activity"
 import { cn } from "@/lib/utils"
@@ -98,11 +97,7 @@ function ErrorRow({ message }: { message: string }) {
 
 const TOOL_TYPES = new Set(["thinking", "tool_use", "tool_result"])
 
-function renderStandalone(
-  event: EventRecord,
-  sessionId: string,
-  lastId: string | undefined
-): ReactNode {
+function renderStandalone(event: EventRecord): ReactNode {
   switch (event.type) {
     case "session_init":
       // Internal metadata — not shown in the transcript.
@@ -112,14 +107,8 @@ function renderStandalone(
     case "assistant_text":
       return <AssistantMessage key={event.id} text={event.text} ts={event.ts} />
     case "permission_request":
-      return (
-        <PermissionApproval
-          key={event.id}
-          sessionId={sessionId}
-          denials={event.denials}
-          active={event.id === lastId}
-        />
-      )
+      // Surfaced live above the composer, not in the transcript history.
+      return null
     case "notice":
       return <Notice key={event.id} text={event.text} />
     case "error":
@@ -137,8 +126,7 @@ function renderStandalone(
 
 /** Render the event log, collapsing contiguous tool/thinking events into a
  *  single `ToolActivity` accordion between assistant/user messages. */
-function renderTimeline(events: EventRecord[], sessionId: string): ReactNode[] {
-  const lastId = events[events.length - 1]?.id
+function renderTimeline(events: EventRecord[]): ReactNode[] {
   const nodes: ReactNode[] = []
   let toolRun: EventRecord[] = []
 
@@ -157,7 +145,7 @@ function renderTimeline(events: EventRecord[], sessionId: string): ReactNode[] {
       continue
     }
     flush()
-    const node = renderStandalone(event, sessionId, lastId)
+    const node = renderStandalone(event)
     if (node) nodes.push(node)
   }
   flush()
@@ -173,8 +161,8 @@ export function Transcript({ sessionId }: { sessionId: string }) {
   // Memoized so streaming deltas (which only touch `streaming`) don't re-walk
   // the whole event log every tick.
   const timeline = useMemo(
-    () => (events ? renderTimeline(events, sessionId) : null),
-    [events, sessionId]
+    () => (events ? renderTimeline(events) : null),
+    [events]
   )
 
   const viewportRef = useRef<HTMLDivElement>(null)

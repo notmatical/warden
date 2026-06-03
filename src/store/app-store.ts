@@ -98,6 +98,9 @@ interface AppState {
   activeSessionByGroup: Record<string, string | null>
   sessions: Record<string, Session>
   eventsBySession: Record<string, EventRecord[]>
+  /** permission_request event id the user has acted on, per session — so the
+   *  approval bar dismisses on approve/deny. */
+  approvalResolvedBySession: Record<string, string>
   streamingBySession: Record<string, string>
   /** Wall-clock start of the in-flight turn, for the live elapsed timer. */
   startedAtBySession: Record<string, number>
@@ -135,6 +138,7 @@ interface AppState {
   sendMessage: (sessionId: string, text: string) => Promise<void>
   cancel: (sessionId: string) => Promise<void>
   approveTools: (sessionId: string, patterns: string[]) => Promise<void>
+  resolveApproval: (sessionId: string, eventId: string) => void
   runPlanToCode: (opts: RunPlanToCodeOptions) => Promise<void>
   loadEvents: (sessionId: string) => Promise<void>
 
@@ -155,6 +159,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeSessionByGroup: {},
   sessions: {},
   eventsBySession: {},
+  approvalResolvedBySession: {},
   streamingBySession: {},
   startedAtBySession: {},
 
@@ -704,6 +709,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         activeSessionByGroup,
         layoutByGroup,
         eventsBySession: omit(state.eventsBySession),
+        approvalResolvedBySession: omit(state.approvalResolvedBySession),
         streamingBySession: omit(state.streamingBySession),
         startedAtBySession: omit(state.startedAtBySession),
         loadingEventsBySession: omit(state.loadingEventsBySession),
@@ -737,6 +743,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     } catch (error) {
       reportError("Failed to approve tools", error)
     }
+  },
+
+  resolveApproval: (sessionId, eventId) => {
+    set((state) => ({
+      approvalResolvedBySession: {
+        ...state.approvalResolvedBySession,
+        [sessionId]: eventId,
+      },
+    }))
   },
 
   runPlanToCode: async (opts) => {

@@ -16,6 +16,7 @@ import { EffortMenu } from "@/components/controls/effort-menu"
 import { ModeMenu } from "@/components/controls/mode-menu"
 import { ModelMenu } from "@/components/controls/model-menu"
 import { GitStatusChips } from "@/components/git-status-chips"
+import { PermissionApproval } from "@/components/permission-approval"
 import { MentionHighlight } from "@/components/mention-highlight"
 import { MentionPopover } from "@/components/mention-popover"
 import { useGitStatus } from "@/hooks/use-git-status"
@@ -74,6 +75,15 @@ export function Composer({ sessionId }: { sessionId: string }) {
 
   const { statuses, refresh } = useGitStatus(sessionId)
 
+  // A live tool-approval request: the latest event is a permission_request the
+  // user hasn't acted on. While pending it takes the chip row's slot.
+  const pendingApproval = useAppStore((s) => {
+    const events = s.eventsBySession[sessionId]
+    const last = events?.[events.length - 1]
+    if (last?.type !== "permission_request") return null
+    return s.approvalResolvedBySession[sessionId] === last.id ? null : last
+  })
+
   // Grow the textarea with its content, from a single line up to a cap.
   useLayoutEffect(() => {
     const el = textareaRef.current
@@ -117,11 +127,19 @@ export function Composer({ sessionId }: { sessionId: string }) {
   return (
     <div className="mx-auto w-full max-w-6xl px-3 pb-3">
       <div className="flex flex-col">
-        <GitStatusChips
-          statuses={statuses}
-          sessionId={sessionId}
-          refresh={refresh}
-        />
+        {pendingApproval ? (
+          <PermissionApproval
+            sessionId={sessionId}
+            eventId={pendingApproval.id}
+            denials={pendingApproval.denials}
+          />
+        ) : (
+          <GitStatusChips
+            statuses={statuses}
+            sessionId={sessionId}
+            refresh={refresh}
+          />
+        )}
         {/* Input card — single, solid surface, on top. Send/stop lives inline
             on the right as a ghost icon. */}
         <div className="relative z-10 flex items-end gap-1 rounded-xl border border-border/60 bg-card pr-1.5 transition-colors focus-within:border-border/80">
