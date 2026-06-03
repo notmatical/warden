@@ -155,11 +155,6 @@ export function stopTerminal(terminalId: string): Promise<void> {
   return invoke("stop_terminal", { terminalId })
 }
 
-/** Abandon a terminal's CLI conversation so the next start opens a fresh one. */
-export function resetTerminalSession(terminalId: string): Promise<void> {
-  return invoke("reset_terminal_session", { terminalId })
-}
-
 export interface UpdateSessionInput {
   model?: string
   permissionMode?: PermissionMode

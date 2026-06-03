@@ -79,7 +79,6 @@ export interface Session {
   branch: string | null
   baseSha: string | null
   isIsolated: boolean
-  ptyStarted: boolean
   turns: number
   costUsd: number
   parentId: string | null
