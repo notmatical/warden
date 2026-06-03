@@ -3,33 +3,76 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
+  useState,
   type ReactNode,
 } from "react"
-import { AlertTriangle, Info } from "lucide-react"
+import { AlertTriangle, Check, Copy, Info } from "lucide-react"
 
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Markdown } from "@/components/ui/markdown"
 import { StreamingStatus } from "@/components/streaming-status"
 import { ToolActivity } from "@/components/tool-activity"
 import { cn } from "@/lib/utils"
-import { formatDuration } from "@/lib/format"
+import { relativeTime } from "@/lib/time"
 import { useAppStore } from "@/store/app-store"
 import type { EventRecord } from "@/types"
 
-function UserBubble({ text }: { text: string }) {
+/** Hover-revealed footer under a message: copy-to-clipboard + a humanized time. */
+function MessageMeta({
+  text,
+  ts,
+  align,
+}: {
+  text: string
+  ts: string
+  align: "start" | "end"
+}) {
+  const [copied, setCopied] = useState(false)
   return (
-    <div className="flex justify-end">
-      <div className="max-w-[85%] rounded-md bg-secondary px-3.5 py-2 text-sm whitespace-pre-wrap text-secondary-foreground">
-        {text}
-      </div>
+    <div
+      className={cn(
+        "flex items-center gap-1.5 opacity-0 transition-opacity group-hover/msg:opacity-100",
+        align === "end" ? "justify-end" : "justify-start"
+      )}
+    >
+      <button
+        type="button"
+        aria-label="Copy message"
+        title="Copy message"
+        onClick={() => {
+          void navigator.clipboard.writeText(text)
+          setCopied(true)
+          setTimeout(() => setCopied(false), 1500)
+        }}
+        className="flex size-5 items-center justify-center rounded text-muted-foreground/60 transition hover:bg-muted hover:text-foreground"
+      >
+        {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
+      </button>
+      <span className="text-[11px] text-muted-foreground/50 tabular-nums">
+        {relativeTime(ts)}
+      </span>
     </div>
   )
 }
 
-function AssistantMessage({ text }: { text: string }) {
+function UserBubble({ text, ts }: { text: string; ts: string }) {
   return (
-    <div className="text-sm text-foreground">
-      <Markdown>{text}</Markdown>
+    <div className="group/msg flex flex-col items-end gap-1">
+      <div className="max-w-[85%] rounded-md bg-secondary px-3.5 py-2 text-sm whitespace-pre-wrap text-secondary-foreground">
+        {text}
+      </div>
+      <MessageMeta text={text} ts={ts} align="end" />
+    </div>
+  )
+}
+
+function AssistantMessage({ text, ts }: { text: string; ts?: string }) {
+  return (
+    <div className="group/msg flex flex-col gap-1">
+      <div className="text-sm text-foreground">
+        <Markdown>{text}</Markdown>
+      </div>
+      {ts ? <MessageMeta text={text} ts={ts} align="start" /> : null}
     </div>
   )
 }
@@ -52,30 +95,6 @@ function ErrorRow({ message }: { message: string }) {
   )
 }
 
-function TurnMeta({
-  duration,
-  isError,
-}: {
-  duration: number | null
-  isError: boolean
-}) {
-  const text = duration !== null ? formatDuration(duration) : ""
-
-  // On success, stay silent unless there's something worth showing.
-  if (!isError && !text) return null
-
-  return (
-    <div
-      className={cn(
-        "text-[11px] text-muted-foreground/50",
-        isError && "text-destructive/80"
-      )}
-    >
-      {isError ? (text ? `Turn failed · ${text}` : "Turn failed") : text}
-    </div>
-  )
-}
-
 const TOOL_TYPES = new Set(["thinking", "tool_use", "tool_result"])
 
 function renderStandalone(event: EventRecord): ReactNode {
@@ -84,21 +103,19 @@ function renderStandalone(event: EventRecord): ReactNode {
       // Internal metadata — not shown in the transcript.
       return null
     case "user_message":
-      return <UserBubble key={event.id} text={event.text} />
+      return <UserBubble key={event.id} text={event.text} ts={event.ts} />
     case "assistant_text":
-      return <AssistantMessage key={event.id} text={event.text} />
+      return <AssistantMessage key={event.id} text={event.text} ts={event.ts} />
     case "notice":
       return <Notice key={event.id} text={event.text} />
     case "error":
       return <ErrorRow key={event.id} message={event.message} />
     case "result":
-      return (
-        <TurnMeta
-          key={event.id}
-          duration={event.duration_ms}
-          isError={event.is_error}
-        />
-      )
+      // The live timer covers in-progress turns; a finished turn only surfaces
+      // here if it failed.
+      return event.is_error ? (
+        <ErrorRow key={event.id} message="Turn failed" />
+      ) : null
     default:
       return null
   }
