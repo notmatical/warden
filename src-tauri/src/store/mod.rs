@@ -551,7 +551,7 @@ fn map_session(row: &Row<'_>) -> rusqlite::Result<Session> {
         effort: EffortLevel::parse(&effort_str).unwrap_or(EffortLevel::High),
         status: SessionStatus::parse(&status_str).unwrap_or(SessionStatus::Idle),
         role: SessionRole::parse(&role_str).unwrap_or(SessionRole::Chat),
-        auto_named: row.get::<_, i64>(21)? != 0,
+        auto_named: row.get::<_, i64>(20)? != 0,
         agent_session_id: row.get(9)?,
         working_dir: row.get(10)?,
         branch: row.get(11)?,
