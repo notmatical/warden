@@ -56,10 +56,18 @@ export function Composer({ sessionId }: { sessionId: string }) {
     onOpenChange: (open: boolean) => setOpenMenu(open ? id : null),
   })
 
-  // Ctrl+E (handled globally) requests this session's model menu.
+  // Ctrl+E (handled globally) requests this session's model menu. Track the
+  // nonce so mounting/switching tabs never re-triggers a stale signal — only a
+  // genuinely new request opens the menu.
   const modelMenuSignal = useAppStore((s) => s.modelMenuSignal)
+  const lastModelNonce = useRef(modelMenuSignal?.nonce ?? 0)
   useEffect(() => {
-    if (modelMenuSignal?.sessionId === sessionId) {
+    if (
+      modelMenuSignal &&
+      modelMenuSignal.sessionId === sessionId &&
+      modelMenuSignal.nonce !== lastModelNonce.current
+    ) {
+      lastModelNonce.current = modelMenuSignal.nonce
       setOpenMenu("model")
     }
   }, [modelMenuSignal, sessionId])
