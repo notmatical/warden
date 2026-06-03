@@ -251,3 +251,16 @@ pub async fn cancel_session(
     state.manager.cancel(&app, &state.store, &session_id);
     Ok(())
 }
+
+/// Approve denied tool patterns for a session and resume the turn.
+#[tauri::command]
+pub async fn approve_tools(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: String,
+    patterns: Vec<String>,
+) -> Result<()> {
+    state.store.add_allowed_tools(&session_id, &patterns)?;
+    let session = state.store.get_session(&session_id)?;
+    state.manager.resume(app, state.store.clone(), session).await
+}

@@ -65,6 +65,7 @@ pub fn run() {
             commands::delete_session,
             commands::send_message,
             commands::cancel_session,
+            commands::approve_tools,
             commands::run_plan_to_code,
             commands::list_files,
             commands::list_commands,

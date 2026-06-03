@@ -4,7 +4,7 @@
 
 use serde_json::Value;
 
-use crate::domain::AgentEvent;
+use crate::domain::{AgentEvent, ToolDenial};
 
 /// Tool-result content larger than this is clipped to keep the event log and
 /// the IPC payload bounded.
@@ -187,7 +187,7 @@ fn parse_stream_event(value: &Value) -> ParsedLine {
 
 fn parse_result(value: &Value) -> ParsedLine {
     let cost_usd = value.get("total_cost_usd").and_then(Value::as_f64);
-    let event = AgentEvent::Result {
+    let mut events = vec![AgentEvent::Result {
         is_error: value
             .get("is_error")
             .and_then(Value::as_bool)
@@ -195,9 +195,39 @@ fn parse_result(value: &Value) -> ParsedLine {
         cost_usd,
         duration_ms: value.get("duration_ms").and_then(Value::as_u64),
         num_turns: value.get("num_turns").and_then(Value::as_u64),
-    };
-    ParsedLine {
-        events: vec![event],
-        cost_usd,
+    }];
+
+    // Tools the CLI denied this turn become an approval request.
+    let denials: Vec<ToolDenial> = value
+        .get("permission_denials")
+        .and_then(Value::as_array)
+        .map(|arr| arr.iter().filter_map(parse_denial).collect())
+        .unwrap_or_default();
+    if !denials.is_empty() {
+        events.push(AgentEvent::PermissionRequest { denials });
     }
+
+    ParsedLine { events, cost_usd }
+}
+
+fn parse_denial(value: &Value) -> Option<ToolDenial> {
+    let tool_name = value.get("tool_name").and_then(Value::as_str)?.to_string();
+    let input = value.get("tool_input").cloned().unwrap_or(Value::Null);
+    let pattern = tool_pattern(&tool_name, &input);
+    Some(ToolDenial {
+        tool_name,
+        pattern,
+        input,
+    })
+}
+
+/// The `--allowedTools` token that would permit a denied call: scope Bash to its
+/// exact command, otherwise allow the whole tool.
+fn tool_pattern(tool_name: &str, input: &Value) -> String {
+    if tool_name == "Bash" {
+        if let Some(cmd) = input.get("command").and_then(Value::as_str) {
+            return format!("Bash({cmd})");
+        }
+    }
+    tool_name.to_string()
 }

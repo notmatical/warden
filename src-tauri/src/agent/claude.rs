@@ -117,6 +117,15 @@ pub fn session_args(session: &Session, add_dirs: &[String]) -> Vec<String> {
         args.push(dir.clone());
     }
 
+    // User-approved tool patterns. `--allowedTools` is variadic; the following
+    // `--session-id`/`--resume` flag terminates it.
+    if !session.allowed_tools.is_empty() {
+        args.push("--allowedTools".to_string());
+        for pattern in &session.allowed_tools {
+            args.push(pattern.clone());
+        }
+    }
+
     // A brand-new session opens its conversation; a re-spawned one (process was
     // killed, or the app restarted) resumes the existing conversation.
     if session.turns == 0 {

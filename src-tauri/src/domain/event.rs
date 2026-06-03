@@ -1,5 +1,15 @@
 use serde::{Deserialize, Serialize};
 
+/// A tool call the CLI denied for lack of permission. `pattern` is the
+/// `--allowedTools` token that would permit it (e.g. `Bash(echo hi)` or `Read`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolDenial {
+    pub tool_name: String,
+    pub pattern: String,
+    pub input: serde_json::Value,
+}
+
 /// A normalized agent event — the single contract the whole UI renders against,
 /// regardless of which backend produced it. Backend-specific stream formats are
 /// translated into this enum by each adapter.
@@ -38,6 +48,9 @@ pub enum AgentEvent {
         duration_ms: Option<u64>,
         num_turns: Option<u64>,
     },
+    /// One or more tool calls were denied for lack of permission. Approving
+    /// resumes the turn with those tools added to the session's allowlist.
+    PermissionRequest { denials: Vec<ToolDenial> },
     /// A warden-level annotation (e.g. a handoff between sessions).
     Notice { text: String },
     /// A turn-level failure.

@@ -210,6 +210,9 @@ pub struct Session {
     pub branch: Option<String>,
     pub base_sha: Option<String>,
     pub is_isolated: bool,
+    /// Tool patterns the user has approved for this session (`--allowedTools`),
+    /// accumulated as denied tools are approved.
+    pub allowed_tools: Vec<String>,
     pub turns: i64,
     pub cost_usd: f64,
     /// Set when this session was produced by a handoff from another session.
