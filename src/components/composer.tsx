@@ -1,5 +1,4 @@
 import {
-  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -21,6 +20,7 @@ import { MentionHighlight } from "@/components/mention-highlight"
 import { MentionPopover } from "@/components/mention-popover"
 import { useGitStatus } from "@/hooks/use-git-status"
 import { useMentions } from "@/hooks/use-mentions"
+import { useUiCommand } from "@/hooks/use-ui-command"
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store/app-store"
 
@@ -56,21 +56,12 @@ export function Composer({ sessionId }: { sessionId: string }) {
     onOpenChange: (open: boolean) => setOpenMenu(open ? id : null),
   })
 
-  // Ctrl+E (handled globally) requests this session's model menu. Track the
-  // nonce so mounting/switching tabs never re-triggers a stale signal — only a
-  // genuinely new request opens the menu.
-  const modelMenuSignal = useAppStore((s) => s.modelMenuSignal)
-  const lastModelNonce = useRef(modelMenuSignal?.nonce ?? 0)
-  useEffect(() => {
-    if (
-      modelMenuSignal &&
-      modelMenuSignal.sessionId === sessionId &&
-      modelMenuSignal.nonce !== lastModelNonce.current
-    ) {
-      lastModelNonce.current = modelMenuSignal.nonce
+  // Ctrl+E toggles this session's model menu when it's the active session.
+  useUiCommand<string>("composer.toggleModelMenu", (targetSessionId) => {
+    if (targetSessionId === sessionId) {
       setOpenMenu((current) => (current === "model" ? null : "model"))
     }
-  }, [modelMenuSignal, sessionId])
+  })
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const backdropRef = useRef<HTMLDivElement>(null)
 

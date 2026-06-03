@@ -7,9 +7,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core"
 
-import { cycleMode } from "@/components/controls/mode-menu"
 import { EmptyState } from "@/components/empty-state"
-import { useKeybinding } from "@/components/keybinding-provider"
 import { PaneGrid } from "@/components/pane-grid"
 import { SessionTabs } from "@/components/session-tabs"
 import { Sidebar } from "@/components/sidebar"
@@ -49,49 +47,8 @@ export function AppShell() {
     void init()
   }, [init])
 
-  // Shift+Tab cycles the active session's mode (Plan → Accept edits → Bypass).
-  useKeybinding({
-    id: "cycle-execution-mode",
-    combo: { key: "Tab", shift: true },
-    allowInInput: true,
-    description: "Cycle execution mode",
-    handler: () => {
-      const { activeGroupId, activeSessionByGroup, sessions, updateSession } =
-        useAppStore.getState()
-      const id = activeGroupId ? activeSessionByGroup[activeGroupId] : null
-      const session = id ? sessions[id] : undefined
-      if (!session) return
-      void updateSession(session.id, {
-        permissionMode: cycleMode(session.permissionMode),
-      })
-    },
-  })
-
-  // Esc cancels the active session's in-flight turn.
-  useKeybinding({
-    id: "cancel-turn",
-    combo: { key: "Escape" },
-    allowInInput: true,
-    description: "Cancel the active turn",
-    handler: () => {
-      const { activeGroupId, activeSessionByGroup, sessions, cancel } =
-        useAppStore.getState()
-      const id = activeGroupId ? activeSessionByGroup[activeGroupId] : null
-      const session = id ? sessions[id] : undefined
-      if (session?.status === "running") {
-        void cancel(session.id)
-      }
-    },
-  })
-
-  // Ctrl/⌘+E opens the model menu for the active agent session.
-  useKeybinding({
-    id: "open-model-menu",
-    combo: { key: "e", mod: true },
-    allowInInput: true,
-    description: "Open the model menu",
-    handler: () => useAppStore.getState().requestModelMenu(),
-  })
+  // Keyboard shortcuts are registered centrally as commands; see lib/commands.ts
+  // and the KeybindingProvider.
 
   // A small activation distance lets a plain click still select the tab while a
   // deliberate drag assigns it to a pane.

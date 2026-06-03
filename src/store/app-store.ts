@@ -104,8 +104,6 @@ interface AppState {
 
   sidebarCollapsed: boolean
   sidebarWidth: number
-  /** One-shot request (Ctrl+E) to open the model menu for a session. */
-  modelMenuSignal: { sessionId: string; nonce: number } | null
 
   initialized: boolean
   loadingGroups: boolean
@@ -114,7 +112,6 @@ interface AppState {
   init: () => Promise<void>
   setSidebarCollapsed: (collapsed: boolean) => void
   setSidebarWidth: (width: number) => void
-  requestModelMenu: () => void
   loadGroupData: (groupId: string) => Promise<void>
   createGroup: (name: string) => Promise<Group | null>
   selectGroup: (id: string) => Promise<void>
@@ -162,7 +159,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   sidebarCollapsed: readSidebarCollapsed(),
   sidebarWidth: readSidebarWidth(),
-  modelMenuSignal: null,
 
   initialized: false,
   loadingGroups: false,
@@ -214,20 +210,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       // ignore storage failures
     }
     set({ sidebarWidth: clamped })
-  },
-
-  requestModelMenu: () => {
-    const { activeGroupId, activeSessionByGroup, sessions } = get()
-    const id = activeGroupId ? activeSessionByGroup[activeGroupId] : null
-    const session = id ? sessions[id] : undefined
-    // Only agent sessions have a model menu (terminals don't).
-    if (!session || session.kind !== "agent") return
-    set((state) => ({
-      modelMenuSignal: {
-        sessionId: session.id,
-        nonce: (state.modelMenuSignal?.nonce ?? 0) + 1,
-      },
-    }))
   },
 
   // Loads a group's roots and sessions into the store for the sidebar tree.

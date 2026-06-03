@@ -1,51 +1,59 @@
+import { useEffect, type ReactNode } from "react"
+
+import { cycleMode } from "@/components/controls/mode-menu"
 import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  type ReactNode,
-} from "react"
+  COMMAND_IDS,
+  COMMANDS,
+  emitUiCommand,
+  resolveCombo,
+  type CommandId,
+} from "@/lib/commands"
+import { isEditableTarget, matchCombo } from "@/lib/keybindings"
+import { useAppStore } from "@/store/app-store"
 
-import {
-  isEditableTarget,
-  matchCombo,
-  serializeCombo,
-  type Keybinding,
-  type KeyCombo,
-  type KeyHandler,
-} from "@/lib/keybindings"
+/** Run a command by id. The single place that knows what each command does —
+ *  invoked by keybindings (and, later, a command palette / menus). */
+export function runCommand(id: CommandId): void {
+  const store = useAppStore.getState()
+  const groupId = store.activeGroupId
+  const sessionId = groupId ? store.activeSessionByGroup[groupId] : null
+  const session = sessionId ? store.sessions[sessionId] : undefined
 
-type RegisterFn = (binding: Keybinding) => () => void
-
-const KeybindingContext = createContext<RegisterFn | null>(null)
-
-/**
- * Installs a single global key listener and dispatches to registered bindings.
- * The first matching binding wins; bindings are skipped while a text field is
- * focused unless they opt in via `allowInInput`.
- */
-export function KeybindingProvider({ children }: { children: ReactNode }) {
-  const bindings = useRef(new Map<string, Keybinding>())
-
-  const register = useCallback<RegisterFn>((binding) => {
-    bindings.current.set(binding.id, binding)
-    return () => {
-      // Guard against clobbering a newer registration under the same id.
-      if (bindings.current.get(binding.id) === binding) {
-        bindings.current.delete(binding.id)
+  switch (id) {
+    case "sidebar.toggle":
+      store.setSidebarCollapsed(!store.sidebarCollapsed)
+      break
+    case "session.cancel":
+      if (session?.status === "running") void store.cancel(session.id)
+      break
+    case "session.cycleMode":
+      if (session) {
+        void store.updateSession(session.id, {
+          permissionMode: cycleMode(session.permissionMode),
+        })
       }
-    }
-  }, [])
+      break
+    case "composer.toggleModelMenu":
+      // Only agent sessions have a model menu; the active composer toggles it.
+      if (session?.kind === "agent") {
+        emitUiCommand("composer.toggleModelMenu", session.id)
+      }
+      break
+  }
+}
 
+/** Installs the single global key listener that resolves each command's bound
+ *  combo and dispatches it. Bindings are skipped in text fields unless the
+ *  command opts in via `allowInInput`. */
+export function KeybindingProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const editable = isEditableTarget(event.target)
-      for (const binding of bindings.current.values()) {
-        if (!binding.allowInInput && editable) continue
-        if (!matchCombo(binding.combo, event)) continue
+      for (const id of COMMAND_IDS) {
+        if (!COMMANDS[id].allowInInput && editable) continue
+        if (!matchCombo(resolveCombo(id), event)) continue
         event.preventDefault()
-        binding.handler(event)
+        runCommand(id)
         return
       }
     }
@@ -53,49 +61,5 @@ export function KeybindingProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [])
 
-  return (
-    <KeybindingContext.Provider value={register}>
-      {children}
-    </KeybindingContext.Provider>
-  )
-}
-
-export interface UseKeybindingOptions {
-  id: string
-  combo: KeyCombo
-  handler: KeyHandler
-  allowInInput?: boolean
-  description?: string
-  /** Register only while true — lets callers scope a binding to UI state. */
-  enabled?: boolean
-}
-
-/** Register a keybinding for the lifetime of the calling component. The handler
- *  may change every render without re-registering. */
-export function useKeybinding({
-  id,
-  combo,
-  handler,
-  allowInInput = false,
-  description,
-  enabled = true,
-}: UseKeybindingOptions) {
-  const register = useContext(KeybindingContext)
-  const handlerRef = useRef(handler)
-  handlerRef.current = handler
-
-  const comboSig = serializeCombo(combo)
-
-  useEffect(() => {
-    if (!register || !enabled) return
-    return register({
-      id,
-      combo,
-      allowInInput,
-      description,
-      handler: (event) => handlerRef.current(event),
-    })
-    // `combo` is captured via its stable signature `comboSig`.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [register, id, comboSig, allowInInput, description, enabled])
+  return <>{children}</>
 }
