@@ -1,6 +1,7 @@
 import { Channel, invoke } from "@tauri-apps/api/core"
 
 import type {
+  Backend,
   EffortLevel,
   EventRecord,
   FileEntry,
@@ -99,6 +100,8 @@ export interface CreateSessionInput {
   effort?: EffortLevel
   role?: SessionRole
   kind?: SessionKind
+  /** Agent backend that powers the session. Defaults to Claude. */
+  backend?: Backend
   /** Run the agent in an isolated git worktree instead of the repo's checkout. */
   isolate?: boolean
 }
@@ -113,6 +116,7 @@ export function createSession(input: CreateSessionInput): Promise<Session> {
     effort: input.effort ?? null,
     role: input.role ?? null,
     kind: input.kind ?? null,
+    backend: input.backend ?? null,
     isolate: input.isolate ?? false,
   })
 }

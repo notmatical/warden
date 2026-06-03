@@ -1,4 +1,4 @@
-export type Backend = "claude"
+export type Backend = "claude" | "codex"
 
 export type PermissionMode =
   | "acceptEdits"

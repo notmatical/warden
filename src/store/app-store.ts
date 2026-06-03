@@ -12,6 +12,7 @@ import {
 } from "@/lib/layout"
 import * as terminals from "@/lib/terminal-instances"
 import type {
+  Backend,
   DeltaPayload,
   EffortLevel,
   EventRecord,
@@ -67,6 +68,7 @@ export interface CreateSessionOptions {
   effort?: EffortLevel
   role?: SessionRole
   kind?: SessionKind
+  backend?: Backend
   isolate?: boolean
   firstMessage?: string
 }
@@ -443,6 +445,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         effort: opts.effort,
         role: opts.role,
         kind: opts.kind,
+        backend: opts.backend,
         isolate: opts.isolate,
       })
       set((state) => ({

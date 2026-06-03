@@ -57,6 +57,8 @@ export function withFast(id: string, fast: boolean): string {
 export const DEFAULT_CHAT_MODEL = "claude-opus-4-8"
 export const DEFAULT_PLANNER_MODEL = "claude-sonnet-4-6"
 export const DEFAULT_CODER_MODEL = "claude-opus-4-8"
+/** Placeholder model for Codex sessions; the backend uses Codex's own default. */
+export const DEFAULT_CODEX_MODEL = "gpt-5.1-codex"
 
 const MODEL_ALIASES: Record<string, string> = {
   opus: "Opus",

@@ -10,10 +10,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { PlanToCodeDialog } from "@/components/plan-to-code-dialog"
-import { DEFAULT_CHAT_MODEL } from "@/lib/models"
+import { DEFAULT_CHAT_MODEL, DEFAULT_CODEX_MODEL } from "@/lib/models"
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store/app-store"
-import type { SessionKind } from "@/types"
+import type { Backend, SessionKind } from "@/types"
 
 function deriveTitle(text: string): string {
   const trimmed = text.trim()
@@ -36,7 +36,7 @@ export function Omnibox() {
   const disabled = !primaryRootId
   const canCreate = !disabled && !creating
 
-  const create = async (kind: SessionKind = "agent") => {
+  const create = async (kind: SessionKind = "agent", backend?: Backend) => {
     if (!canCreate || !primaryRootId) return
     setCreating(true)
     try {
@@ -44,10 +44,11 @@ export function Omnibox() {
       const session = await createSession({
         projectId: primaryRootId,
         title: kind === "terminal" ? "Terminal" : deriveTitle(text),
-        model: DEFAULT_CHAT_MODEL,
+        model: backend === "codex" ? DEFAULT_CODEX_MODEL : DEFAULT_CHAT_MODEL,
         permissionMode: "bypassPermissions",
         role: "chat",
         kind,
+        backend,
         firstMessage: kind === "agent" ? text || undefined : undefined,
       })
       if (session) {
@@ -112,6 +113,12 @@ export function Omnibox() {
               <DropdownMenuItem onSelect={() => void create("agent")}>
                 <Sparkles />
                 Agent session
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => void create("agent", "codex")}
+              >
+                <Sparkles />
+                Codex session
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => void create("terminal")}>
                 <SquareTerminal />
