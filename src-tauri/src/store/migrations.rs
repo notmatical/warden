@@ -87,16 +87,52 @@ const MIGRATIONS: &[&str] = &[
 
 pub fn run(conn: &Connection) -> Result<()> {
     conn.execute_batch("PRAGMA foreign_keys = ON;")?;
-    let current: i64 = conn.query_row("PRAGMA user_version", [], |row| row.get(0))?;
 
-    for (idx, sql) in MIGRATIONS.iter().enumerate() {
-        let version = (idx + 1) as i64;
-        if version > current {
-            conn.execute_batch(sql)?;
-            // PRAGMA does not accept bound parameters.
-            conn.execute_batch(&format!("PRAGMA user_version = {version};"))?;
-        }
+    // Pre-release: the schema is a single baseline we edit freely. Rather than
+    // hand-wiping the dev database after every change, rebuild it automatically
+    // whenever the baseline's fingerprint changes. Existing data is throwaway.
+    //
+    // TODO: before shipping, replace this with an append-only `user_version`
+    // migration loop so real user data survives upgrades.
+    let want = fingerprint();
+    let have: i64 = conn.query_row("PRAGMA user_version", [], |row| row.get(0))?;
+    if have == want {
+        return Ok(());
     }
 
+    drop_all_tables(conn)?;
+    for sql in MIGRATIONS {
+        conn.execute_batch(sql)?;
+    }
+    // PRAGMA does not accept bound parameters.
+    conn.execute_batch(&format!("PRAGMA user_version = {want};"))?;
+    Ok(())
+}
+
+/// A stable, positive 31-bit fingerprint of the schema (fits `user_version`).
+fn fingerprint() -> i64 {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325; // FNV-1a offset basis
+    for sql in MIGRATIONS {
+        for byte in sql.bytes() {
+            hash ^= byte as u64;
+            hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+    }
+    (hash & 0x7fff_ffff) as i64
+}
+
+fn drop_all_tables(conn: &Connection) -> Result<()> {
+    let tables: Vec<String> = {
+        let mut stmt = conn.prepare(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
+        )?;
+        let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()?
+    };
+    conn.execute_batch("PRAGMA foreign_keys = OFF;")?;
+    for table in tables {
+        conn.execute_batch(&format!("DROP TABLE IF EXISTS \"{table}\";"))?;
+    }
+    conn.execute_batch("PRAGMA foreign_keys = ON;")?;
     Ok(())
 }
