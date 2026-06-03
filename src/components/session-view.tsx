@@ -15,9 +15,9 @@ function AgentView({ sessionId }: { sessionId: string }) {
   useEffect(() => {
     const el = overlayRef.current
     if (!el) return
-    const observer = new ResizeObserver(() => setInset(el.offsetHeight + 24))
+    const observer = new ResizeObserver(() => setInset(el.offsetHeight + 4))
     observer.observe(el)
-    setInset(el.offsetHeight + 24)
+    setInset(el.offsetHeight + 4)
     return () => observer.disconnect()
   }, [])
 
@@ -28,7 +28,7 @@ function AgentView({ sessionId }: { sessionId: string }) {
         ref={overlayRef}
         className="pointer-events-none absolute inset-x-0 bottom-0"
       >
-        <div className="h-12 bg-gradient-to-t from-background to-transparent" />
+        <div className="h-6 bg-gradient-to-t from-background to-transparent" />
         <div className="pointer-events-auto bg-background">
           <Composer sessionId={sessionId} />
         </div>

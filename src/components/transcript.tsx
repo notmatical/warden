@@ -208,7 +208,7 @@ export function Transcript({
       onScrollCapture={handleScroll}
     >
       <div
-        className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 pt-6"
+        className="mx-auto flex w-full max-w-6xl flex-col gap-2.5 px-4 pt-5"
         style={{ paddingBottom: bottomInset }}
       >
         {isEmpty && (
