@@ -10,6 +10,7 @@ import {
   parseGroupView,
   serializeGroupView,
 } from "@/lib/layout"
+import { DEFAULT_CHAT_MODEL, DEFAULT_CODEX_MODEL } from "@/lib/models"
 import * as terminals from "@/lib/terminal-instances"
 import type {
   Backend,
@@ -20,6 +21,8 @@ import type {
   GroupView,
   Layout,
   PermissionMode,
+  Provider,
+  ProviderStatus,
   Session,
   SessionKind,
   SessionRole,
@@ -29,6 +32,17 @@ import type {
 function reportError(scope: string, error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
   toast.error(scope, { description: message })
+}
+
+/** The interactive CLI a native terminal session launches, per provider. */
+const NATIVE_CLI: Record<Provider, string> = {
+  claude: "claude",
+  codex: "codex",
+}
+
+const NATIVE_TITLE: Record<Provider, string> = {
+  claude: "Claude",
+  codex: "Codex",
 }
 
 const SIDEBAR_KEY = "warden:sidebar-collapsed"
@@ -99,6 +113,11 @@ interface AppState {
   /** The active tab per group. */
   activeSessionByGroup: Record<string, string | null>
   sessions: Record<string, Session>
+  /** Provider CLI to launch in a native terminal session, by session id. Absent
+   *  for plain-shell terminals. Lives in memory — set when the session is made. */
+  nativeCommandBySession: Record<string, string>
+  /** Install/auth status of each agent CLI provider. */
+  providers: ProviderStatus[]
   eventsBySession: Record<string, EventRecord[]>
   /** permission_request event id the user has acted on, per session — so the
    *  approval bar dismisses on approve/deny. */
@@ -117,6 +136,9 @@ interface AppState {
   init: () => Promise<void>
   setSidebarCollapsed: (collapsed: boolean) => void
   setSidebarWidth: (width: number) => void
+  loadProviders: () => Promise<void>
+  installProvider: (id: Provider) => Promise<void>
+  updateProvider: (id: Provider) => Promise<void>
   loadGroupData: (groupId: string) => Promise<void>
   createGroup: (name: string) => Promise<Group | null>
   selectGroup: (id: string) => Promise<void>
@@ -128,6 +150,8 @@ interface AppState {
   /** Persist a group's full view-state (layout + open tabs + active tab). */
   saveGroupView: (groupId: string) => void
   createSession: (opts: CreateSessionOptions) => Promise<Session | null>
+  /** Create a terminal session that launches a provider's CLI natively. */
+  createNativeSession: (projectId: string, provider: Provider) => Promise<void>
   openSession: (id: string) => void
   updateSession: (sessionId: string, patch: SessionSettingsPatch) => Promise<void>
   setIsolation: (sessionId: string, isolate: boolean) => Promise<void>
@@ -160,6 +184,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   tabsByGroup: {},
   activeSessionByGroup: {},
   sessions: {},
+  nativeCommandBySession: {},
+  providers: [],
   eventsBySession: {},
   approvalResolvedBySession: {},
   streamingBySession: {},
@@ -183,7 +209,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       onAgentEvent((record) => get().onAgentEvent(record))
       onAgentDelta((payload) => get().onDelta(payload))
       onSessionUpdated((session) => get().onSessionUpdated(session))
+      // Re-probe providers when the window regains focus, so installs or
+      // logins done outside the app are reflected without a restart.
+      window.addEventListener("focus", () => void get().loadProviders())
     }
+
+    void get().loadProviders()
 
     set({ loadingGroups: true })
     try {
@@ -218,6 +249,33 @@ export const useAppStore = create<AppState>((set, get) => ({
       // ignore storage failures
     }
     set({ sidebarWidth: clamped })
+  },
+
+  loadProviders: async () => {
+    try {
+      const providers = await ipc.listProviderStatus()
+      set({ providers })
+    } catch (error) {
+      reportError("Failed to load providers", error)
+    }
+  },
+
+  installProvider: async (id) => {
+    try {
+      await ipc.installProvider(id)
+      await get().loadProviders()
+    } catch (error) {
+      reportError("Failed to install provider", error)
+    }
+  },
+
+  updateProvider: async (id) => {
+    try {
+      await ipc.updateProvider(id)
+      await get().loadProviders()
+    } catch (error) {
+      reportError("Failed to update provider", error)
+    }
   },
 
   // Loads a group's roots and sessions into the store for the sidebar tree.
@@ -484,6 +542,25 @@ export const useAppStore = create<AppState>((set, get) => ({
       reportError("Failed to create session", error)
       return null
     }
+  },
+
+  createNativeSession: async (projectId, provider) => {
+    const session = await get().createSession({
+      projectId,
+      title: NATIVE_TITLE[provider],
+      model: provider === "codex" ? DEFAULT_CODEX_MODEL : DEFAULT_CHAT_MODEL,
+      permissionMode: "bypassPermissions",
+      role: "chat",
+      kind: "terminal",
+      backend: provider,
+    })
+    if (!session) return
+    set((state) => ({
+      nativeCommandBySession: {
+        ...state.nativeCommandBySession,
+        [session.id]: NATIVE_CLI[provider],
+      },
+    }))
   },
 
   updateSession: async (sessionId, patch) => {

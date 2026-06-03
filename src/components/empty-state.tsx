@@ -66,7 +66,8 @@ export function EmptyState({
       <div className="space-y-1">
         <h2 className="text-base font-medium">No session selected</h2>
         <p className="max-w-sm text-sm text-muted-foreground">
-          Use the omnibox above to start a new agent session, or pick a tab.
+          Pick a session from the sidebar, or start one from a folder's +
+          menu.
         </p>
       </div>
     </div>

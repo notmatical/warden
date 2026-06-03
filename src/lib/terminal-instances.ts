@@ -24,23 +24,35 @@ interface Instance {
 
 const instances = new Map<string, Instance>()
 
-// Transparent background so the terminal blends into the app surface; xterm
-// needs hex/rgba and `allowTransparency` to skip its opaque background layer.
-const THEME = {
-  background: "rgba(0, 0, 0, 0)",
-  foreground: "#e8e3d8",
-  cursor: "#e8e3d8",
-  cursorAccent: "#1b1a17",
-  selectionBackground: "#3a3833",
+// xterm needs a concrete rgb()/hex color; transparency is unreliable, so we
+// sample the app's resolved `--background` (an oklch var) at runtime and feed
+// xterm a solid color that matches the surface the terminal sits on.
+function surfaceBackground(): string {
+  const probe = document.createElement("div")
+  probe.className = "bg-background"
+  probe.style.display = "none"
+  document.body.appendChild(probe)
+  const color = getComputedStyle(probe).backgroundColor
+  probe.remove()
+  return color || "#1b1a17"
 }
 
-function create(id: string, workingDir: string): Instance {
+function theme() {
+  return {
+    background: surfaceBackground(),
+    foreground: "#e8e3d8",
+    cursor: "#e8e3d8",
+    cursorAccent: "#1b1a17",
+    selectionBackground: "#3a3833",
+  }
+}
+
+function create(id: string, workingDir: string, command?: string): Instance {
   const term = new Terminal({
     fontFamily: '"JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace',
     fontSize: 13,
     cursorBlink: true,
-    theme: THEME,
-    allowTransparency: true,
+    theme: theme(),
     allowProposedApi: true,
   })
   const fit = new FitAddon()
@@ -59,11 +71,16 @@ function create(id: string, workingDir: string): Instance {
   instances.set(id, inst)
 
   // Spawn the PTY once, sized to the current terminal.
-  startPty(id, workingDir, inst)
+  startPty(id, workingDir, inst, command)
   return inst
 }
 
-function startPty(id: string, workingDir: string, inst: Instance) {
+function startPty(
+  id: string,
+  workingDir: string,
+  inst: Instance,
+  command?: string
+) {
   inst.started = true
   const channel = new Channel<ipc.TerminalEvent>()
   channel.onmessage = (msg) => {
@@ -75,7 +92,7 @@ function startPty(id: string, workingDir: string, inst: Instance) {
   }
   const cols = inst.term.cols || 80
   const rows = inst.term.rows || 24
-  void ipc.startTerminal(id, workingDir, cols, rows, channel)
+  void ipc.startTerminal(id, workingDir, cols, rows, channel, command)
 }
 
 /** Fit to the container, pushing the new size to the PTY only when it changed. */
@@ -88,9 +105,15 @@ function pushResize(id: string, inst: Instance) {
   void ipc.terminalResize(id, cols, rows)
 }
 
-/** Mount the terminal into `container` (creating it on first use). */
-export function attach(id: string, container: HTMLElement, workingDir: string) {
-  const inst = instances.get(id) ?? create(id, workingDir)
+/** Mount the terminal into `container` (creating it on first use). A native
+ *  session passes the provider CLI to launch instead of the shell. */
+export function attach(
+  id: string,
+  container: HTMLElement,
+  workingDir: string,
+  command?: string
+) {
+  const inst = instances.get(id) ?? create(id, workingDir, command)
   container.appendChild(inst.el)
   // Defer the fit until the element has laid out.
   requestAnimationFrame(() => {
@@ -109,6 +132,20 @@ export function fit(id: string) {
   const inst = instances.get(id)
   if (!inst) return
   pushResize(id, inst)
+}
+
+// Re-sample the surface color and re-skin every live terminal when the app's
+// theme class flips on the document root.
+if (typeof MutationObserver !== "undefined") {
+  new MutationObserver(() => {
+    const next = theme()
+    for (const inst of instances.values()) {
+      inst.term.options.theme = next
+    }
+  }).observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["class"],
+  })
 }
 
 /** Permanently destroy a terminal and kill its PTY (on session delete). */

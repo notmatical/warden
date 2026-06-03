@@ -39,14 +39,22 @@ function AgentView({ sessionId }: { sessionId: string }) {
 
 export function SessionView({ sessionId }: { sessionId: string }) {
   const session = useAppStore((s) => s.sessions[sessionId])
+  const nativeCommand = useAppStore((s) => s.nativeCommandBySession[sessionId])
 
   if (!session) {
     return null
   }
 
-  // Terminal sessions run the shell in a PTY — no transcript/composer.
+  // Terminal sessions run a PTY — no transcript/composer. Native sessions launch
+  // a provider CLI; plain ones launch the shell.
   if (session.kind === "terminal") {
-    return <TerminalView sessionId={sessionId} workingDir={session.workingDir} />
+    return (
+      <TerminalView
+        sessionId={sessionId}
+        workingDir={session.workingDir}
+        command={nativeCommand}
+      />
+    )
   }
 
   return <AgentView sessionId={sessionId} />

@@ -8,6 +8,8 @@ import type {
   Group,
   PermissionMode,
   PlanToCodeResult,
+  Provider,
+  ProviderStatus,
   RepoRef,
   RepoStatus,
   RepoRefBody,
@@ -28,6 +30,20 @@ export function openProject(path: string): Promise<Project> {
 
 export function listSessions(projectId: string): Promise<Session[]> {
   return invoke("list_sessions", { projectId })
+}
+
+// ----- providers -----------------------------------------------------------
+
+export function listProviderStatus(): Promise<ProviderStatus[]> {
+  return invoke("list_provider_status")
+}
+
+export function installProvider(id: Provider): Promise<void> {
+  return invoke("install_provider", { id })
+}
+
+export function updateProvider(id: Provider): Promise<void> {
+  return invoke("update_provider", { id })
 }
 
 // ----- groups --------------------------------------------------------------
@@ -132,12 +148,15 @@ export function startTerminal(
   workingDir: string,
   cols: number,
   rows: number,
-  onOutput: Channel<TerminalEvent>
+  onOutput: Channel<TerminalEvent>,
+  /** A program to launch instead of the shell — a provider CLI for native sessions. */
+  command?: string
 ): Promise<void> {
   return invoke("start_terminal", {
     onOutput,
     terminalId,
     workingDir,
+    command: command ?? null,
     cols,
     rows,
   })

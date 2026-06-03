@@ -1,9 +1,10 @@
-import type { EffortLevel } from "@/types"
+import type { Backend, EffortLevel } from "@/types"
 
 export interface ModelOption {
   id: string
   label: string
-  /** Grouping label — the seam for future non-Anthropic providers. */
+  /** Display grouping (vendor name). The {@link Backend} that runs the model
+   *  is derived from its id by {@link backendForModel}. */
   provider: string
 }
 
@@ -19,7 +20,22 @@ export const MODELS: ModelOption[] = [
   { id: "haiku", label: "Haiku", provider: "Anthropic" },
   { id: "claude-opus-4-8[1m]", label: "Opus 4.8 (1M)", provider: "Anthropic" },
   { id: "claude-sonnet-4-6[1m]", label: "Sonnet 4.6 (1M)", provider: "Anthropic" },
+  { id: "gpt-5.1-codex", label: "GPT-5.1 Codex", provider: "OpenAI" },
+  { id: "gpt-5.5", label: "GPT-5.5", provider: "OpenAI" },
+  { id: "gpt-5.4-mini", label: "GPT-5.4 Mini", provider: "OpenAI" },
 ]
+
+/**
+ * The agent backend that runs a model id, mirroring the backend's own rule
+ * (`gpt`/`codex` prefixes → Codex; everything else → Claude). Keep this in
+ * sync with `backend_for_model` in src-tauri/src/commands/session.rs.
+ */
+export function backendForModel(id: string): Backend {
+  const lower = baseModelId(id).toLowerCase()
+  return lower.startsWith("gpt") || lower.startsWith("codex")
+    ? "codex"
+    : "claude"
+}
 
 /** Provider display names in first-seen order, for grouping in the picker. */
 export const MODEL_PROVIDERS: string[] = [

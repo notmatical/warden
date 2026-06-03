@@ -5,6 +5,7 @@ import {
   type ReactNode,
 } from "react"
 import {
+  Bot,
   ChevronRight,
   FolderGit2,
   FolderPlus,
@@ -28,6 +29,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
@@ -197,7 +199,14 @@ function RootRow({
   const sessionIds = useAppStore((s) => s.sessionsByGroup[groupId])
   const sessions = useAppStore((s) => s.sessions)
   const createSession = useAppStore((s) => s.createSession)
+  const createNativeSession = useAppStore((s) => s.createNativeSession)
   const removeRoot = useAppStore((s) => s.removeRoot)
+  const claudeAuthed = useAppStore(
+    (s) => s.providers.some((p) => p.id === "claude" && p.authed)
+  )
+  const codexAuthed = useAppStore(
+    (s) => s.providers.some((p) => p.id === "codex" && p.authed)
+  )
 
   const rootSessions = (sessionIds ?? []).filter(
     (id) => sessions[id]?.projectId === project.id
@@ -274,6 +283,25 @@ function RootRow({
             <SquareTerminal />
             Terminal session
           </DropdownMenuItem>
+          {claudeAuthed || codexAuthed ? <DropdownMenuSeparator /> : null}
+          {claudeAuthed ? (
+            <DropdownMenuItem
+              onSelect={() =>
+                void createNativeSession(project.id, "claude")
+              }
+            >
+              <Sparkles />
+              Native Claude
+            </DropdownMenuItem>
+          ) : null}
+          {codexAuthed ? (
+            <DropdownMenuItem
+              onSelect={() => void createNativeSession(project.id, "codex")}
+            >
+              <Bot />
+              Native Codex
+            </DropdownMenuItem>
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
 

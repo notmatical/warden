@@ -1,7 +1,19 @@
-import { Columns2, Grid2x2, PanelBottom, Rows2, Square } from "lucide-react"
+import { useState } from "react"
+import {
+  ChevronDown,
+  Columns2,
+  Grid2x2,
+  PanelBottom,
+  Rows2,
+  Square,
+} from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { ButtonGroup } from "@/components/ui/button-group"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { withMode } from "@/lib/layout"
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store/app-store"
@@ -16,6 +28,7 @@ const MODES: { mode: LayoutMode; label: string; Icon: typeof Square }[] = [
 ]
 
 export function LayoutSwitcher() {
+  const [open, setOpen] = useState(false)
   const mode = useAppStore((s) =>
     s.activeGroupId ? s.layoutByGroup[s.activeGroupId]?.mode ?? null : null
   )
@@ -54,25 +67,46 @@ export function LayoutSwitcher() {
     setLayout(activeGroupId, resized)
   }
 
+  const current = MODES.find((m) => m.mode === mode) ?? MODES[0]
+  const CurrentIcon = current.Icon
+
   return (
-    <ButtonGroup>
-      {MODES.map(({ mode: m, label, Icon }) => (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
         <Button
-          key={m}
           variant="outline"
-          size="icon-sm"
-          aria-label={label}
-          title={label}
-          aria-pressed={mode === m}
-          onClick={() => setMode(m)}
-          className={cn(
-            "text-muted-foreground",
-            mode === m && "bg-muted text-foreground"
-          )}
+          size="sm"
+          aria-label="Pane layout"
+          title="Pane layout"
+          className="gap-1.5 px-2 text-muted-foreground"
         >
-          <Icon />
+          <CurrentIcon />
+          <ChevronDown className="size-3 opacity-50" />
         </Button>
-      ))}
-    </ButtonGroup>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-auto p-1.5">
+        <div className="flex items-center gap-1">
+          {MODES.map(({ mode: m, label, Icon }) => (
+            <button
+              key={m}
+              type="button"
+              aria-label={label}
+              title={label}
+              aria-pressed={mode === m}
+              onClick={() => {
+                setMode(m)
+                setOpen(false)
+              }}
+              className={cn(
+                "flex size-8 items-center justify-center rounded-md text-muted-foreground outline-hidden transition-colors hover:bg-muted hover:text-foreground",
+                mode === m && "bg-muted text-foreground"
+              )}
+            >
+              <Icon className="size-4" />
+            </button>
+          ))}
+        </div>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

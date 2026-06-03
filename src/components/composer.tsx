@@ -224,6 +224,8 @@ export function Composer({ sessionId }: { sessionId: string }) {
         <div className="-mt-3 flex items-center gap-1 rounded-b-xl bg-muted/40 px-2 pt-5 pb-1.5">
           <ModelMenu
             value={session.model}
+            backend={session.backend}
+            started={started}
             onChange={(model) => void updateSession(sessionId, { model })}
             {...menuProps("model")}
           />

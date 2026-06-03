@@ -8,9 +8,12 @@ import * as terminals from "@/lib/terminal-instances"
 export function TerminalView({
   sessionId,
   workingDir,
+  command,
 }: {
   sessionId: string
   workingDir: string
+  /** Provider CLI to launch instead of the shell, for native sessions. */
+  command?: string
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -18,7 +21,7 @@ export function TerminalView({
     const container = containerRef.current
     if (!container) return
 
-    terminals.attach(sessionId, container, workingDir)
+    terminals.attach(sessionId, container, workingDir, command)
 
     // Coalesce resize bursts to one fit per frame. Without this, fit() mutates
     // the observed element's size and re-triggers the observer in a tight loop.

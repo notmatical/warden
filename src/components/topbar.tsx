@@ -1,8 +1,8 @@
 import { PanelLeft } from "lucide-react"
 
 import { LayoutSwitcher } from "@/components/layout-switcher"
-import { Omnibox } from "@/components/omnibox"
 import { OpenInButtons } from "@/components/open-in-buttons"
+import { ProvidersPopover } from "@/components/providers-popover"
 import { QuickSwitcher } from "@/components/quick-switcher"
 import { Button } from "@/components/ui/button"
 import {
@@ -47,7 +47,7 @@ export function Topbar() {
   return (
     <header
       data-tauri-drag-region
-      className="flex h-14 shrink-0 items-center gap-3 border-b border-border/60 px-4"
+      className="flex h-14 shrink-0 items-center gap-2 border-b border-border/60 px-4"
     >
       {collapsed ? (
         <HoverCard openDelay={120} closeDelay={120}>
@@ -67,11 +67,10 @@ export function Topbar() {
       ) : (
         <SidebarToggle />
       )}
-      <div className="flex-1">
-        <Omnibox />
-      </div>
-      <LayoutSwitcher />
+      <div className="flex-1" />
       <OpenInButtons path={openPath} />
+      <LayoutSwitcher />
+      <ProvidersPopover />
     </header>
   )
 }

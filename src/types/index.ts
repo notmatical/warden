@@ -1,5 +1,17 @@
 export type Backend = "claude" | "codex"
 
+/** An agent CLI provider; one-to-one with the session backends. */
+export type Provider = Backend
+
+/** A provider's installation/auth snapshot, surfaced by the backend. */
+export interface ProviderStatus {
+  id: Provider
+  name: string
+  installed: boolean
+  version: string | null
+  authed: boolean
+}
+
 export type PermissionMode =
   | "acceptEdits"
   | "bypassPermissions"
