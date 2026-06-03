@@ -153,7 +153,13 @@ function renderTimeline(events: EventRecord[]): ReactNode[] {
   return nodes
 }
 
-export function Transcript({ sessionId }: { sessionId: string }) {
+export function Transcript({
+  sessionId,
+  bottomInset,
+}: {
+  sessionId: string
+  bottomInset: number
+}) {
   const events = useAppStore((s) => s.eventsBySession[sessionId])
   const streaming = useAppStore((s) => s.streamingBySession[sessionId])
   const loading = useAppStore((s) => s.loadingEventsBySession[sessionId])
@@ -201,7 +207,10 @@ export function Transcript({ sessionId }: { sessionId: string }) {
       viewportRef={viewportRef}
       onScrollCapture={handleScroll}
     >
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 p-4 pb-32">
+      <div
+        className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 pt-6"
+        style={{ paddingBottom: bottomInset }}
+      >
         {isEmpty && (
           <p className="py-8 text-center text-sm text-muted-foreground">
             {loading ? "Loading transcript…" : "No messages yet."}

@@ -1,7 +1,41 @@
+import { useEffect, useRef, useState } from "react"
+
 import { Composer } from "@/components/composer"
 import { TerminalView } from "@/components/terminal-view"
 import { Transcript } from "@/components/transcript"
 import { useAppStore } from "@/store/app-store"
+
+/** Agent transcript + floating composer. The transcript scrolls *under* the
+ *  composer (which fades in over a gradient); its bottom padding tracks the
+ *  composer's measured height so the last message + its footer always clear it. */
+function AgentView({ sessionId }: { sessionId: string }) {
+  const overlayRef = useRef<HTMLDivElement>(null)
+  const [inset, setInset] = useState(220)
+
+  useEffect(() => {
+    const el = overlayRef.current
+    if (!el) return
+    const observer = new ResizeObserver(() => setInset(el.offsetHeight + 24))
+    observer.observe(el)
+    setInset(el.offsetHeight + 24)
+    return () => observer.disconnect()
+  }, [])
+
+  return (
+    <div className="relative h-full">
+      <Transcript sessionId={sessionId} bottomInset={inset} />
+      <div
+        ref={overlayRef}
+        className="pointer-events-none absolute inset-x-0 bottom-0"
+      >
+        <div className="h-12 bg-gradient-to-t from-background to-transparent" />
+        <div className="pointer-events-auto bg-background">
+          <Composer sessionId={sessionId} />
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export function SessionView({ sessionId }: { sessionId: string }) {
   const session = useAppStore((s) => s.sessions[sessionId])
@@ -10,22 +44,10 @@ export function SessionView({ sessionId }: { sessionId: string }) {
     return null
   }
 
-  // Terminal sessions run the native claude TUI in a PTY — no transcript/composer.
+  // Terminal sessions run the shell in a PTY — no transcript/composer.
   if (session.kind === "terminal") {
     return <TerminalView sessionId={sessionId} workingDir={session.workingDir} />
   }
 
-  // The transcript fills the space and scrolls *under* the floating composer,
-  // which fades in over a gradient (no hard footer, no per-session header).
-  return (
-    <div className="relative h-full">
-      <Transcript sessionId={sessionId} />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0">
-        <div className="h-12 bg-gradient-to-t from-background to-transparent" />
-        <div className="pointer-events-auto bg-background">
-          <Composer sessionId={sessionId} />
-        </div>
-      </div>
-    </div>
-  )
+  return <AgentView sessionId={sessionId} />
 }
