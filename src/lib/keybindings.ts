@@ -64,14 +64,24 @@ export function isEditableTarget(target: EventTarget | null): boolean {
   return EDITABLE_TAGS.has(target.tagName) || target.isContentEditable
 }
 
-/** A display string for a combo, e.g. "⇧Tab" (mac) or "Shift+Tab" (other). */
-export function formatCombo(combo: KeyCombo): string {
+/** A combo's display tokens, in order, e.g. ["⌘","E"] (mac) or ["Ctrl","E"]. */
+export function comboParts(combo: KeyCombo): string[] {
   const parts: string[] = []
   if (combo.mod) parts.push(isMac ? "⌘" : "Ctrl")
   if (combo.ctrl) parts.push(isMac ? "⌃" : "Ctrl")
   if (combo.meta) parts.push("⌘")
   if (combo.alt) parts.push(isMac ? "⌥" : "Alt")
   if (combo.shift) parts.push(isMac ? "⇧" : "Shift")
-  parts.push(combo.key === " " ? "Space" : combo.key)
+  if (combo.key === " ") {
+    parts.push("Space")
+  } else {
+    parts.push(combo.key.length === 1 ? combo.key.toUpperCase() : combo.key)
+  }
+  return parts
+}
+
+/** A display string for a combo, e.g. "⇧Tab" (mac) or "Shift+Tab" (other). */
+export function formatCombo(combo: KeyCombo): string {
+  const parts = comboParts(combo)
   return isMac ? parts.join("") : parts.join("+")
 }

@@ -12,6 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Shortcut } from "@/components/shortcut"
 import { Switch } from "@/components/ui/switch"
 import {
   Tooltip,
@@ -19,7 +20,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { useControllableOpen } from "@/hooks/use-controllable-open"
-import { formatCombo } from "@/lib/keybindings"
 import { cn } from "@/lib/utils"
 import {
   MODEL_PROVIDERS,
@@ -70,9 +70,7 @@ export function ModelMenu({
         </TooltipTrigger>
         <TooltipContent side="top" className="flex items-center gap-1.5">
           Model
-          <kbd className="rounded bg-foreground/10 px-1 font-mono text-[10px]">
-            {formatCombo({ key: "e", mod: true })}
-          </kbd>
+          <Shortcut combo={{ key: "e", mod: true }} />
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="start" className="w-56">
