@@ -136,3 +136,50 @@ fn drop_all_tables(conn: &Connection) -> Result<()> {
     conn.execute_batch("PRAGMA foreign_keys = ON;")?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rusqlite::Connection;
+
+    fn columns(conn: &Connection, table: &str) -> Vec<String> {
+        let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})")).unwrap();
+        let rows = stmt.query_map([], |row| row.get::<_, String>(1)).unwrap();
+        rows.map(|r| r.unwrap()).collect()
+    }
+
+    #[test]
+    fn rebuilds_a_stale_db_to_the_current_baseline() {
+        let conn = Connection::open_in_memory().unwrap();
+        // A stale schema (an old `sessions` shape) at a different version.
+        conn.execute_batch("CREATE TABLE sessions(id TEXT); PRAGMA user_version = 1;")
+            .unwrap();
+
+        run(&conn).unwrap();
+
+        let cols = columns(&conn, "sessions");
+        assert!(cols.contains(&"allowed_tools".to_string()));
+        assert!(cols.contains(&"group_id".to_string()));
+        let version: i64 = conn
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(version, fingerprint());
+    }
+
+    #[test]
+    fn is_idempotent_when_up_to_date() {
+        let conn = Connection::open_in_memory().unwrap();
+        run(&conn).unwrap();
+        // A second run must not drop/rebuild (data would be lost).
+        conn.execute_batch(
+            "INSERT INTO projects(id,name,path,is_git,created_at) \
+             VALUES('p','n','/tmp',0,'t');",
+        )
+        .unwrap();
+        run(&conn).unwrap();
+        let count: i64 = conn
+            .query_row("SELECT count(*) FROM projects", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+}
