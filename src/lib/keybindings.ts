@@ -78,5 +78,5 @@ export function comboLabel(combo: KeyCombo): string {
     // Single keys read nicest uppercased ("E"); named keys keep their casing.
     parts.push(combo.key.length === 1 ? combo.key.toUpperCase() : combo.key)
   }
-  return parts.join("+")
+  return parts.join(" + ")
 }
