@@ -67,6 +67,23 @@ export function AppShell() {
     },
   })
 
+  // Esc cancels the active session's in-flight turn.
+  useKeybinding({
+    id: "cancel-turn",
+    combo: { key: "Escape" },
+    allowInInput: true,
+    description: "Cancel the active turn",
+    handler: () => {
+      const { activeGroupId, activeSessionByGroup, sessions, cancel } =
+        useAppStore.getState()
+      const id = activeGroupId ? activeSessionByGroup[activeGroupId] : null
+      const session = id ? sessions[id] : undefined
+      if (session?.status === "running") {
+        void cancel(session.id)
+      }
+    },
+  })
+
   // A small activation distance lets a plain click still select the tab while a
   // deliberate drag assigns it to a pane.
   const sensors = useSensors(
