@@ -167,12 +167,25 @@ pub async fn send_request(method: &str, params: Value) -> Result<Value> {
         return Err(e);
     }
 
-    match rx.await {
-        Ok(Ok(value)) => Ok(value),
-        Ok(Err(message)) => Err(AppError::Agent(message)),
-        Err(_) => Err(AppError::Agent(format!(
+    // A control RPC (initialize / thread / turn start) always responds promptly;
+    // the turn's actual work streams as notifications. A missing response means
+    // something is wrong — time out rather than hang the turn forever.
+    match tokio::time::timeout(std::time::Duration::from_secs(60), rx).await {
+        Ok(Ok(Ok(value))) => Ok(value),
+        Ok(Ok(Err(message))) => Err(AppError::Agent(message)),
+        Ok(Err(_)) => Err(AppError::Agent(format!(
             "codex app-server dropped the response to {method}"
         ))),
+        Err(_) => {
+            server
+                .pending
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .remove(&id);
+            Err(AppError::Agent(format!(
+                "codex app-server timed out responding to {method}"
+            )))
+        }
     }
 }
 
@@ -327,7 +340,6 @@ fn thread_params(session: &Session) -> Value {
         "cwd": session.working_dir,
         "approvalPolicy": "never",
         "sandbox": "workspace-write",
-        "persistExtendedHistory": true,
     })
 }
 
