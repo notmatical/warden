@@ -47,10 +47,10 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { DEFAULT_CHAT_MODEL, DEFAULT_CODEX_MODEL } from "@/lib/models";
+import { DEFAULT_CHAT_MODEL } from "@/lib/models";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app-store";
-import type { Backend, Group, Project, SessionKind } from "@/types";
+import type { Group, Project, SessionKind } from "@/types";
 
 // Keep shadcn's left connector line; tighten the rhythm and drop the right
 // padding (pl only) to reclaim width for long names.
@@ -221,15 +221,14 @@ function RootRow({
 		(id) => sessions[id]?.projectId === project.id,
 	);
 
-	const newSession = async (kind: SessionKind, backend?: Backend) => {
+	const newSession = async (kind: SessionKind) => {
 		await createSession({
 			projectId: project.id,
 			title: kind === "terminal" ? "Terminal" : "New session",
-			model: backend === "codex" ? DEFAULT_CODEX_MODEL : DEFAULT_CHAT_MODEL,
+			model: DEFAULT_CHAT_MODEL,
 			permissionMode: "bypassPermissions",
 			role: "chat",
 			kind,
-			backend,
 		});
 	};
 
@@ -281,10 +280,6 @@ function RootRow({
 					<DropdownMenuItem onSelect={() => void newSession("agent")}>
 						<Sparkles />
 						Agent session
-					</DropdownMenuItem>
-					<DropdownMenuItem onSelect={() => void newSession("agent", "codex")}>
-						<Sparkles />
-						Codex session
 					</DropdownMenuItem>
 					<DropdownMenuItem onSelect={() => void newSession("terminal")}>
 						<SquareTerminal />

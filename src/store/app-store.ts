@@ -85,6 +85,8 @@ export interface CreateSessionOptions {
   backend?: Backend
   isolate?: boolean
   firstMessage?: string
+  /** A provider CLI for a native terminal session to launch instead of the shell. */
+  nativeCommand?: string
 }
 
 export interface SessionSettingsPatch {
@@ -261,20 +263,24 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   installProvider: async (id) => {
+    const name = get().providers.find((p) => p.id === id)?.name ?? id
     try {
       await ipc.installProvider(id)
       await get().loadProviders()
+      toast.success(`Installed ${name}`)
     } catch (error) {
-      reportError("Failed to install provider", error)
+      reportError(`Failed to install ${name}`, error)
     }
   },
 
   updateProvider: async (id) => {
+    const name = get().providers.find((p) => p.id === id)?.name ?? id
     try {
       await ipc.updateProvider(id)
       await get().loadProviders()
+      toast.success(`${name} is up to date`)
     } catch (error) {
-      reportError("Failed to update provider", error)
+      reportError(`Failed to update ${name}`, error)
     }
   },
 
@@ -528,6 +534,13 @@ export const useAppStore = create<AppState>((set, get) => ({
           ? { ...state.layoutByGroup, [groupId]: DEFAULT_LAYOUT }
           : state.layoutByGroup,
         eventsBySession: { ...state.eventsBySession, [session.id]: [] },
+        // Set before the pane mounts so the terminal spawns the CLI, not a shell.
+        nativeCommandBySession: opts.nativeCommand
+          ? {
+              ...state.nativeCommandBySession,
+              [session.id]: opts.nativeCommand,
+            }
+          : state.nativeCommandBySession,
       }))
       get().saveGroupView(groupId)
       if (
@@ -545,7 +558,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   createNativeSession: async (projectId, provider) => {
-    const session = await get().createSession({
+    await get().createSession({
       projectId,
       title: NATIVE_TITLE[provider],
       model: provider === "codex" ? DEFAULT_CODEX_MODEL : DEFAULT_CHAT_MODEL,
@@ -553,14 +566,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       role: "chat",
       kind: "terminal",
       backend: provider,
+      nativeCommand: NATIVE_CLI[provider],
     })
-    if (!session) return
-    set((state) => ({
-      nativeCommandBySession: {
-        ...state.nativeCommandBySession,
-        [session.id]: NATIVE_CLI[provider],
-      },
-    }))
   },
 
   updateSession: async (sessionId, patch) => {

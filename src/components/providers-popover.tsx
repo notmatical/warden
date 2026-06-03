@@ -1,4 +1,5 @@
-import { Bot, Sparkles } from "lucide-react";
+import { Bot, Loader2, Sparkles } from "lucide-react";
+import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -60,16 +61,29 @@ function ProviderRow({ status }: { status: ProviderStatus }) {
 		}, 400);
 	};
 
+	const [busy, setBusy] = useState(false);
+	const run = async (fn: () => Promise<void>) => {
+		setBusy(true);
+		try {
+			await fn();
+		} finally {
+			setBusy(false);
+		}
+	};
+
 	let action: { label: string; onClick: () => void };
 	if (!status.installed) {
 		action = {
 			label: "Install",
-			onClick: () => void installProvider(status.id),
+			onClick: () => void run(() => installProvider(status.id)),
 		};
 	} else if (!status.authed) {
 		action = { label: "Sign in", onClick: () => void signIn() };
 	} else {
-		action = { label: "Update", onClick: () => void updateProvider(status.id) };
+		action = {
+			label: "Update",
+			onClick: () => void run(() => updateProvider(status.id)),
+		};
 	}
 
 	return (
@@ -90,10 +104,10 @@ function ProviderRow({ status }: { status: ProviderStatus }) {
 				variant={action.label === "Update" ? "ghost" : "secondary"}
 				size="xs"
 				onClick={action.onClick}
-				disabled={action.label === "Sign in" && !primaryRootId}
+				disabled={busy || (action.label === "Sign in" && !primaryRootId)}
 				className="shrink-0"
 			>
-				{action.label}
+				{busy ? <Loader2 className="size-3 animate-spin" /> : action.label}
 			</Button>
 		</div>
 	);
