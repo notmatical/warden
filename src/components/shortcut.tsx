@@ -1,13 +1,7 @@
-import { Kbd, KbdGroup } from "@/components/ui/kbd"
-import { comboParts, type KeyCombo } from "@/lib/keybindings"
+import { Kbd } from "@/components/ui/kbd"
+import { comboLabel, type KeyCombo } from "@/lib/keybindings"
 
-/** Renders a key combo as platform-aware `Kbd` chips. */
+/** Renders a key combo as a single platform-aware `Kbd`, e.g. CMD+E / CTRL+E. */
 export function Shortcut({ combo }: { combo: KeyCombo }) {
-  return (
-    <KbdGroup>
-      {comboParts(combo).map((part, i) => (
-        <Kbd key={`${part}-${i}`}>{part}</Kbd>
-      ))}
-    </KbdGroup>
-  )
+  return <Kbd>{comboLabel(combo)}</Kbd>
 }

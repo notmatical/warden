@@ -64,24 +64,14 @@ export function isEditableTarget(target: EventTarget | null): boolean {
   return EDITABLE_TAGS.has(target.tagName) || target.isContentEditable
 }
 
-/** A combo's display tokens, in order, e.g. ["⌘","E"] (mac) or ["Ctrl","E"]. */
-export function comboParts(combo: KeyCombo): string[] {
+/** A single display label for a combo, e.g. "CMD+E" (mac) or "CTRL+E". */
+export function comboLabel(combo: KeyCombo): string {
   const parts: string[] = []
-  if (combo.mod) parts.push(isMac ? "⌘" : "Ctrl")
-  if (combo.ctrl) parts.push(isMac ? "⌃" : "Ctrl")
-  if (combo.meta) parts.push("⌘")
-  if (combo.alt) parts.push(isMac ? "⌥" : "Alt")
-  if (combo.shift) parts.push(isMac ? "⇧" : "Shift")
-  if (combo.key === " ") {
-    parts.push("Space")
-  } else {
-    parts.push(combo.key.length === 1 ? combo.key.toUpperCase() : combo.key)
-  }
-  return parts
-}
-
-/** A display string for a combo, e.g. "⇧Tab" (mac) or "Shift+Tab" (other). */
-export function formatCombo(combo: KeyCombo): string {
-  const parts = comboParts(combo)
-  return isMac ? parts.join("") : parts.join("+")
+  if (combo.mod) parts.push(isMac ? "CMD" : "CTRL")
+  if (combo.ctrl) parts.push("CTRL")
+  if (combo.meta) parts.push("CMD")
+  if (combo.alt) parts.push(isMac ? "OPT" : "ALT")
+  if (combo.shift) parts.push("SHIFT")
+  parts.push(combo.key === " " ? "SPACE" : combo.key.toUpperCase())
+  return parts.join("+")
 }
