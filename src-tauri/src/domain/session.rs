@@ -210,9 +210,6 @@ pub struct Session {
     pub branch: Option<String>,
     pub base_sha: Option<String>,
     pub is_isolated: bool,
-    /// True once a terminal PTY has opened the CLI conversation, so reopening
-    /// resumes (`--resume`) instead of starting a new one (`--session-id`).
-    pub pty_started: bool,
     pub turns: i64,
     pub cost_usd: f64,
     /// Set when this session was produced by a handoff from another session.

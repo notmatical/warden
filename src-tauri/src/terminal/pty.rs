@@ -1,5 +1,5 @@
-//! Spawns an interactive `claude` process in a PTY and streams its output to
-//! the frontend over a Tauri channel.
+//! Spawns the user's default shell in a PTY and streams its output to the
+//! frontend over a Tauri channel.
 
 use std::io::Read;
 use std::thread;
@@ -11,24 +11,19 @@ use super::registry::{self, Session};
 use super::TerminalEvent;
 use crate::error::{AppError, Result};
 
-/// Build the command the PTY runs. On Windows `claude` is a `.cmd` shim, which
-/// ConPTY can't exec directly, so go through `cmd /c`.
-fn build_command(cwd: &str, extra_args: &[String]) -> Result<CommandBuilder> {
+/// Build the shell command the PTY runs, started in `cwd`. Windows uses
+/// PowerShell; elsewhere the user's `$SHELL` (falling back to bash).
+fn build_command(cwd: &str) -> CommandBuilder {
     let mut cmd = if cfg!(windows) {
-        let mut c = CommandBuilder::new("cmd");
-        c.args(["/c", "claude"]);
-        c
+        CommandBuilder::new("powershell.exe")
     } else {
-        let bin = which::which("claude")
-            .map_err(|_| AppError::NotFound("`claude` was not found on PATH".to_string()))?;
-        CommandBuilder::new(bin)
+        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
+        CommandBuilder::new(shell)
     };
-    for arg in extra_args {
-        cmd.arg(arg);
-    }
     cmd.cwd(cwd);
     cmd.env("TERM", "xterm-256color");
-    Ok(cmd)
+    cmd.env("COLORTERM", "truecolor");
+    cmd
 }
 
 pub fn spawn(
@@ -37,7 +32,6 @@ pub fn spawn(
     working_dir: String,
     cols: u16,
     rows: u16,
-    extra_args: Vec<String>,
 ) -> Result<()> {
     let pty_system = native_pty_system();
     let pair = pty_system
@@ -51,8 +45,8 @@ pub fn spawn(
 
     let child = pair
         .slave
-        .spawn_command(build_command(&working_dir, &extra_args)?)
-        .map_err(|e| AppError::Agent(format!("failed to launch claude: {e}")))?;
+        .spawn_command(build_command(&working_dir))
+        .map_err(|e| AppError::Agent(format!("failed to launch terminal: {e}")))?;
     // Drop the slave in the parent so EOF is observed when the child exits.
     drop(pair.slave);
 
