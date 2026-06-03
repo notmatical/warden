@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -54,6 +55,14 @@ export function Composer({ sessionId }: { sessionId: string }) {
     open: openMenu === id,
     onOpenChange: (open: boolean) => setOpenMenu(open ? id : null),
   })
+
+  // Ctrl+E (handled globally) requests this session's model menu.
+  const modelMenuSignal = useAppStore((s) => s.modelMenuSignal)
+  useEffect(() => {
+    if (modelMenuSignal?.sessionId === sessionId) {
+      setOpenMenu("model")
+    }
+  }, [modelMenuSignal, sessionId])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const backdropRef = useRef<HTMLDivElement>(null)
 

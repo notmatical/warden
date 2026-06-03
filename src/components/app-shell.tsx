@@ -84,6 +84,15 @@ export function AppShell() {
     },
   })
 
+  // Ctrl/⌘+E opens the model menu for the active agent session.
+  useKeybinding({
+    id: "open-model-menu",
+    combo: { key: "e", mod: true },
+    allowInInput: true,
+    description: "Open the model menu",
+    handler: () => useAppStore.getState().requestModelMenu(),
+  })
+
   // A small activation distance lets a plain click still select the tab while a
   // deliberate drag assigns it to a pane.
   const sensors = useSensors(

@@ -13,7 +13,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Switch } from "@/components/ui/switch"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { useControllableOpen } from "@/hooks/use-controllable-open"
+import { formatCombo } from "@/lib/keybindings"
 import { cn } from "@/lib/utils"
 import {
   MODEL_PROVIDERS,
@@ -47,18 +53,28 @@ export function ModelMenu({
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={disabled}
-          className="h-7 gap-1.5 px-2 text-xs font-medium text-muted-foreground hover:text-foreground"
-        >
-          {formatModelName(value)}
-          {fast && <AnimatedZap active className="size-3" />}
-          <ChevronsUpDown className="size-3 opacity-50" />
-        </Button>
-      </DropdownMenuTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={disabled}
+              className="h-7 gap-1.5 px-2 text-xs font-medium text-muted-foreground hover:text-foreground"
+            >
+              {formatModelName(value)}
+              {fast && <AnimatedZap active className="size-3" />}
+              <ChevronsUpDown className="size-3 opacity-50" />
+            </Button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="flex items-center gap-1.5">
+          Model
+          <kbd className="rounded bg-foreground/10 px-1 font-mono text-[10px]">
+            {formatCombo({ key: "e", mod: true })}
+          </kbd>
+        </TooltipContent>
+      </Tooltip>
       <DropdownMenuContent align="start" className="w-56">
         <DropdownMenuRadioGroup
           value={base}
