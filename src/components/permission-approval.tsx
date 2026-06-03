@@ -48,7 +48,7 @@ export function PermissionApproval({
           <span className="shrink-0 text-xs font-medium text-foreground">
             Permission needed
           </span>
-          <code className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">
+          <code className="min-w-0 flex-1 truncate font-mono text-[11px] font-medium text-foreground/70">
             {denials[0]?.pattern}
           </code>
           {extra > 0 ? (
@@ -78,11 +78,11 @@ export function PermissionApproval({
         </div>
       </div>
       {expanded ? (
-        <ul className="space-y-1 border-t border-border/60 bg-muted/30 px-2.5 py-2">
+        <ul className="space-y-1 border-t border-border/60 px-2.5 py-2">
           {denials.map((denial, i) => (
             <li
               key={i}
-              className="rounded-md bg-background/60 px-2 py-1 font-mono text-[11px] break-all text-muted-foreground"
+              className="font-mono text-[11px] font-medium break-all text-foreground/80"
             >
               {denial.pattern}
             </li>
