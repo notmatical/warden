@@ -1,5 +1,5 @@
-import { Check, ChevronsUpDown, Lock } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Bot, Check, ChevronsUpDown, Sparkles } from "lucide-react";
+import { useState } from "react";
 
 import { AnimatedZap } from "@/components/animated-zap";
 import { Shortcut } from "@/components/shortcut";
@@ -44,11 +44,16 @@ interface ModelMenuProps {
 	onOpenChange?: (open: boolean) => void;
 }
 
-/** Each provider rail entry, derived from {@link MODELS}. */
 interface ProviderEntry {
 	name: string;
 	backend: Backend;
 }
+
+/** A provider's mark, shown in the rail when more than one provider is usable. */
+const PROVIDER_ICON: Record<Backend, typeof Bot> = {
+	claude: Sparkles,
+	codex: Bot,
+};
 
 const PROVIDER_ENTRIES: ProviderEntry[] = MODEL_PROVIDERS.map((name) => ({
 	name,
@@ -72,25 +77,36 @@ export function ModelMenu({
 
 	const activeProvider =
 		MODELS.find((m) => m.id === base)?.provider ?? PROVIDER_ENTRIES[0].name;
+
+	// Which providers can be picked right now: once a turn has run the backend is
+	// fixed to one provider; otherwise every authed provider is selectable.
+	const authed = new Set(
+		providers.filter((p) => p.authed).map((p) => p.id),
+	);
+	const usable = started
+		? PROVIDER_ENTRIES.filter((e) => e.backend === backend)
+		: PROVIDER_ENTRIES.filter((e) => authed.has(e.backend));
+	// Fall back to the session's own provider so the menu is never empty (e.g.
+	// before provider status has loaded).
+	const entries =
+		usable.length > 0
+			? usable
+			: PROVIDER_ENTRIES.filter((e) => e.backend === backend);
+	// Only worth a provider rail when there's more than one to switch between.
+	const showRail = entries.length > 1;
+
 	const [pane, setPane] = useState(activeProvider);
-	// Snap the right pane back to the active model's provider each open.
 	const [seenOpen, setSeenOpen] = useState(open);
 	if (open !== seenOpen) {
 		setSeenOpen(open);
 		if (open) setPane(activeProvider);
 	}
-
-	const statusFor = useMemo(
-		() => (b: Backend) => providers.find((p) => p.id === b) ?? null,
-		[providers],
-	);
-
-	const paneModels = MODELS.filter((m) => m.provider === pane);
-	const paneEntry =
-		PROVIDER_ENTRIES.find((p) => p.name === pane) ?? PROVIDER_ENTRIES[0];
-	// Before the first turn the session is provider-agnostic; once started, only
-	// the current backend's models remain selectable.
-	const paneLocked = started && paneEntry.backend !== backend;
+	const paneName = entries.some((e) => e.name === pane)
+		? pane
+		: entries.some((e) => e.name === activeProvider)
+			? activeProvider
+			: entries[0].name;
+	const paneModels = MODELS.filter((m) => m.provider === paneName);
 
 	return (
 		<DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
@@ -114,74 +130,57 @@ export function ModelMenu({
 					<Shortcut combo={{ key: "e", mod: true }} />
 				</TooltipContent>
 			</Tooltip>
-			<DropdownMenuContent align="start" className="w-[22rem] p-0">
+			<DropdownMenuContent
+				align="start"
+				className={cn("p-0", showRail ? "w-[20rem]" : "w-60")}
+			>
 				<div className="flex">
-					{/* Provider rail */}
-					<div className="w-32 shrink-0 border-r border-border/50 p-1">
-						{PROVIDER_ENTRIES.map((entry) => {
-							const status = statusFor(entry.backend);
-							const locked = started && entry.backend !== backend;
-							const selected = entry.name === pane;
-							const dot = !status?.installed
-								? "bg-muted-foreground/40"
-								: status.authed
-									? "bg-emerald-500"
-									: "bg-amber-500";
+					{showRail ? (
+						<div className="flex w-12 shrink-0 flex-col gap-1 border-r border-border/50 p-1.5">
+							{entries.map((entry) => {
+								const Icon = PROVIDER_ICON[entry.backend];
+								const selected = entry.name === paneName;
+								return (
+									<button
+										key={entry.name}
+										type="button"
+										aria-label={entry.name}
+										title={entry.name}
+										onClick={() => setPane(entry.name)}
+										className={cn(
+											"flex aspect-square items-center justify-center rounded-md transition-colors",
+											selected
+												? "bg-accent text-accent-foreground"
+												: "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+										)}
+									>
+										<Icon className="size-4" />
+									</button>
+								);
+							})}
+						</div>
+					) : null}
+
+					<div className="min-w-0 flex-1 p-1">
+						{paneModels.map((model) => {
+							const selected = model.id === base;
 							return (
 								<button
-									key={entry.name}
+									key={model.id}
 									type="button"
-									disabled={locked}
-									onClick={() => setPane(entry.name)}
-									className={cn(
-										"flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-hidden transition-colors",
-										selected
-											? "bg-accent text-accent-foreground"
-											: "text-foreground/80 hover:bg-accent/50",
-										locked && "pointer-events-none opacity-50",
-									)}
+									onClick={() => onChange(withFast(model.id, fast))}
+									className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-hidden transition-colors hover:bg-accent focus:bg-accent focus:text-accent-foreground"
 								>
-									<span className={cn("size-1.5 shrink-0 rounded-full", dot)} />
-									<span className="min-w-0 flex-1 truncate">{entry.name}</span>
-									{locked && (
-										<Lock className="size-3 shrink-0 text-muted-foreground" />
-									)}
+									<Check
+										className={cn(
+											"size-4 shrink-0",
+											selected ? "opacity-100" : "opacity-0",
+										)}
+									/>
+									<span className="min-w-0 flex-1 truncate">{model.label}</span>
 								</button>
 							);
 						})}
-					</div>
-
-					{/* Models for the selected provider */}
-					<div className="min-w-0 flex-1 p-1">
-						{paneLocked ? (
-							<p className="px-2 py-3 text-xs text-muted-foreground">
-								This session runs on{" "}
-								{paneEntry.backend === "codex" ? "Codex" : "Claude"}. Its
-								provider is fixed once it has started.
-							</p>
-						) : (
-							paneModels.map((model) => {
-								const selected = model.id === base;
-								return (
-									<button
-										key={model.id}
-										type="button"
-										onClick={() => onChange(withFast(model.id, fast))}
-										className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-hidden transition-colors hover:bg-accent focus:bg-accent focus:text-accent-foreground"
-									>
-										<Check
-											className={cn(
-												"size-4 shrink-0",
-												selected ? "opacity-100" : "opacity-0",
-											)}
-										/>
-										<span className="min-w-0 flex-1 truncate">
-											{model.label}
-										</span>
-									</button>
-								);
-							})
-						)}
 					</div>
 				</div>
 
