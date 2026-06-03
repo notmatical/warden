@@ -24,9 +24,10 @@ interface Instance {
 
 const instances = new Map<string, Instance>()
 
-// Approximate the app's warm-black / cream palette (xterm needs hex).
+// Transparent background so the terminal blends into the app surface; xterm
+// needs hex/rgba and `allowTransparency` to skip its opaque background layer.
 const THEME = {
-  background: "#1b1a17",
+  background: "rgba(0, 0, 0, 0)",
   foreground: "#e8e3d8",
   cursor: "#e8e3d8",
   cursorAccent: "#1b1a17",
@@ -39,6 +40,7 @@ function create(id: string, workingDir: string): Instance {
     fontSize: 13,
     cursorBlink: true,
     theme: THEME,
+    allowTransparency: true,
     allowProposedApi: true,
   })
   const fit = new FitAddon()
