@@ -515,64 +515,64 @@ const SESSION_SELECT_ALL: &str =
 
 fn map_project(row: &Row<'_>) -> rusqlite::Result<Project> {
     Ok(Project {
-        id: row.get(0)?,
-        name: row.get(1)?,
-        path: row.get(2)?,
-        is_git: row.get::<_, i64>(3)? != 0,
-        created_at: row.get(4)?,
+        id: row.get("id")?,
+        name: row.get("name")?,
+        path: row.get("path")?,
+        is_git: row.get::<_, i64>("is_git")? != 0,
+        created_at: row.get("created_at")?,
     })
 }
 
 fn map_group(row: &Row<'_>) -> rusqlite::Result<Group> {
     Ok(Group {
-        id: row.get(0)?,
-        name: row.get(1)?,
-        layout: row.get(2)?,
-        created_at: row.get(3)?,
+        id: row.get("id")?,
+        name: row.get("name")?,
+        layout: row.get("layout")?,
+        created_at: row.get("created_at")?,
     })
 }
 
 fn map_session(row: &Row<'_>) -> rusqlite::Result<Session> {
-    let backend_str: String = row.get(4)?;
-    let pm_str: String = row.get(6)?;
-    let status_str: String = row.get(7)?;
-    let role_str: String = row.get(8)?;
-    let effort_str: String = row.get(19)?;
-    let kind_str: String = row.get(21)?;
+    let backend_str: String = row.get("backend")?;
+    let pm_str: String = row.get("permission_mode")?;
+    let status_str: String = row.get("status")?;
+    let role_str: String = row.get("role")?;
+    let effort_str: String = row.get("effort")?;
+    let kind_str: String = row.get("kind")?;
     Ok(Session {
-        id: row.get(0)?,
-        group_id: row.get(1)?,
-        project_id: row.get(2)?,
-        title: row.get(3)?,
+        id: row.get("id")?,
+        group_id: row.get("group_id")?,
+        project_id: row.get("project_id")?,
+        title: row.get("title")?,
         kind: SessionKind::parse(&kind_str).unwrap_or(SessionKind::Agent),
         backend: Backend::parse(&backend_str).unwrap_or(Backend::Claude),
-        model: row.get(5)?,
+        model: row.get("model")?,
         permission_mode: PermissionMode::parse(&pm_str).unwrap_or(PermissionMode::Default),
         effort: EffortLevel::parse(&effort_str).unwrap_or(EffortLevel::High),
         status: SessionStatus::parse(&status_str).unwrap_or(SessionStatus::Idle),
         role: SessionRole::parse(&role_str).unwrap_or(SessionRole::Chat),
-        auto_named: row.get::<_, i64>(20)? != 0,
-        agent_session_id: row.get(9)?,
-        working_dir: row.get(10)?,
-        branch: row.get(11)?,
-        base_sha: row.get(12)?,
-        is_isolated: row.get::<_, i64>(13)? != 0,
-        turns: row.get(14)?,
-        cost_usd: row.get(15)?,
-        parent_id: row.get(16)?,
-        created_at: row.get(17)?,
-        updated_at: row.get(18)?,
+        auto_named: row.get::<_, i64>("auto_named")? != 0,
+        agent_session_id: row.get("agent_session_id")?,
+        working_dir: row.get("working_dir")?,
+        branch: row.get("branch")?,
+        base_sha: row.get("base_sha")?,
+        is_isolated: row.get::<_, i64>("is_isolated")? != 0,
+        turns: row.get("turns")?,
+        cost_usd: row.get("cost_usd")?,
+        parent_id: row.get("parent_id")?,
+        created_at: row.get("created_at")?,
+        updated_at: row.get("updated_at")?,
     })
 }
 
 /// Maps a row into a `Result<EventRecord>` because deserializing the JSON
 /// payload can fail independently of the SQLite read.
 fn map_event(row: &Row<'_>) -> rusqlite::Result<Result<EventRecord>> {
-    let id: String = row.get(0)?;
-    let session_id: String = row.get(1)?;
-    let seq: i64 = row.get(2)?;
-    let ts: String = row.get(3)?;
-    let payload: String = row.get(4)?;
+    let id: String = row.get("id")?;
+    let session_id: String = row.get("session_id")?;
+    let seq: i64 = row.get("seq")?;
+    let ts: String = row.get("ts")?;
+    let payload: String = row.get("payload")?;
     Ok((|| {
         let event: AgentEvent = serde_json::from_str(&payload)?;
         Ok(EventRecord {
