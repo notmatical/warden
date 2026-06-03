@@ -109,6 +109,8 @@ export const Markdown = memo(function Markdown({
     <div
       className={cn(
         "prose prose-sm dark:prose-invert max-w-none break-words",
+        // Slightly heavier body text + fuller contrast for readability.
+        "font-[450] prose-p:text-foreground/90 prose-li:text-foreground/90",
         "prose-pre:bg-transparent prose-pre:p-0",
         "prose-headings:font-semibold prose-p:leading-relaxed",
         className
