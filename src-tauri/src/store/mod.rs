@@ -449,6 +449,18 @@ impl Store {
         Ok(())
     }
 
+    /// Persist the backend conversation id for a session. Claude assigns this at
+    /// creation (a client-chosen uuid); Codex learns its thread id from the
+    /// server on `thread/start`, so it's set here once the thread exists.
+    pub fn set_agent_session_id(&self, id: &str, agent_session_id: &str) -> Result<()> {
+        let conn = self.lock();
+        conn.execute(
+            "UPDATE sessions SET agent_session_id = ?2, updated_at = ?3 WHERE id = ?1",
+            (id, agent_session_id, now_rfc3339()),
+        )?;
+        Ok(())
+    }
+
     /// Add approved tool patterns to a session's allowlist (deduped), returning
     /// the full updated list.
     pub fn add_allowed_tools(&self, id: &str, patterns: &[String]) -> Result<Vec<String>> {

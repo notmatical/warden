@@ -6,18 +6,21 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "snake_case")]
 pub enum Backend {
     Claude,
+    Codex,
 }
 
 impl Backend {
     pub fn as_str(self) -> &'static str {
         match self {
             Backend::Claude => "claude",
+            Backend::Codex => "codex",
         }
     }
 
     pub fn parse(s: &str) -> Option<Self> {
         match s {
             "claude" => Some(Backend::Claude),
+            "codex" => Some(Backend::Codex),
             _ => None,
         }
     }

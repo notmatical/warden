@@ -37,6 +37,7 @@ pub async fn create_session(
     effort: Option<String>,
     role: Option<String>,
     kind: Option<String>,
+    backend: Option<String>,
     isolate: Option<bool>,
 ) -> Result<Session> {
     let project = state.store.get_project(&project_id)?;
@@ -64,13 +65,17 @@ pub async fn create_session(
         .as_deref()
         .and_then(SessionKind::parse)
         .unwrap_or(SessionKind::Agent);
+    let backend = backend
+        .as_deref()
+        .and_then(Backend::parse)
+        .unwrap_or(Backend::Claude);
 
     let session = state.store.create_session(NewSession {
         group_id,
         project_id,
         title,
         kind,
-        backend: Backend::Claude,
+        backend,
         model,
         permission_mode,
         effort,

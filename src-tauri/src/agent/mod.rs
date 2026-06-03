@@ -2,22 +2,29 @@
 //! persisted events, and tracking which sessions have a turn in flight.
 
 mod claude;
+mod codex;
 mod naming;
 mod session_proc;
 mod stream;
 
 pub use naming::generate_session_title;
-pub use session_proc::kill_all;
 
 use tauri::AppHandle;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
 
-use crate::domain::{AgentEvent, Session, SessionStatus};
+use crate::domain::{AgentEvent, Backend, Session, SessionStatus};
 use crate::error::{AppError, Result};
 use crate::events::{emit_delta, emit_event, emit_session};
 use crate::store::Store;
 
 use stream::parse_line;
+
+/// Tear down every live agent process on app exit: the persistent Claude
+/// session processes and the shared Codex app-server.
+pub fn kill_all() {
+    session_proc::kill_all();
+    codex::kill_all();
+}
 
 /// What a completed one-shot turn produced (recipes/naming).
 pub struct TurnOutput {
@@ -183,6 +190,17 @@ impl AgentManager {
         prompt: String,
     ) -> Result<()> {
         self.begin_turn(&store, &app, &session, &prompt)?;
+
+        if session.backend == Backend::Codex {
+            // Codex runs the turn to completion in its adapter, settling the
+            // session to Idle on the terminating `turn/completed`. A failure to
+            // start the turn is surfaced as an error event here.
+            if let Err(err) = codex::run_turn(&app, &store, &session, &prompt).await {
+                let failed: Result<TurnOutput> = Err(err);
+                self.finalize(&app, &store, &session.id, &failed);
+            }
+            return Ok(());
+        }
 
         // Hand every non-primary root to the CLI as an extra directory.
         let add_dirs: Vec<String> = store
