@@ -3,14 +3,12 @@
 
 mod claude;
 mod naming;
+mod session_proc;
 mod stream;
 
 pub use naming::generate_session_title;
+pub use session_proc::kill_all;
 
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-
-use tauri::async_runtime::JoinHandle;
 use tauri::AppHandle;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
 
@@ -21,30 +19,21 @@ use crate::store::Store;
 
 use stream::parse_line;
 
-/// What a completed turn produced.
+/// What a completed one-shot turn produced (recipes/naming).
 pub struct TurnOutput {
     pub cost_usd: f64,
     pub assistant_text: String,
 }
 
-/// Tracks in-flight turns by session id so we can enforce one-at-a-time and
-/// support cancellation. Cloneable so it can live in shared Tauri state.
-#[derive(Clone, Default)]
-pub struct AgentManager {
-    running: Arc<Mutex<HashMap<String, JoinHandle<()>>>>,
-}
+/// Drives agent turns: interactive chat runs against a persistent per-session
+/// process (see [`session_proc`]); recipes and naming use one-shot runs. Holds
+/// no state itself — cloneable for shared Tauri state.
+#[derive(Clone, Copy, Default)]
+pub struct AgentManager;
 
 impl AgentManager {
     pub fn new() -> Self {
-        Self::default()
-    }
-
-    fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, JoinHandle<()>>> {
-        self.running.lock().unwrap_or_else(|p| p.into_inner())
-    }
-
-    pub fn is_running(&self, id: &str) -> bool {
-        self.lock().contains_key(id)
+        Self
     }
 
     /// Record the user prompt and flip the session to `Running`. Rejects if a
@@ -56,7 +45,8 @@ impl AgentManager {
         session: &Session,
         prompt: &str,
     ) -> Result<()> {
-        if self.is_running(&session.id) {
+        let current = store.get_session(&session.id)?;
+        if current.status == SessionStatus::Running {
             return Err(AppError::Busy);
         }
         let record = store.append_event(
@@ -182,9 +172,10 @@ impl AgentManager {
         }
     }
 
-    /// Fire-and-forget a turn: streams over events, finalizes, and removes its
-    /// own handle from the running map when done.
-    pub fn run_turn(
+    /// Send a turn to the session's persistent process (spawning it on first
+    /// use). Returns once the message is queued; events stream in via the
+    /// process reader, which flips the session back to `Idle` on completion.
+    pub async fn run_turn(
         &self,
         app: AppHandle,
         store: Store,
@@ -193,14 +184,24 @@ impl AgentManager {
     ) -> Result<()> {
         self.begin_turn(&store, &app, &session, &prompt)?;
 
-        let manager = self.clone();
-        let session_id = session.id.clone();
-        let handle = tauri::async_runtime::spawn(async move {
-            let result = Self::run_process(&app, &store, &session, &prompt).await;
-            manager.finalize(&app, &store, &session.id, &result);
-            manager.lock().remove(&session.id);
-        });
-        self.lock().insert(session_id, handle);
+        // Hand every non-primary root to the CLI as an extra directory.
+        let add_dirs: Vec<String> = store
+            .list_session_root_projects(&session.id)
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|p| p.id != session.project_id)
+            .map(|p| p.path)
+            .collect();
+
+        if let Err(err) = session_proc::ensure(&app, &store, &session, &add_dirs).await {
+            let failed: Result<TurnOutput> = Err(err);
+            self.finalize(&app, &store, &session.id, &failed);
+            return Ok(());
+        }
+        if let Err(err) = session_proc::send(&session.id, claude::user_message_line(&prompt)) {
+            let failed: Result<TurnOutput> = Err(err);
+            self.finalize(&app, &store, &session.id, &failed);
+        }
         Ok(())
     }
 
@@ -219,15 +220,18 @@ impl AgentManager {
         out.map(|o| o.assistant_text)
     }
 
-    /// Abort an in-flight turn. `kill_on_drop` tears down the CLI child once the
-    /// handle is dropped. Returns whether a turn was actually running.
+    /// Cancel an in-flight turn by killing the session's process. Returns
+    /// whether a turn was actually running. The conversation resumes on the next
+    /// message (the process re-spawns with `--resume`).
     pub fn cancel(&self, app: &AppHandle, store: &Store, session_id: &str) -> bool {
-        let handle = self.lock().remove(session_id);
-        let was_running = handle.is_some();
-        if let Some(handle) = handle {
-            handle.abort();
-        }
+        let was_running = matches!(
+            store.get_session(session_id).map(|s| s.status),
+            Ok(SessionStatus::Running)
+        );
+        // Settle the status before killing so the reader's EOF handler reads this
+        // as a cancel rather than a crash.
         let _ = store.set_session_status(session_id, SessionStatus::Idle);
+        session_proc::kill(session_id);
         if let Ok(session) = store.get_session(session_id) {
             emit_session(app, &session);
         }

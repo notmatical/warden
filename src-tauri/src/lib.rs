@@ -79,9 +79,10 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|_app, event| {
-            // Tear down any live PTYs when the app exits.
+            // Tear down any live PTYs and agent processes when the app exits.
             if matches!(event, tauri::RunEvent::Exit) {
                 terminal::kill_all();
+                agent::kill_all();
             }
         });
 }

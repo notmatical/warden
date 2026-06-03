@@ -221,7 +221,8 @@ pub async fn send_message(
 
     state
         .manager
-        .run_turn(app.clone(), state.store.clone(), session, text)?;
+        .run_turn(app.clone(), state.store.clone(), session, text)
+        .await?;
 
     if let Some((working_dir, message)) = naming_ctx {
         let store = state.store.clone();
