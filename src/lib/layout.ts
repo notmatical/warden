@@ -1,4 +1,4 @@
-import type { Layout, LayoutMode } from "@/types"
+import type { GroupView, Layout, LayoutMode } from "@/types"
 
 /** Number of panes each layout mode renders. */
 export const PANE_COUNT: Record<LayoutMode, number> = {
@@ -36,6 +36,35 @@ export function parseLayout(raw: string): Layout {
 
 export function serializeLayout(layout: Layout): string {
   return JSON.stringify(layout)
+}
+
+export const DEFAULT_VIEW: GroupView = {
+  ...DEFAULT_LAYOUT,
+  openTabs: [],
+  activeSession: null,
+}
+
+/** Parse a group's stored view-state: the layout plus open tabs + active tab. */
+export function parseGroupView(raw: string): GroupView {
+  const layout = parseLayout(raw)
+  let openTabs: string[] = []
+  let activeSession: string | null = null
+  try {
+    const parsed = JSON.parse(raw) as Partial<GroupView>
+    if (Array.isArray(parsed.openTabs)) {
+      openTabs = parsed.openTabs.filter((id): id is string => typeof id === "string")
+    }
+    if (typeof parsed.activeSession === "string") {
+      activeSession = parsed.activeSession
+    }
+  } catch {
+    // fall through to defaults
+  }
+  return { ...layout, openTabs, activeSession }
+}
+
+export function serializeGroupView(view: GroupView): string {
+  return JSON.stringify(view)
 }
 
 /** Switch grid mode, preserving as many pane assignments as still fit. */

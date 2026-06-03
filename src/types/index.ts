@@ -52,6 +52,15 @@ export interface Layout {
   panes: (string | null)[]
 }
 
+/** A group's full persisted view-state: its layout plus which tabs are open
+ *  and which is focused. Stored (serialized) in `Group.layout`. */
+export interface GroupView extends Layout {
+  /** Open tab session ids, in order. */
+  openTabs: string[]
+  /** The focused session id (must be one of `openTabs`), or null. */
+  activeSession: string | null
+}
+
 /** The top-level workspace: named set of repo roots + a saved pane layout. */
 export interface Group {
   id: string

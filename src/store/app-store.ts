@@ -7,8 +7,8 @@ import { onAgentDelta, onAgentEvent, onSessionUpdated } from "@/lib/events"
 import {
   DEFAULT_LAYOUT,
   detachSession,
-  parseLayout,
-  serializeLayout,
+  parseGroupView,
+  serializeGroupView,
 } from "@/lib/layout"
 import * as terminals from "@/lib/terminal-instances"
 import type {
@@ -16,6 +16,7 @@ import type {
   EffortLevel,
   EventRecord,
   Group,
+  GroupView,
   Layout,
   PermissionMode,
   Session,
@@ -119,6 +120,8 @@ interface AppState {
   addRoot: (groupId: string) => Promise<void>
   removeRoot: (groupId: string, projectId: string) => Promise<void>
   setLayout: (groupId: string, layout: Layout) => void
+  /** Persist a group's full view-state (layout + open tabs + active tab). */
+  saveGroupView: (groupId: string) => void
   createSession: (opts: CreateSessionOptions) => Promise<Session | null>
   openSession: (id: string) => void
   updateSession: (sessionId: string, patch: SessionSettingsPatch) => Promise<void>
@@ -223,9 +226,17 @@ export const useAppStore = create<AppState>((set, get) => ({
           nextSessions[session.id] = session
         }
         const group = state.groups.find((g) => g.id === groupId)
-        const layout = state.layoutByGroup[groupId]
-          ? state.layoutByGroup[groupId]
-          : parseLayout(group?.layout ?? "")
+        // Restore the saved view, dropping references to sessions that no
+        // longer exist. Already-loaded groups keep their live in-memory state.
+        const loaded = state.layoutByGroup[groupId] !== undefined
+        const view = parseGroupView(group?.layout ?? "")
+        const ids = new Set(sessions.map((s) => s.id))
+        const openTabs = view.openTabs.filter((id) => ids.has(id))
+        const panes = view.panes.map((id) => (id && ids.has(id) ? id : null))
+        const activeSession =
+          view.activeSession && openTabs.includes(view.activeSession)
+            ? view.activeSession
+            : openTabs[0] ?? null
         return {
           sessions: nextSessions,
           rootsByGroup: { ...state.rootsByGroup, [groupId]: roots },
@@ -233,14 +244,23 @@ export const useAppStore = create<AppState>((set, get) => ({
             ...state.sessionsByGroup,
             [groupId]: sessions.map((s) => s.id),
           },
-          layoutByGroup: { ...state.layoutByGroup, [groupId]: layout },
+          layoutByGroup: {
+            ...state.layoutByGroup,
+            [groupId]: loaded
+              ? state.layoutByGroup[groupId]
+              : { mode: view.mode, panes },
+          },
           tabsByGroup: {
             ...state.tabsByGroup,
-            [groupId]: state.tabsByGroup[groupId] ?? [],
+            [groupId]: loaded
+              ? state.tabsByGroup[groupId] ?? []
+              : openTabs,
           },
           activeSessionByGroup: {
             ...state.activeSessionByGroup,
-            [groupId]: state.activeSessionByGroup[groupId] ?? null,
+            [groupId]: loaded
+              ? state.activeSessionByGroup[groupId] ?? null
+              : activeSession,
           },
         }
       })
@@ -379,9 +399,21 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((state) => ({
       layoutByGroup: { ...state.layoutByGroup, [groupId]: layout },
     }))
+    get().saveGroupView(groupId)
+  },
+
+  saveGroupView: (groupId) => {
+    const state = get()
+    const layout = state.layoutByGroup[groupId] ?? DEFAULT_LAYOUT
+    const view: GroupView = {
+      mode: layout.mode,
+      panes: layout.panes,
+      openTabs: state.tabsByGroup[groupId] ?? [],
+      activeSession: state.activeSessionByGroup[groupId] ?? null,
+    }
     void ipc
-      .setGroupLayout(groupId, serializeLayout(layout))
-      .catch((error) => reportError("Failed to save layout", error))
+      .setGroupLayout(groupId, serializeGroupView(view))
+      .catch((error) => reportError("Failed to save view", error))
   },
 
   createSession: async (opts) => {
@@ -407,9 +439,6 @@ export const useAppStore = create<AppState>((set, get) => ({
         kind: opts.kind,
         isolate: opts.isolate,
       })
-      if (wasEmpty) {
-        get().setLayout(groupId, DEFAULT_LAYOUT)
-      }
       set((state) => ({
         sessions: { ...state.sessions, [session.id]: session },
         sessionsByGroup: {
@@ -427,8 +456,13 @@ export const useAppStore = create<AppState>((set, get) => ({
           ...state.activeSessionByGroup,
           [groupId]: session.id,
         },
+        // Opening into an empty workspace resets to a full-screen single pane.
+        layoutByGroup: wasEmpty
+          ? { ...state.layoutByGroup, [groupId]: DEFAULT_LAYOUT }
+          : state.layoutByGroup,
         eventsBySession: { ...state.eventsBySession, [session.id]: [] },
       }))
+      get().saveGroupView(groupId)
       if (
         opts.kind !== "terminal" &&
         opts.firstMessage &&
@@ -499,6 +533,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     })
     if (wasEmpty) {
       get().setLayout(groupId, DEFAULT_LAYOUT)
+    } else {
+      get().saveGroupView(groupId)
     }
     if (!get().eventsBySession[id]) {
       void get().loadEvents(id)
@@ -513,6 +549,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((state) => ({
       activeSessionByGroup: { ...state.activeSessionByGroup, [groupId]: id },
     }))
+    get().saveGroupView(groupId)
     if (!get().eventsBySession[id]) {
       void get().loadEvents(id)
     }
@@ -550,6 +587,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     })
     if (detached) {
       get().setLayout(groupId, detached)
+    } else {
+      get().saveGroupView(groupId)
     }
   },
 
@@ -568,6 +607,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       tabsByGroup: { ...state.tabsByGroup, [groupId]: [id] },
       activeSessionByGroup: { ...state.activeSessionByGroup, [groupId]: id },
     }))
+    get().saveGroupView(groupId)
   },
 
   renameSession: async (sessionId, title) => {
@@ -591,12 +631,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   deleteSessions: async (sessionIds) => {
+    // Groups whose view-state may change, captured before the rows are removed.
+    const affected = new Set<string>()
     const deleted = new Set<string>()
     for (const id of sessionIds) {
       try {
-        if (get().sessions[id]?.kind === "terminal") {
+        const session = get().sessions[id]
+        if (session?.kind === "terminal") {
           terminals.dispose(id)
         }
+        if (session) affected.add(session.groupId)
         await ipc.deleteSession(id)
         deleted.add(id)
       } catch (error) {
@@ -648,9 +692,6 @@ export const useAppStore = create<AppState>((set, get) => ({
           }
           if (next !== layout) {
             layoutByGroup[gid] = next
-            void ipc
-              .setGroupLayout(gid, serializeLayout(next))
-              .catch((error) => reportError("Failed to save layout", error))
           }
         }
       }
@@ -667,6 +708,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         loadingEventsBySession: omit(state.loadingEventsBySession),
       }
     })
+
+    affected.forEach((gid) => get().saveGroupView(gid))
   },
 
   deleteSession: (sessionId) => get().deleteSessions([sessionId]),
@@ -738,6 +781,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           },
         }
       })
+      get().saveGroupView(groupId)
       void get().loadEvents(result.planner.id)
       void get().loadEvents(result.coder.id)
     } catch (error) {
