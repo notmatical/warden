@@ -1,7 +1,9 @@
-import { Bot, Check, ChevronsUpDown, Sparkles } from "lucide-react";
+import { Check, ChevronsUpDown, Search } from "lucide-react";
+import type { ComponentType, SVGProps } from "react";
 import { useState } from "react";
 
 import { AnimatedZap } from "@/components/animated-zap";
+import { AnthropicIcon, OpenAIIcon } from "@/components/icons/brand";
 import { Shortcut } from "@/components/shortcut";
 import { Button } from "@/components/ui/button";
 import {
@@ -49,10 +51,10 @@ interface ProviderEntry {
 	backend: Backend;
 }
 
-/** A provider's mark, shown in the rail when more than one provider is usable. */
-const PROVIDER_ICON: Record<Backend, typeof Bot> = {
-	claude: Sparkles,
-	codex: Bot,
+/** A provider's brand mark, shown in the rail when more than one is usable. */
+const PROVIDER_ICON: Record<Backend, ComponentType<SVGProps<SVGSVGElement>>> = {
+	claude: AnthropicIcon,
+	codex: OpenAIIcon,
 };
 
 const PROVIDER_ENTRIES: ProviderEntry[] = MODEL_PROVIDERS.map((name) => ({
@@ -74,17 +76,13 @@ export function ModelMenu({
 	const base = baseModelId(value);
 	const fast = isFastModel(value);
 	const canFast = supportsFast(base);
-	// Fast mode is a Claude service tier; Codex has no equivalent toggle.
-	const showFast = backendForModel(base) === "claude";
 
 	const activeProvider =
 		MODELS.find((m) => m.id === base)?.provider ?? PROVIDER_ENTRIES[0].name;
 
 	// Which providers can be picked right now: once a turn has run the backend is
 	// fixed to one provider; otherwise every authed provider is selectable.
-	const authed = new Set(
-		providers.filter((p) => p.authed).map((p) => p.id),
-	);
+	const authed = new Set(providers.filter((p) => p.authed).map((p) => p.id));
 	const usable = started
 		? PROVIDER_ENTRIES.filter((e) => e.backend === backend)
 		: PROVIDER_ENTRIES.filter((e) => authed.has(e.backend));
@@ -98,17 +96,33 @@ export function ModelMenu({
 	const showRail = entries.length > 1;
 
 	const [pane, setPane] = useState(activeProvider);
+	const [query, setQuery] = useState("");
 	const [seenOpen, setSeenOpen] = useState(open);
 	if (open !== seenOpen) {
 		setSeenOpen(open);
-		if (open) setPane(activeProvider);
+		if (open) {
+			setPane(activeProvider);
+			setQuery("");
+		}
 	}
 	const paneName = entries.some((e) => e.name === pane)
 		? pane
 		: entries.some((e) => e.name === activeProvider)
 			? activeProvider
 			: entries[0].name;
-	const paneModels = MODELS.filter((m) => m.provider === paneName);
+
+	const selectPane = (name: string) => {
+		setPane(name);
+		setQuery("");
+	};
+
+	const q = query.trim().toLowerCase();
+	const paneModels = MODELS.filter((m) => m.provider === paneName).filter(
+		(m) =>
+			!q ||
+			m.label.toLowerCase().includes(q) ||
+			m.id.toLowerCase().includes(q),
+	);
 
 	return (
 		<DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
@@ -134,8 +148,20 @@ export function ModelMenu({
 			</Tooltip>
 			<DropdownMenuContent
 				align="start"
-				className={cn("p-0", showRail ? "w-[20rem]" : "w-60")}
+				className={cn("p-0", showRail ? "w-[22rem]" : "w-72")}
 			>
+				<div className="flex items-center gap-2 border-b border-border/50 px-2.5">
+					<Search className="size-3.5 shrink-0 text-muted-foreground" />
+					{/* Stop key events bubbling so the menu's typeahead doesn't steal them. */}
+					<input
+						value={query}
+						onChange={(e) => setQuery(e.target.value)}
+						onKeyDown={(e) => e.stopPropagation()}
+						placeholder="Search models"
+						className="h-9 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+					/>
+				</div>
+
 				<div className="flex">
 					{showRail ? (
 						<div className="flex w-12 shrink-0 flex-col gap-1 border-r border-border/50 p-1.5">
@@ -148,7 +174,7 @@ export function ModelMenu({
 										type="button"
 										aria-label={entry.name}
 										title={entry.name}
-										onClick={() => setPane(entry.name)}
+										onClick={() => selectPane(entry.name)}
 										className={cn(
 											"flex aspect-square items-center justify-center rounded-md transition-colors",
 											selected
@@ -163,57 +189,59 @@ export function ModelMenu({
 						</div>
 					) : null}
 
-					<div className="min-w-0 flex-1 p-1">
-						{paneModels.map((model) => {
-							const selected = model.id === base;
-							return (
-								<button
-									key={model.id}
-									type="button"
-									onClick={() => onChange(withFast(model.id, fast))}
-									className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-hidden transition-colors hover:bg-accent focus:bg-accent focus:text-accent-foreground"
-								>
-									<Check
-										className={cn(
-											"size-4 shrink-0",
-											selected ? "opacity-100" : "opacity-0",
-										)}
-									/>
-									<span className="min-w-0 flex-1 truncate">{model.label}</span>
-								</button>
-							);
-						})}
+					<div className="min-w-0 flex-1 overflow-y-auto p-1 max-h-72">
+						{paneModels.length === 0 ? (
+							<p className="px-2 py-6 text-center text-sm text-muted-foreground">
+								No models found
+							</p>
+						) : (
+							paneModels.map((model) => {
+								const selected = model.id === base;
+								return (
+									<button
+										key={model.id}
+										type="button"
+										onClick={() => onChange(withFast(model.id, fast))}
+										className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm outline-hidden transition-colors hover:bg-accent focus:bg-accent focus:text-accent-foreground"
+									>
+										<span className="min-w-0 flex-1 truncate">
+											{model.label}
+										</span>
+										<Check
+											className={cn(
+												"size-4 shrink-0",
+												selected ? "opacity-100" : "opacity-0",
+											)}
+										/>
+									</button>
+								);
+							})
+						)}
 					</div>
 				</div>
 
-				{showFast ? (
-					<>
-						<DropdownMenuSeparator className="mx-0 my-0" />
-						<div className="p-1">
-							<DropdownMenuLabel className="text-xs text-muted-foreground">
-								Fast mode
-							</DropdownMenuLabel>
-							<div className="flex items-center justify-between gap-3 px-2 pt-0.5 pb-1.5">
-								<span
-									className={cn(
-										"flex items-center gap-2 text-sm",
-										!canFast && "text-muted-foreground",
-									)}
-								>
-									<AnimatedZap active={fast && canFast} className="size-4" />
-									Enable fast mode
-								</span>
-								<Switch
-									checked={fast}
-									disabled={!canFast}
-									onCheckedChange={(checked) =>
-										onChange(withFast(base, checked))
-									}
-								/>
-							</div>
-						</div>
-					</>
-				) : null}
+				<DropdownMenuSeparator className="mx-0 my-0" />
+				<div className="p-1">
+					<DropdownMenuLabel className="text-xs text-muted-foreground">
+						Fast mode
+					</DropdownMenuLabel>
+					<div className="flex items-center justify-between gap-3 px-2 pt-0.5 pb-1.5">
+						<span
+							className={cn(
+								"flex items-center gap-2 text-sm",
+								!canFast && "text-muted-foreground",
+							)}
+						>
+							<AnimatedZap active={fast && canFast} className="size-4" />
+							Enable fast mode
+						</span>
+						<Switch
+							checked={fast}
+							disabled={!canFast}
+							onCheckedChange={(checked) => onChange(withFast(base, checked))}
+						/>
+					</div>
+				</div>
 			</DropdownMenuContent>
 		</DropdownMenu>
 	);
