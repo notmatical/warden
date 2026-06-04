@@ -118,6 +118,8 @@ interface AppState {
   sessions: Record<string, Session>
   /** Install/auth status of each agent CLI provider. */
   providers: ProviderStatus[]
+  /** Install/auth status of the GitHub CLI (loaded lazily by Settings). */
+  githubStatus: ProviderStatus | null
   eventsBySession: Record<string, EventRecord[]>
   /** permission_request event id the user has acted on, per session — so the
    *  approval bar dismisses on approve/deny. */
@@ -128,6 +130,10 @@ interface AppState {
 
   sidebarCollapsed: boolean
   sidebarWidth: number
+
+  /** Settings dialog visibility and the section it opens to. */
+  settingsOpen: boolean
+  settingsSection: string
 
   initialized: boolean
   loadingGroups: boolean
@@ -140,6 +146,12 @@ interface AppState {
   installProvider: (id: Provider) => Promise<void>
   updateProvider: (id: Provider) => Promise<void>
   setProviderSource: (id: Provider, source: ProviderSource) => Promise<void>
+  loadGithubStatus: () => Promise<void>
+  installGithub: () => Promise<void>
+  updateGithub: () => Promise<void>
+  setGithubSource: (source: ProviderSource) => Promise<void>
+  openSettings: (section?: string) => void
+  setSettingsOpen: (open: boolean) => void
   loadGroupData: (groupId: string) => Promise<void>
   createGroup: (name: string) => Promise<Group | null>
   selectGroup: (id: string) => Promise<void>
@@ -186,6 +198,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeSessionByGroup: {},
   sessions: {},
   providers: [],
+  githubStatus: null,
+  settingsOpen: false,
+  settingsSection: "providers",
   eventsBySession: {},
   approvalResolvedBySession: {},
   streamingBySession: {},
@@ -298,6 +313,52 @@ export const useAppStore = create<AppState>((set, get) => ({
       await get().loadProviders()
     }
   },
+
+  loadGithubStatus: async () => {
+    try {
+      set({ githubStatus: await ipc.githubStatus() })
+    } catch (error) {
+      reportError("Failed to load GitHub CLI status", error)
+    }
+  },
+
+  installGithub: async () => {
+    try {
+      await ipc.installGithubCli()
+      await get().loadGithubStatus()
+      toast.success("Installed GitHub CLI")
+    } catch (error) {
+      reportError("Failed to install GitHub CLI", error)
+    }
+  },
+
+  updateGithub: async () => {
+    try {
+      await ipc.updateGithubCli()
+      await get().loadGithubStatus()
+      toast.success("Updated GitHub CLI")
+    } catch (error) {
+      reportError("Failed to update GitHub CLI", error)
+    }
+  },
+
+  setGithubSource: async (source) => {
+    set((state) => ({
+      githubStatus: state.githubStatus
+        ? { ...state.githubStatus, source }
+        : state.githubStatus,
+    }))
+    try {
+      await ipc.setGithubSource(source)
+      await get().loadGithubStatus()
+    } catch (error) {
+      reportError("Failed to change CLI source", error)
+      await get().loadGithubStatus()
+    }
+  },
+
+  openSettings: (section = "providers") => set({ settingsOpen: true, settingsSection: section }),
+  setSettingsOpen: (open) => set({ settingsOpen: open }),
 
   // Loads a group's roots and sessions into the store for the sidebar tree.
   // Does not change which tabs are open — that's driven by openSession.

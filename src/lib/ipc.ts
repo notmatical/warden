@@ -54,6 +54,24 @@ export function setProviderSource(
   return invoke("set_provider_source", { id, source })
 }
 
+// ----- github cli ----------------------------------------------------------
+
+export function githubStatus(): Promise<ProviderStatus> {
+  return invoke("github_status")
+}
+
+export function installGithubCli(): Promise<void> {
+  return invoke("install_github_cli")
+}
+
+export function updateGithubCli(): Promise<void> {
+  return invoke("update_github_cli")
+}
+
+export function setGithubSource(source: ProviderSource): Promise<void> {
+  return invoke("set_github_source", { source })
+}
+
 // ----- groups --------------------------------------------------------------
 
 export function listGroups(): Promise<Group[]> {

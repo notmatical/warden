@@ -6,6 +6,7 @@ import {
 	Layers,
 	Pencil,
 	Plus,
+	Settings2,
 	Sparkles,
 	SquareTerminal,
 	Trash2,
@@ -29,7 +30,6 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ProvidersStatus } from "@/components/providers-popover";
 import { Input } from "@/components/ui/input";
 import {
 	SidebarContent,
@@ -486,6 +486,10 @@ export function Sidebar() {
 	const activeGroupId = useAppStore((s) => s.activeGroupId);
 	const selectGroup = useAppStore((s) => s.selectGroup);
 	const createGroup = useAppStore((s) => s.createGroup);
+	const openSettings = useAppStore((s) => s.openSettings);
+	const needsSetup = useAppStore((s) =>
+		s.providers.some((p) => !p.installed || !p.authed),
+	);
 
 	const [expanded, setExpanded] = useState<Set<string>>(
 		() => new Set(activeGroupId ? [activeGroupId] : []),
@@ -550,7 +554,21 @@ export function Sidebar() {
 				</SidebarGroup>
 			</SidebarContent>
 			<SidebarFooter className="p-2 pt-0">
-				<ProvidersStatus />
+				<button
+					type="button"
+					onClick={() => openSettings()}
+					aria-label="Settings"
+					className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+				>
+					<Settings2 className="size-4 shrink-0" />
+					<span className="flex-1 truncate">Settings</span>
+					{needsSetup && (
+						<span
+							className="size-1.5 shrink-0 rounded-full bg-amber-500"
+							title="A provider needs setup"
+						/>
+					)}
+				</button>
 			</SidebarFooter>
 		</SidebarRoot>
 	);
