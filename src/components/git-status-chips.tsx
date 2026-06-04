@@ -1,7 +1,15 @@
-import { ArrowDown, ArrowUp, GitBranch, Plus, X } from "lucide-react";
-import { useCallback } from "react";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import {
+	ArrowDown,
+	ArrowUp,
+	GitBranch,
+	GitPullRequest,
+	Plus,
+	X,
+} from "lucide-react";
+import { useCallback, useEffect } from "react";
 
-import { MergeSessionButton } from "@/components/merge-session-dialog";
+import { LandSessionButton } from "@/components/land-session-dialog";
 import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
@@ -96,6 +104,40 @@ function StatusChip({
 	);
 }
 
+/** A link chip to the session's pull request, tinted by its state. */
+function PrChip({
+	number,
+	url,
+	state,
+}: {
+	number: number;
+	url: string | null;
+	state: string | null;
+}) {
+	const tone =
+		state === "MERGED"
+			? "text-violet-500"
+			: state === "CLOSED"
+				? "text-red-500"
+				: "text-emerald-500";
+	return (
+		<button
+			type="button"
+			onClick={() => url && void openUrl(url)}
+			title={url ?? `PR #${number}`}
+			className="inline-flex items-center gap-1 rounded-lg bg-muted/60 px-2 py-0.5 text-xs text-muted-foreground transition hover:bg-muted hover:text-foreground"
+		>
+			<GitPullRequest className={cn("size-3", tone)} />
+			<span className="font-medium">#{number}</span>
+			{state ? (
+				<span className="text-[10px] text-muted-foreground/70">
+					{state.toLowerCase()}
+				</span>
+			) : null}
+		</button>
+	);
+}
+
 // The session's roots are exactly the git-status rows; non-primary project ids
 // are the editable set handed to `set_session_roots`.
 function nonPrimaryIds(statuses: RepoStatus[]): string[] {
@@ -169,6 +211,16 @@ export function GitStatusChips({
 	sessionId,
 	refresh,
 }: GitStatusChipsProps) {
+	const session = useAppStore((s) => s.sessions[sessionId]);
+	const refreshPrStatus = useAppStore((s) => s.refreshPrStatus);
+	const hasRemote = statuses.some((s) => s.isPrimary && s.hasRemote);
+
+	// Re-check the PR's state whenever this session's view mounts.
+	const prNumber = session?.prNumber ?? null;
+	useEffect(() => {
+		if (prNumber) void refreshPrStatus(sessionId);
+	}, [prNumber, sessionId, refreshPrStatus]);
+
 	const remove = useCallback(
 		(projectId: string) => {
 			void ipc
@@ -203,7 +255,20 @@ export function GitStatusChips({
 				statuses={statuses}
 				refresh={refresh}
 			/>
-			<MergeSessionButton sessionId={sessionId} refresh={refresh} />
+			<div className="ml-auto flex items-center gap-1.5">
+				{session?.prNumber ? (
+					<PrChip
+						number={session.prNumber}
+						url={session.prUrl}
+						state={session.prState}
+					/>
+				) : null}
+				<LandSessionButton
+					sessionId={sessionId}
+					hasRemote={hasRemote}
+					refresh={refresh}
+				/>
+			</div>
 		</div>
 	);
 }

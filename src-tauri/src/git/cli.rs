@@ -274,3 +274,21 @@ pub fn delete_branch(repo: &Path, branch: &str) -> Result<()> {
     run(repo, &["branch", "-D", branch])?;
     Ok(())
 }
+
+/// Whether the repo has at least one configured remote (a prerequisite for a PR).
+pub fn has_remote(repo: &Path) -> bool {
+    run(repo, &["remote"])
+        .map(|o| !o.trim().is_empty())
+        .unwrap_or(false)
+}
+
+/// Push the worktree's current branch to origin, setting upstream. Surfaces the
+/// remote's own error (auth, missing remote) on failure.
+pub fn push_branch(worktree: &Path) -> Result<()> {
+    let out = run_raw(worktree, &["push", "-u", "origin", "HEAD"])?;
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        return Err(AppError::Git(format!("git push failed: {}", stderr.trim())));
+    }
+    Ok(())
+}

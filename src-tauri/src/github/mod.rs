@@ -2,6 +2,7 @@
 //! for authenticated API calls. PR/issue operations build on this later.
 
 pub mod download;
+pub mod pr;
 mod token;
 
 use std::time::Duration;

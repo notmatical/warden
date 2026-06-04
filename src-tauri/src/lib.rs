@@ -114,6 +114,8 @@ pub fn run() {
             github::commands::install_github_cli,
             github::commands::update_github_cli,
             github::commands::set_github_source,
+            github::commands::open_pull_request,
+            github::commands::refresh_pr_status,
             // terminal
             terminal::commands::start_terminal,
             terminal::commands::terminal_write,

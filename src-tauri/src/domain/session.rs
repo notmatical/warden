@@ -235,6 +235,11 @@ pub struct Session {
     /// When the session's branch was merged back into its base — `None` until
     /// then. A merged session's worktree is gone, so it becomes read-only.
     pub merged_at: Option<String>,
+    /// The open pull request for this session's branch, once one is created.
+    pub pr_number: Option<i64>,
+    pub pr_url: Option<String>,
+    /// GitHub's PR state (`OPEN`/`MERGED`/`CLOSED`), refreshed on demand.
+    pub pr_state: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }

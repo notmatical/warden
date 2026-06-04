@@ -25,6 +25,8 @@ pub struct RepoStatus {
     pub behind: u32,
     pub uncommitted_added: u32,
     pub uncommitted_removed: u32,
+    /// Whether this root's repo has a remote — i.e. a PR can be opened from it.
+    pub has_remote: bool,
 }
 
 /// Git status for every root of a session. The primary root reads from the
@@ -59,6 +61,7 @@ pub async fn session_git_status(
             behind: 0,
             uncommitted_added: 0,
             uncommitted_removed: 0,
+            has_remote: false,
         };
 
         if git::is_repo(dir) {
@@ -70,6 +73,7 @@ pub async fn session_git_status(
             status.behind = behind;
             status.uncommitted_added = added;
             status.uncommitted_removed = removed;
+            status.has_remote = git::has_remote(dir);
         }
 
         out.push(status);

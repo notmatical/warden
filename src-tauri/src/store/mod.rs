@@ -301,6 +301,9 @@ impl Store {
             cost_usd: 0.0,
             parent_id: new.parent_id,
             merged_at: None,
+            pr_number: None,
+            pr_url: None,
+            pr_state: None,
             created_at: now.clone(),
             updated_at: now,
         };
@@ -437,6 +440,17 @@ impl Store {
         conn.execute(
             "UPDATE sessions SET merged_at = ?2, updated_at = ?2 WHERE id = ?1",
             (id, now),
+        )?;
+        Ok(())
+    }
+
+    /// Record (or refresh) the pull request bound to a session's branch.
+    pub fn set_session_pr(&self, id: &str, number: i64, url: &str, state: &str) -> Result<()> {
+        let conn = self.lock();
+        conn.execute(
+            "UPDATE sessions SET pr_number = ?2, pr_url = ?3, pr_state = ?4, updated_at = ?5
+             WHERE id = ?1",
+            (id, number, url, state, now_rfc3339()),
         )?;
         Ok(())
     }
@@ -623,13 +637,13 @@ const SESSION_SELECT: &str =
     "SELECT id, group_id, project_id, title, backend, model, permission_mode, status, role, \
     agent_session_id, working_dir, branch, base_sha, is_isolated, allowed_tools, turns, cost_usd, \
     parent_id, created_at, updated_at, effort, auto_named, kind, terminal_command, terminal_started, \
-    terminal_resume_id, base_branch, merged_at FROM sessions WHERE id = ?1";
+    terminal_resume_id, base_branch, merged_at, pr_number, pr_url, pr_state FROM sessions WHERE id = ?1";
 
 const SESSION_SELECT_ALL: &str =
     "SELECT id, group_id, project_id, title, backend, model, permission_mode, status, role, \
     agent_session_id, working_dir, branch, base_sha, is_isolated, allowed_tools, turns, cost_usd, \
     parent_id, created_at, updated_at, effort, auto_named, kind, terminal_command, terminal_started, \
-    terminal_resume_id, base_branch, merged_at FROM sessions";
+    terminal_resume_id, base_branch, merged_at, pr_number, pr_url, pr_state FROM sessions";
 
 fn map_project(row: &Row<'_>) -> rusqlite::Result<Project> {
     Ok(Project {
@@ -685,6 +699,9 @@ fn map_session(row: &Row<'_>) -> rusqlite::Result<Session> {
         cost_usd: row.get("cost_usd")?,
         parent_id: row.get("parent_id")?,
         merged_at: row.get("merged_at")?,
+        pr_number: row.get("pr_number")?,
+        pr_url: row.get("pr_url")?,
+        pr_state: row.get("pr_state")?,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
     })

@@ -8,6 +8,7 @@ import type {
   Group,
   IntegrateOutcome,
   MergeMode,
+  PrInfo,
   PermissionMode,
   PlanToCodeResult,
   Provider,
@@ -136,6 +137,18 @@ export function integrateSession(
   mode: MergeMode
 ): Promise<IntegrateOutcome> {
   return invoke("integrate_session", { sessionId, message, mode })
+}
+
+export function openPullRequest(
+  sessionId: string,
+  title: string,
+  body: string
+): Promise<PrInfo> {
+  return invoke("open_pull_request", { sessionId, title, body })
+}
+
+export function refreshPrStatus(sessionId: string): Promise<PrInfo | null> {
+  return invoke("refresh_pr_status", { sessionId })
 }
 
 export function getEvents(sessionId: string): Promise<EventRecord[]> {

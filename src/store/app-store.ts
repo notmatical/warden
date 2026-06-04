@@ -23,6 +23,7 @@ import type {
 	Layout,
 	MergeMode,
 	PermissionMode,
+	PrInfo,
 	Project,
 	Provider,
 	ProviderSource,
@@ -162,6 +163,12 @@ interface AppState {
 		message: string,
 		mode: MergeMode,
 	) => Promise<IntegrateOutcome | null>;
+	openPullRequest: (
+		sessionId: string,
+		title: string,
+		body: string,
+	) => Promise<PrInfo | null>;
+	refreshPrStatus: (sessionId: string) => Promise<PrInfo | null>;
 	loadGroupData: (groupId: string) => Promise<void>;
 	createGroup: (name: string) => Promise<Group | null>;
 	selectGroup: (id: string) => Promise<void>;
@@ -380,6 +387,24 @@ export const useAppStore = create<AppState>((set, get) => ({
 			return await ipc.integrateSession(sessionId, message, mode);
 		} catch (error) {
 			reportError("Failed to merge session", error);
+			return null;
+		}
+	},
+
+	openPullRequest: async (sessionId, title, body) => {
+		// Success records the PR on the session via the session-updated event.
+		try {
+			return await ipc.openPullRequest(sessionId, title, body);
+		} catch (error) {
+			reportError("Failed to open pull request", error);
+			return null;
+		}
+	},
+
+	refreshPrStatus: async (sessionId) => {
+		try {
+			return await ipc.refreshPrStatus(sessionId);
+		} catch {
 			return null;
 		}
 	},

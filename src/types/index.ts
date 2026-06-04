@@ -126,6 +126,10 @@ export interface Session {
   parentId: string | null
   /** Set once the session's branch has been merged back; the worktree is gone. */
   mergedAt: string | null
+  /** The pull request opened for this session's branch, if any. */
+  prNumber: number | null
+  prUrl: string | null
+  prState: string | null
   createdAt: string
   updatedAt: string
 }
@@ -138,6 +142,15 @@ export type IntegrateOutcome =
   | { status: "merged" }
   | { status: "conflict"; files: string[] }
 
+/** A pull request's identity and state, mirrored from `gh`. */
+export interface PrInfo {
+  number: number
+  url: string
+  /** GitHub PR state: "OPEN" | "MERGED" | "CLOSED". */
+  state: string
+  title: string
+}
+
 export interface RepoStatus {
   projectId: string
   name: string
@@ -149,6 +162,7 @@ export interface RepoStatus {
   behind: number
   uncommittedAdded: number
   uncommittedRemoved: number
+  hasRemote: boolean
 }
 
 export interface PlanToCodeResult {

@@ -63,6 +63,9 @@ const MIGRATIONS: &[&str] = &[
         cost_usd          REAL NOT NULL DEFAULT 0,
         parent_id         TEXT REFERENCES sessions(id) ON DELETE SET NULL,
         merged_at         TEXT,
+        pr_number         INTEGER,
+        pr_url            TEXT,
+        pr_state          TEXT,
         created_at        TEXT NOT NULL,
         updated_at        TEXT NOT NULL
     );
