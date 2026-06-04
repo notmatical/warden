@@ -15,6 +15,27 @@ pub(crate) fn resolve_claude() -> PathBuf {
     cli::resolve(Tool::Claude)
 }
 
+/// Make `gh` reachable to the agent so it can open PRs / comment during a turn:
+/// prepend the resolved GitHub CLI's directory to the child `PATH` and pass the
+/// brokered token. A no-op for the directory prepend if `gh` can't be resolved.
+fn apply_gh_env(cmd: &mut Command) {
+    // Ensure we read the user's real PATH (macOS GUI apps start with a minimal one).
+    crate::platform::ensure_macos_path();
+    if let Some(dir) = cli::resolve(Tool::Gh).parent() {
+        let sep = if cfg!(windows) { ';' } else { ':' };
+        let existing = std::env::var("PATH").unwrap_or_default();
+        let path = if existing.is_empty() {
+            dir.to_string_lossy().into_owned()
+        } else {
+            format!("{}{sep}{existing}", dir.display())
+        };
+        cmd.env("PATH", path);
+    }
+    if let Some(token) = crate::github::resolve_token() {
+        cmd.env("GH_TOKEN", token);
+    }
+}
+
 /// Assemble the CLI argument vector for a turn. A session's first turn opens a
 /// new conversation via `--session-id`; later turns resume it via `--resume`.
 ///
@@ -77,6 +98,7 @@ pub fn command(session: &Session, prompt: &str, add_dirs: &[String]) -> Result<C
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
+    apply_gh_env(&mut cmd);
     Ok(cmd)
 }
 
@@ -148,6 +170,7 @@ pub fn session_command(session: &Session, add_dirs: &[String]) -> Result<Command
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
+    apply_gh_env(&mut cmd);
     Ok(cmd)
 }
 
