@@ -9,6 +9,7 @@ import type {
   Group,
   IntegrateOutcome,
   MergeMode,
+  PrContent,
   PrInfo,
   PermissionMode,
   PlanToCodeResult,
@@ -154,9 +155,19 @@ export function integrateSession(
 export function openPullRequest(
   sessionId: string,
   title: string,
-  body: string
+  body: string,
+  draft?: boolean
 ): Promise<PrInfo> {
-  return invoke("open_pull_request", { sessionId, title, body })
+  return invoke("open_pull_request", {
+    sessionId,
+    title,
+    body,
+    draft: draft ?? null,
+  })
+}
+
+export function generatePrContent(sessionId: string): Promise<PrContent> {
+  return invoke("generate_pr_content", { sessionId })
 }
 
 export function refreshPrStatus(sessionId: string): Promise<PrInfo | null> {

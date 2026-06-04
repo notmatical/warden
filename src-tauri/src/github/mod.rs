@@ -4,6 +4,7 @@
 pub mod download;
 pub mod poll;
 pub mod pr;
+pub mod pr_content;
 mod token;
 
 use std::time::Duration;

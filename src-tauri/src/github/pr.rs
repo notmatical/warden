@@ -71,16 +71,23 @@ fn gh(cwd: &Path, args: &[&str]) -> Command {
 }
 
 /// Open a PR for the worktree's current branch against `base`, then read it back
-/// as structured data.
-pub fn create_pr(worktree: &Path, base: &str, title: &str, body: &str) -> Result<PrInfo> {
-    let out = gh(
-        worktree,
-        &[
-            "pr", "create", "--base", base, "--title", title, "--body", body,
-        ],
-    )
-    .output()
-    .map_err(|e| AppError::Git(format!("failed to run gh: {e}")))?;
+/// as structured data. `draft` opens it as a draft PR.
+pub fn create_pr(
+    worktree: &Path,
+    base: &str,
+    title: &str,
+    body: &str,
+    draft: bool,
+) -> Result<PrInfo> {
+    let mut args = vec![
+        "pr", "create", "--base", base, "--title", title, "--body", body,
+    ];
+    if draft {
+        args.push("--draft");
+    }
+    let out = gh(worktree, &args)
+        .output()
+        .map_err(|e| AppError::Git(format!("failed to run gh: {e}")))?;
 
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr);

@@ -122,6 +122,7 @@ pub fn run() {
             github::commands::open_pull_request,
             github::commands::refresh_pr_status,
             github::commands::merge_pull_request,
+            github::commands::generate_pr_content,
             // terminal
             terminal::commands::start_terminal,
             terminal::commands::terminal_write,

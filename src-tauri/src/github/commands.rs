@@ -52,6 +52,7 @@ pub async fn open_pull_request(
     session_id: String,
     title: String,
     body: String,
+    draft: Option<bool>,
 ) -> Result<PrInfo> {
     let session = state.store.get_session(&session_id)?;
     if session.merged_at.is_some() {
@@ -87,7 +88,7 @@ pub async fn open_pull_request(
     };
     let _ = crate::git::stage_and_commit(worktree, &title)?;
     crate::git::push_branch(worktree)?;
-    let info = pr::create_pr(worktree, &base, &title, &body)?;
+    let info = pr::create_pr(worktree, &base, &title, &body, draft.unwrap_or(false))?;
 
     state.store.set_session_pr(
         &session_id,
@@ -168,4 +169,24 @@ pub async fn merge_pull_request(
         emit_session(&app, &updated);
     }
     Ok(())
+}
+
+/// Generate a suggested PR title and body from the session branch's changes,
+/// for the user to review before opening. Falls back to the session title.
+#[tauri::command]
+pub async fn generate_pr_content(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Result<crate::github::pr_content::PrContent> {
+    let session = state.store.get_session(&session_id)?;
+    let base = session
+        .base_sha
+        .clone()
+        .ok_or_else(|| AppError::Invalid("session has no base commit".to_string()))?;
+    crate::github::pr_content::generate_pr_content(
+        std::path::Path::new(&session.working_dir),
+        &base,
+        &session.title,
+    )
+    .await
 }

@@ -167,6 +167,7 @@ interface AppState {
 		sessionId: string,
 		title: string,
 		body: string,
+		draft?: boolean,
 	) => Promise<PrInfo | null>;
 	refreshPrStatus: (sessionId: string) => Promise<PrInfo | null>;
 	mergePullRequest: (
@@ -395,10 +396,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}
 	},
 
-	openPullRequest: async (sessionId, title, body) => {
+	openPullRequest: async (sessionId, title, body, draft) => {
 		// Success records the PR on the session via the session-updated event.
 		try {
-			return await ipc.openPullRequest(sessionId, title, body);
+			return await ipc.openPullRequest(sessionId, title, body, draft);
 		} catch (error) {
 			reportError("Failed to open pull request", error);
 			return null;

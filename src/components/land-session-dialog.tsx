@@ -1,8 +1,9 @@
-import { GitMerge, GitPullRequest, Loader2 } from "lucide-react";
+import { GitMerge, GitPullRequest, Loader2, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import * as ipc from "@/lib/ipc";
 import {
 	Dialog,
 	DialogContent,
@@ -80,6 +81,8 @@ export function LandSessionButton({
 	const [mode, setMode] = useState<MergeMode>("squash");
 	const [prTitle, setPrTitle] = useState("");
 	const [prBody, setPrBody] = useState("");
+	const [draft, setDraft] = useState(false);
+	const [generating, setGenerating] = useState(false);
 	const [busy, setBusy] = useState(false);
 	const [conflicts, setConflicts] = useState<string[] | null>(null);
 
@@ -104,7 +107,18 @@ export function LandSessionButton({
 			setMode("squash");
 			setPrTitle(session.title);
 			setPrBody("");
+			setDraft(false);
 			setConflicts(null);
+		}
+	};
+
+	const generate = async () => {
+		setGenerating(true);
+		const content = await ipc.generatePrContent(sessionId).catch(() => null);
+		setGenerating(false);
+		if (content) {
+			setPrTitle(content.title);
+			setPrBody(content.body);
 		}
 	};
 
@@ -125,7 +139,12 @@ export function LandSessionButton({
 
 	const runPr = async () => {
 		setBusy(true);
-		const pr = await openPr(sessionId, prTitle.trim() || session.title, prBody.trim());
+		const pr = await openPr(
+			sessionId,
+			prTitle.trim() || session.title,
+			prBody.trim(),
+			draft,
+		);
 		setBusy(false);
 		if (!pr) return;
 		toast.success(`Opened pull request #${pr.number}`);
@@ -210,14 +229,27 @@ export function LandSessionButton({
 					</div>
 				) : tab === "pr" ? (
 					<div className="flex flex-col gap-3">
-						<label className="flex flex-col gap-1.5">
+						<div className="flex items-center justify-between">
 							<span className="text-xs font-medium text-muted-foreground">Title</span>
-							<input
-								value={prTitle}
-								onChange={(e) => setPrTitle(e.target.value)}
-								className="h-8 rounded-md border border-border bg-input/40 px-2.5 text-sm outline-none focus-visible:border-ring"
-							/>
-						</label>
+							<button
+								type="button"
+								onClick={() => void generate()}
+								disabled={generating}
+								className="inline-flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+							>
+								{generating ? (
+									<Loader2 className="size-3 animate-spin" />
+								) : (
+									<Sparkles className="size-3" />
+								)}
+								Generate with AI
+							</button>
+						</div>
+						<input
+							value={prTitle}
+							onChange={(e) => setPrTitle(e.target.value)}
+							className="h-8 rounded-md border border-border bg-input/40 px-2.5 text-sm outline-none focus-visible:border-ring"
+						/>
 						<label className="flex flex-col gap-1.5">
 							<span className="text-xs font-medium text-muted-foreground">
 								Description
@@ -225,10 +257,19 @@ export function LandSessionButton({
 							<textarea
 								value={prBody}
 								onChange={(e) => setPrBody(e.target.value)}
-								rows={4}
+								rows={5}
 								placeholder="Optional"
 								className="resize-none rounded-md border border-border bg-input/40 px-2.5 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring"
 							/>
+						</label>
+						<label className="flex items-center gap-2 text-xs text-muted-foreground">
+							<input
+								type="checkbox"
+								checked={draft}
+								onChange={(e) => setDraft(e.target.checked)}
+								className="size-3.5 accent-foreground"
+							/>
+							Open as a draft
 						</label>
 						<span className="text-[11px] text-muted-foreground">
 							Commits and pushes the branch, then opens a PR into {base}.

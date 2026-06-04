@@ -154,6 +154,12 @@ export type IntegrateOutcome =
   | { status: "merged" }
   | { status: "conflict"; files: string[] }
 
+/** A generated PR title + body, for review before opening. */
+export interface PrContent {
+  title: string
+  body: string
+}
+
 /** A pull request's identity and state, mirrored from `gh`. */
 export interface PrInfo {
   number: number
