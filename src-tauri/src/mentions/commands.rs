@@ -42,9 +42,34 @@ pub struct RepoRef {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct RepoComment {
+    pub author: String,
+    pub body: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RepoRefBody {
     pub title: String,
     pub body: String,
+    pub comments: Vec<RepoComment>,
+}
+
+/// How many of an issue/PR's comments to inject, and the per-comment char cap —
+/// enough for context without flooding the prompt.
+const MAX_COMMENTS: usize = 5;
+const MAX_COMMENT_CHARS: usize = 600;
+
+/// A `gh` command in `working_dir`, run through the managed binary with the
+/// brokered token and no console flash on Windows.
+fn gh_cmd(working_dir: &str, args: &[&str]) -> Command {
+    let mut cmd = Command::new(crate::cli::resolve(crate::cli::Tool::Gh));
+    crate::platform::silent_command(&mut cmd);
+    cmd.current_dir(working_dir).args(args);
+    if let Some(token) = crate::github::resolve_token() {
+        cmd.env("GH_TOKEN", token);
+    }
+    cmd
 }
 
 /// List files in the working directory, honoring .gitignore. Runs on a blocking
@@ -214,10 +239,11 @@ pub async fn list_repo_refs(working_dir: String) -> Result<Vec<RepoRef>> {
 }
 
 fn gh_list(working_dir: &str, kind: &str) -> Vec<RepoRef> {
-    let output = Command::new("gh")
-        .current_dir(working_dir)
-        .args([kind, "list", "--json", "number,title", "--limit", GH_LIMIT])
-        .output();
+    let output = gh_cmd(
+        working_dir,
+        &[kind, "list", "--json", "number,title", "--limit", GH_LIMIT],
+    )
+    .output();
     let Ok(output) = output else {
         return Vec::new();
     };
@@ -249,10 +275,17 @@ fn gh_list(working_dir: &str, kind: &str) -> Vec<RepoRef> {
 #[tauri::command]
 pub async fn fetch_repo_ref(working_dir: String, kind: String, number: u64) -> Result<RepoRefBody> {
     let sub = if kind == "pr" { "pr" } else { "issue" };
-    let output = Command::new("gh")
-        .current_dir(&working_dir)
-        .args([sub, "view", &number.to_string(), "--json", "title,body"])
-        .output()?;
+    let output = gh_cmd(
+        &working_dir,
+        &[
+            sub,
+            "view",
+            &number.to_string(),
+            "--json",
+            "title,body,comments",
+        ],
+    )
+    .output()?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(AppError::Invalid(format!(
@@ -261,16 +294,47 @@ pub async fn fetch_repo_ref(working_dir: String, kind: String, number: u64) -> R
         )));
     }
     let parsed: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+    let str_field = |key: &str| {
+        parsed
+            .get(key)
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string()
+    };
+    // gh shapes comments as `[{ author: { login }, body }]`; take the most recent
+    // few, clipped, as grounding for the agent.
+    let comments = parsed
+        .get("comments")
+        .and_then(|v| v.as_array())
+        .map(|items| {
+            items
+                .iter()
+                .rev()
+                .take(MAX_COMMENTS)
+                .map(|c| RepoComment {
+                    author: c
+                        .get("author")
+                        .and_then(|a| a.get("login"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("someone")
+                        .to_string(),
+                    body: c
+                        .get("body")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .chars()
+                        .take(MAX_COMMENT_CHARS)
+                        .collect(),
+                })
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+                .collect()
+        })
+        .unwrap_or_default();
     Ok(RepoRefBody {
-        title: parsed
-            .get("title")
-            .and_then(|v| v.as_str())
-            .unwrap_or_default()
-            .to_string(),
-        body: parsed
-            .get("body")
-            .and_then(|v| v.as_str())
-            .unwrap_or_default()
-            .to_string(),
+        title: str_field("title"),
+        body: str_field("body"),
+        comments,
     })
 }

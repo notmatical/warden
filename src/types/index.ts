@@ -58,9 +58,15 @@ export interface RepoRef {
   kind: "issue" | "pr"
 }
 
+export interface RepoComment {
+  author: string
+  body: string
+}
+
 export interface RepoRefBody {
   title: string
   body: string
+  comments: RepoComment[]
 }
 
 export type SessionRole = "chat" | "planner" | "coder"

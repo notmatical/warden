@@ -103,13 +103,22 @@ const repoRefProvider: MentionProvider = {
   async resolve(item, ctx) {
     const ref = item.payload as RepoRef
     try {
-      const { title, body } = await ipc.fetchRepoRef(ctx.workingDir, ref.kind, ref.number)
+      const { title, body, comments } = await ipc.fetchRepoRef(
+        ctx.workingDir,
+        ref.kind,
+        ref.number
+      )
       const clipped =
         body.length > MAX_REPO_BODY
           ? `${body.slice(0, MAX_REPO_BODY)}\n…(truncated)`
           : body
       const label = ref.kind === "pr" ? "PR" : "Issue"
-      return `\n\n--- GitHub ${label} #${ref.number}: ${title} ---\n${clipped}\n\n`
+      const thread = comments.length
+        ? `\n\nComments:\n${comments
+            .map((c) => `${c.author}: ${c.body}`)
+            .join("\n\n")}`
+        : ""
+      return `\n\n--- GitHub ${label} #${ref.number}: ${title} ---\n${clipped}${thread}\n\n`
     } catch {
       return `#${ref.number} `
     }
