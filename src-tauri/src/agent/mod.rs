@@ -3,6 +3,7 @@
 
 mod claude;
 mod codex;
+pub mod codex_history;
 mod naming;
 mod session_proc;
 mod stream;
@@ -226,15 +227,15 @@ impl AgentManager {
     /// Resume a session after the user approved previously-denied tools: kill the
     /// process so it re-spawns with the updated `--allowedTools`, then nudge the
     /// agent to continue (it retries the denied step).
-    pub async fn resume(
-        &self,
-        app: AppHandle,
-        store: Store,
-        session: Session,
-    ) -> Result<()> {
+    pub async fn resume(&self, app: AppHandle, store: Store, session: Session) -> Result<()> {
         session_proc::kill(&session.id);
-        self.run_turn(app, store, session, "Approved — please continue.".to_string())
-            .await
+        self.run_turn(
+            app,
+            store,
+            session,
+            "Approved — please continue.".to_string(),
+        )
+        .await
     }
 
     /// Run a turn to completion and return its assistant text. Used by recipes,

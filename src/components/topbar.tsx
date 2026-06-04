@@ -2,7 +2,6 @@ import { PanelLeft } from "lucide-react";
 
 import { LayoutSwitcher } from "@/components/layout-switcher";
 import { OpenInButtons } from "@/components/open-in-buttons";
-import { ProvidersPopover } from "@/components/providers-popover";
 import { QuickSwitcher } from "@/components/quick-switcher";
 import { Button } from "@/components/ui/button";
 import {
@@ -70,7 +69,6 @@ export function Topbar() {
 			<div className="flex-1" />
 			<OpenInButtons path={openPath} />
 			<LayoutSwitcher />
-			<ProvidersPopover />
 		</header>
 	);
 }

@@ -15,6 +15,13 @@ pub fn home_dir() -> Option<PathBuf> {
     std::env::var_os(var).map(PathBuf::from)
 }
 
+/// Codex's config/state directory. Honours `$CODEX_HOME`, defaulting to `~/.codex`.
+pub fn codex_home() -> PathBuf {
+    std::env::var_os("CODEX_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| home_dir().unwrap_or_default().join(".codex"))
+}
+
 /// Configure a `Command` so it never flashes a console window on Windows when
 /// spawned from the GUI. A no-op on other platforms.
 pub fn silent_command(cmd: &mut Command) -> &mut Command {

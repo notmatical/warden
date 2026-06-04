@@ -36,6 +36,24 @@ pub fn run() {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
             let store = Store::open(&data_dir.join("warden.db"))?;
+
+            // Seed the managed-CLI resolver with the app data dir and each
+            // provider's persisted source preference (defaulting to Auto).
+            let sources = providers::Provider::ALL
+                .iter()
+                .map(|&p| {
+                    let key = providers::Source::setting_key(p);
+                    let source = store
+                        .get_setting(&key)
+                        .ok()
+                        .flatten()
+                        .and_then(|v| providers::Source::parse(&v))
+                        .unwrap_or(providers::Source::Auto);
+                    (p, source)
+                })
+                .collect();
+            providers::manage::init(data_dir.clone(), sources);
+
             app.manage(AppState {
                 store,
                 manager: AgentManager::new(),
@@ -76,6 +94,7 @@ pub fn run() {
             commands::list_provider_status,
             commands::install_provider,
             commands::update_provider,
+            commands::set_provider_source,
             commands::start_terminal,
             commands::terminal_write,
             commands::terminal_resize,

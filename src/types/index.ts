@@ -3,13 +3,32 @@ export type Backend = "claude" | "codex"
 /** An agent CLI provider; one-to-one with the session backends. */
 export type Provider = Backend
 
+/** Where a provider's CLI is sourced from. */
+export type ProviderSource = "auto" | "managed" | "system"
+
 /** A provider's installation/auth snapshot, surfaced by the backend. */
 export interface ProviderStatus {
   id: Provider
   name: string
+  /** User's source preference. */
+  source: ProviderSource
+  /** Whether the effective (resolved) binary is present and runnable. */
   installed: boolean
+  /** Version of the effective binary. */
   version: string | null
+  /** Absolute path of the effective binary. */
+  path: string | null
   authed: boolean
+  /** Whether a copy exists on the system PATH. */
+  systemDetected: boolean
+  /** Whether warden's managed copy is installed. */
+  managedInstalled: boolean
+  /** Version of the managed copy, if installed. */
+  managedVersion: string | null
+  /** Latest published version (best-effort). */
+  latestVersion: string | null
+  /** Whether the managed copy is behind the latest published version. */
+  updateAvailable: boolean
 }
 
 export type PermissionMode =

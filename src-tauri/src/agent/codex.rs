@@ -18,7 +18,7 @@ use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin};
 use tokio::sync::{mpsc, oneshot, Mutex as AsyncMutex};
 
-use crate::domain::{AgentEvent, Session, SessionStatus};
+use crate::domain::{AgentEvent, EffortLevel, Session, SessionStatus};
 use crate::error::{AppError, Result};
 use crate::events::{emit_delta, emit_event, emit_session};
 use crate::store::Store;
@@ -50,9 +50,10 @@ struct CodexServer {
 
 static SERVER: OnceLock<CodexServer> = OnceLock::new();
 
-/// Locate the `codex` binary on PATH.
-fn resolve_codex() -> Result<std::path::PathBuf> {
-    which::which("codex").map_err(|_| AppError::Agent("codex CLI not found on PATH".to_string()))
+/// The `codex` binary to run — warden's managed copy or the system PATH one,
+/// per the provider's source preference.
+fn resolve_codex() -> std::path::PathBuf {
+    crate::providers::resolve(crate::providers::Provider::Codex)
 }
 
 /// Spawn + initialize the app-server if it isn't already running. Idempotent;
@@ -63,7 +64,7 @@ pub async fn ensure_running() -> Result<()> {
         return Ok(());
     }
 
-    let bin = resolve_codex()?;
+    let bin = resolve_codex();
     let mut child = tokio::process::Command::new(bin)
         .arg("app-server")
         .stdin(Stdio::piped())
@@ -334,13 +335,42 @@ pub fn kill_all() {
 
 // ----- turn execution -------------------------------------------------------
 
-/// Build `thread/start` params for an autonomous (3a) Codex thread.
+/// Split a fast model id into its base model and a fast-tier flag, e.g.
+/// `gpt-5.5-fast` → (`gpt-5.5`, true). Codex exposes the priority tier on the
+/// gpt-5.5 / gpt-5.4 family; ids that merely happen to end in `-fast` are left
+/// as-is so they don't silently request a tier the model doesn't offer.
+fn split_fast_model(model: &str) -> (&str, bool) {
+    match model {
+        "gpt-5.5-fast" => ("gpt-5.5", true),
+        "gpt-5.4-fast" => ("gpt-5.4", true),
+        "gpt-5.4-mini-fast" => ("gpt-5.4-mini", true),
+        other => (other.strip_suffix("-fast").unwrap_or(other), false),
+    }
+}
+
+/// Codex's reasoning effort omits Claude's `max` tier; clamp it to the highest
+/// Codex accepts so a session carried over from Claude still starts.
+fn codex_effort(effort: EffortLevel) -> &'static str {
+    match effort {
+        EffortLevel::Max => "xhigh",
+        other => other.as_cli(),
+    }
+}
+
+/// Build `thread/start` params for an autonomous (3a) Codex thread. The session's
+/// model selects the engine; the `-fast` suffix maps to the priority service tier.
 fn thread_params(session: &Session) -> Value {
-    json!({
+    let (model, is_fast) = split_fast_model(&session.model);
+    let mut params = json!({
         "cwd": session.working_dir,
         "approvalPolicy": "never",
         "sandbox": "workspace-write",
-    })
+        "model": model,
+    });
+    if is_fast {
+        params["serviceTier"] = json!("fast");
+    }
+    params
 }
 
 /// Start a new Codex thread (or resume the session's existing one), returning
@@ -389,6 +419,7 @@ pub async fn run_turn(
     let turn_params = json!({
         "threadId": thread_id,
         "input": [{ "type": "text", "text": prompt }],
+        "effort": codex_effort(session.effort),
     });
     if let Err(e) = send_request("turn/start", turn_params).await {
         unregister_thread(&thread_id);
@@ -428,10 +459,8 @@ fn handle_notification(
         }
         "turn/completed" => {
             let turn = params.get("turn");
-            let is_error = turn
-                .and_then(|t| t.get("status"))
-                .and_then(Value::as_str)
-                == Some("failed");
+            let is_error =
+                turn.and_then(|t| t.get("status")).and_then(Value::as_str) == Some("failed");
             persist(
                 app,
                 store,
@@ -602,7 +631,10 @@ fn file_change_events(item: &Value, id: String) -> Vec<AgentEvent> {
 }
 
 fn mcp_events(item: &Value, id: String) -> Vec<AgentEvent> {
-    let server = item.get("server").and_then(Value::as_str).unwrap_or_default();
+    let server = item
+        .get("server")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
     let tool = item.get("tool").and_then(Value::as_str).unwrap_or_default();
     let name = if server.is_empty() {
         tool.to_string()
@@ -633,7 +665,10 @@ fn mcp_events(item: &Value, id: String) -> Vec<AgentEvent> {
 }
 
 fn web_search_events(item: &Value, id: String) -> Vec<AgentEvent> {
-    let query = item.get("query").and_then(Value::as_str).unwrap_or_default();
+    let query = item
+        .get("query")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
     vec![AgentEvent::ToolUse {
         id,
         name: "WebSearch".to_string(),

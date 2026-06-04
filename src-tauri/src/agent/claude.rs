@@ -6,12 +6,13 @@ use std::process::Stdio;
 use tokio::process::Command;
 
 use crate::domain::Session;
-use crate::error::{AppError, Result};
+use crate::error::Result;
+use crate::providers::{self, Provider};
 
-/// Locate the `claude` binary on PATH.
-pub(crate) fn resolve_claude() -> Result<PathBuf> {
-    which::which("claude")
-        .map_err(|_| AppError::Agent("claude CLI not found on PATH".to_string()))
+/// The `claude` binary to run — warden's managed copy or the system PATH one,
+/// per the provider's source preference.
+pub(crate) fn resolve_claude() -> PathBuf {
+    providers::resolve(Provider::Claude)
 }
 
 /// Assemble the CLI argument vector for a turn. A session's first turn opens a
@@ -68,7 +69,7 @@ pub fn build_args(session: &Session, prompt: &str, add_dirs: &[String]) -> Vec<S
 /// stdout/stderr, no stdin, killed if the handle is dropped. Used by recipes and
 /// background naming, which don't need a persistent conversation.
 pub fn command(session: &Session, prompt: &str, add_dirs: &[String]) -> Result<Command> {
-    let bin = resolve_claude()?;
+    let bin = resolve_claude();
     let mut cmd = Command::new(bin);
     cmd.args(build_args(session, prompt, add_dirs))
         .current_dir(&session.working_dir)
@@ -139,7 +140,7 @@ pub fn session_args(session: &Session, add_dirs: &[String]) -> Vec<String> {
 
 /// Build the persistent session command: stdin/stdout/stderr all piped.
 pub fn session_command(session: &Session, add_dirs: &[String]) -> Result<Command> {
-    let bin = resolve_claude()?;
+    let bin = resolve_claude();
     let mut cmd = Command::new(bin);
     cmd.args(session_args(session, add_dirs))
         .current_dir(&session.working_dir)

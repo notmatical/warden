@@ -1,78 +1,51 @@
-//! Commands for the provider panel: list each agent CLI's install/auth status
-//! and best-effort install/update via the user's package manager.
+//! Commands for the provider panel: list each agent CLI's install/auth status,
+//! install/update warden's managed copy, and choose between the managed binary
+//! and the one on the system PATH.
 
-use std::process::Command;
+use tauri::{AppHandle, State};
 
 use crate::error::{AppError, Result};
-use crate::providers::{self, Provider, ProviderStatus};
-use crate::util::silent_command;
-
-/// The npm package that ships a provider's CLI.
-fn npm_package(provider: Provider) -> &'static str {
-    match provider {
-        Provider::Claude => "@anthropic-ai/claude-code",
-        Provider::Codex => "@openai/codex",
-    }
-}
+use crate::providers::{self, Provider, ProviderStatus, Source};
+use crate::state::AppState;
 
 #[tauri::command]
 pub async fn list_provider_status() -> Result<Vec<ProviderStatus>> {
     providers::status_all().await
 }
 
-/// Install a provider's CLI globally via npm. Best-effort: surfaces the package
-/// manager's error if it fails (e.g. npm missing or no network).
+/// Install warden's managed copy of a provider CLI (latest version).
 #[tauri::command]
-pub async fn install_provider(id: String) -> Result<()> {
-    npm_global(&id, false).await
-}
-
-/// Update a provider's CLI to the latest published version via npm.
-#[tauri::command]
-pub async fn update_provider(id: String) -> Result<()> {
-    npm_global(&id, true).await
-}
-
-/// Run `npm install -g <pkg>` (or `<pkg>@latest` for updates) off the async
-/// runtime. npm shells out through `cmd` on Windows.
-async fn npm_global(id: &str, latest: bool) -> Result<()> {
-    let provider = Provider::parse(id)
-        .ok_or_else(|| AppError::Invalid(format!("unknown provider: {id}")))?;
-    let pkg = npm_package(provider);
-    let spec = if latest {
-        format!("{pkg}@latest")
-    } else {
-        pkg.to_string()
-    };
-
-    tauri::async_runtime::spawn_blocking(move || run_npm_install(&spec))
+pub async fn install_provider(app: AppHandle, id: String) -> Result<()> {
+    let provider = parse_provider(&id)?;
+    providers::install::install(&app, provider, None)
         .await
-        .map_err(|e| AppError::Agent(format!("install task failed: {e}")))?
+        .map_err(AppError::Agent)
 }
 
-fn run_npm_install(spec: &str) -> Result<()> {
-    let mut cmd = if cfg!(windows) {
-        let mut c = Command::new("cmd");
-        c.args(["/C", "npm", "install", "-g", spec]);
-        c
-    } else {
-        let mut c = Command::new("npm");
-        c.args(["install", "-g", spec]);
-        c
-    };
+/// Reinstall the managed copy at the latest published version.
+#[tauri::command]
+pub async fn update_provider(app: AppHandle, id: String) -> Result<()> {
+    install_provider(app, id).await
+}
 
-    let output = silent_command(&mut cmd)
-        .output()
-        .map_err(|e| AppError::Agent(format!("failed to run npm: {e}")))?;
+/// Choose where a provider's CLI comes from (`auto` | `managed` | `system`),
+/// persisting the choice so it survives restarts.
+#[tauri::command]
+pub async fn set_provider_source(
+    state: State<'_, AppState>,
+    id: String,
+    source: String,
+) -> Result<()> {
+    let provider = parse_provider(&id)?;
+    let source = Source::parse(&source)
+        .ok_or_else(|| AppError::Invalid(format!("unknown CLI source: {source}")))?;
+    state
+        .store
+        .set_setting(&Source::setting_key(provider), source.as_str())?;
+    providers::manage::set_source(provider, source);
+    Ok(())
+}
 
-    if output.status.success() {
-        return Ok(());
-    }
-    let detail = String::from_utf8_lossy(&output.stderr);
-    let detail = detail.trim();
-    Err(AppError::Agent(if detail.is_empty() {
-        format!("npm install -g {spec} failed")
-    } else {
-        detail.to_string()
-    }))
+fn parse_provider(id: &str) -> Result<Provider> {
+    Provider::parse(id).ok_or_else(|| AppError::Invalid(format!("unknown provider: {id}")))
 }

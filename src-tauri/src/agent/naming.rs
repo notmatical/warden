@@ -34,9 +34,8 @@ fn build_prompt(message: &str) -> String {
 /// Tidy the model's reply into a usable title, or `None` if it's unusable.
 fn sanitize_title(raw: &str) -> Option<String> {
     let first_line = raw.lines().next().unwrap_or("").trim();
-    let unquoted = first_line.trim_matches(|c: char| {
-        c == '"' || c == '\'' || c == '.' || c.is_whitespace()
-    });
+    let unquoted =
+        first_line.trim_matches(|c: char| c == '"' || c == '\'' || c == '.' || c.is_whitespace());
     let cleaned = unquoted.split_whitespace().collect::<Vec<_>>().join(" ");
     if cleaned.is_empty() {
         return None;
@@ -49,7 +48,12 @@ fn sanitize_title(raw: &str) -> Option<String> {
     }
 
     let capped: String = if cleaned.chars().count() > MAX_TITLE_CHARS {
-        cleaned.chars().take(MAX_TITLE_CHARS).collect::<String>().trim_end().to_string()
+        cleaned
+            .chars()
+            .take(MAX_TITLE_CHARS)
+            .collect::<String>()
+            .trim_end()
+            .to_string()
     } else {
         cleaned
     };
@@ -63,7 +67,7 @@ fn sanitize_title(raw: &str) -> Option<String> {
 /// Generate a title for a session from its first message. Returns `None` on any
 /// failure so the caller can keep the existing title.
 pub async fn generate_session_title(working_dir: &str, message: &str) -> Option<String> {
-    let bin = resolve_claude().ok()?;
+    let bin = resolve_claude();
     let prompt = build_prompt(message);
 
     let output = Command::new(bin)

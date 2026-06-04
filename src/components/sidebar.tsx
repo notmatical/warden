@@ -29,9 +29,11 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ProvidersStatus } from "@/components/providers-popover";
 import { Input } from "@/components/ui/input";
 import {
 	SidebarContent,
+	SidebarFooter,
 	SidebarGroup,
 	SidebarHeader,
 	SidebarMenu,
@@ -547,6 +549,9 @@ export function Sidebar() {
 					</SidebarMenu>
 				</SidebarGroup>
 			</SidebarContent>
+			<SidebarFooter className="p-2 pt-0">
+				<ProvidersStatus />
+			</SidebarFooter>
 		</SidebarRoot>
 	);
 }
