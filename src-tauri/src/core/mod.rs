@@ -3,5 +3,6 @@
 
 pub mod error;
 pub mod events;
+pub mod platform;
 pub mod state;
 pub mod util;

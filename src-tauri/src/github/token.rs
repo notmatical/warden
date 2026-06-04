@@ -17,7 +17,7 @@ pub fn resolve_token() -> Option<String> {
     }
 
     let gh = cli::resolve(Tool::Gh);
-    let output = crate::util::silent_command(&mut std::process::Command::new(&gh))
+    let output = crate::platform::silent_command(&mut std::process::Command::new(&gh))
         .args(["auth", "token"])
         .output()
         .ok()?;

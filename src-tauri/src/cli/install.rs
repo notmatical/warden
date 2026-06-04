@@ -53,8 +53,7 @@ pub async fn install(app: &AppHandle, tool: Tool, version: Option<String>) -> Re
         &format!("Installing {}…", tool.name()),
         70,
     );
-    write_binary_file(&binary_path, &binary)?;
-    make_runnable(&binary_path);
+    crate::platform::write_binary_file(&binary_path, &binary)?;
 
     emit_progress(app, tool, "verifying", "Verifying installation…", 90);
     if current_version(&binary_path).is_none() {
@@ -85,7 +84,7 @@ pub async fn latest_version(tool: Tool) -> Result<String, String> {
 
 /// The version a binary reports via `--version` (digits-and-dots extracted).
 pub fn current_version(path: &std::path::Path) -> Option<String> {
-    let output = crate::util::silent_command(&mut std::process::Command::new(path))
+    let output = crate::platform::silent_command(&mut std::process::Command::new(path))
         .arg("--version")
         .output()
         .ok()?;
@@ -117,61 +116,6 @@ fn extract_version(text: &str) -> Option<String> {
             t.contains('.') && t.chars().next().is_some_and(|c| c.is_ascii_digit())
         })
         .map(|tok| tok.trim_start_matches('v').to_string())
-}
-
-/// Write a downloaded binary to `path` via a temp file + atomic rename. On
-/// Windows a running binary holds a lock, so the existing file is moved aside
-/// first; elsewhere the rename swaps the directory entry to the new inode.
-pub fn write_binary_file(path: &std::path::Path, content: &[u8]) -> Result<(), String> {
-    let temp_path = path.with_extension("tmp");
-    std::fs::write(&temp_path, content).map_err(|e| format!("failed to write temp file: {e}"))?;
-
-    #[cfg(windows)]
-    {
-        let old_path = path.with_extension("old");
-        if path.exists() {
-            let _ = std::fs::remove_file(&old_path);
-            if let Err(e) = std::fs::rename(path, &old_path) {
-                let _ = std::fs::remove_file(&temp_path);
-                return Err(format!("failed to replace existing binary: {e}"));
-            }
-        }
-        if let Err(e) = std::fs::rename(&temp_path, path) {
-            let _ = std::fs::rename(&old_path, path);
-            return Err(format!("failed to install new binary: {e}"));
-        }
-        let _ = std::fs::remove_file(&old_path);
-    }
-
-    #[cfg(not(windows))]
-    if let Err(e) = std::fs::rename(&temp_path, path) {
-        let _ = std::fs::remove_file(&temp_path);
-        return Err(format!("failed to install new binary: {e}"));
-    }
-
-    Ok(())
-}
-
-/// Make a freshly written binary executable (Unix) and clear macOS quarantine.
-fn make_runnable(path: &std::path::Path) {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        if let Ok(meta) = std::fs::metadata(path) {
-            let mut perms = meta.permissions();
-            perms.set_mode(0o755);
-            let _ = std::fs::set_permissions(path, perms);
-        }
-    }
-    #[cfg(target_os = "macos")]
-    {
-        let _ = std::process::Command::new("xattr")
-            .args(["-d", "com.apple.quarantine"])
-            .arg(path)
-            .output();
-    }
-    #[cfg(not(any(unix, target_os = "macos")))]
-    let _ = path;
 }
 
 #[cfg(test)]

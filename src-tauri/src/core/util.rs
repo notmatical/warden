@@ -1,7 +1,6 @@
 //! Small shared helpers used across modules.
 
 use std::path::PathBuf;
-use std::process::Command;
 
 /// A fresh v4 UUID as a lowercase hyphenated string.
 pub fn uuid() -> String {
@@ -20,18 +19,6 @@ pub fn codex_home() -> PathBuf {
     std::env::var_os("CODEX_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| home_dir().unwrap_or_default().join(".codex"))
-}
-
-/// Configure a `Command` so it never flashes a console window on Windows when
-/// spawned from the GUI. A no-op on other platforms.
-pub fn silent_command(cmd: &mut Command) -> &mut Command {
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        cmd.creation_flags(CREATE_NO_WINDOW);
-    }
-    cmd
 }
 
 /// The current UTC time as an RFC 3339 / ISO 8601 string.

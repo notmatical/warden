@@ -11,7 +11,7 @@ mod terminal;
 
 // Keep the foundation modules reachable at their familiar crate-root paths
 // (`crate::error`, `crate::util`, …) while they live under `core/`.
-pub use core::{error, events, state, util};
+pub use core::{error, events, platform, state, util};
 
 use tauri::Manager;
 

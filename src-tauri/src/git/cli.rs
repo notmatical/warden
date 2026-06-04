@@ -6,9 +6,17 @@ use std::process::Command;
 
 use crate::error::{AppError, Result};
 
+/// Build a `git` command in `cwd`, configured for silent background use.
+fn git(cwd: &Path, args: &[&str]) -> Command {
+    let mut cmd = Command::new("git");
+    cmd.current_dir(cwd).args(args);
+    crate::platform::silent_command(&mut cmd);
+    cmd
+}
+
 /// Run a git subcommand in `cwd`, returning stdout or a descriptive error.
 fn run(cwd: &Path, args: &[&str]) -> Result<String> {
-    let output = Command::new("git").current_dir(cwd).args(args).output()?;
+    let output = git(cwd, args).output()?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(AppError::Git(format!(
@@ -22,9 +30,7 @@ fn run(cwd: &Path, args: &[&str]) -> Result<String> {
 
 /// Whether `path` sits inside a git working tree.
 pub fn is_repo(path: &Path) -> bool {
-    Command::new("git")
-        .current_dir(path)
-        .args(["rev-parse", "--is-inside-work-tree"])
+    git(path, &["rev-parse", "--is-inside-work-tree"])
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false)
@@ -141,7 +147,7 @@ pub enum MergeOutcome {
 /// Run a git subcommand, returning its raw output without erroring on a non-zero
 /// exit — callers inspect the status themselves (e.g. to detect merge conflicts).
 fn run_raw(cwd: &Path, args: &[&str]) -> Result<std::process::Output> {
-    Ok(Command::new("git").current_dir(cwd).args(args).output()?)
+    Ok(git(cwd, args).output()?)
 }
 
 /// Whether the working tree (or index) has changes not yet committed.

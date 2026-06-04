@@ -16,7 +16,7 @@ const LATEST_TIMEOUT: Duration = Duration::from_secs(8);
 /// Whether the resolved `gh` is logged in (`gh auth status` exits 0).
 fn is_authed() -> bool {
     let gh = cli::resolve(Tool::Gh);
-    crate::util::silent_command(&mut std::process::Command::new(&gh))
+    crate::platform::silent_command(&mut std::process::Command::new(&gh))
         .args(["auth", "status"])
         .output()
         .map(|o| o.status.success())

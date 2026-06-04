@@ -9,7 +9,7 @@ pub fn is_authed(binary: Option<&str>) -> bool {
         .unwrap_or_else(|| PathBuf::from("codex"));
     let mut cmd = std::process::Command::new(bin);
     cmd.args(["login", "status"]);
-    let status_ok = crate::util::silent_command(&mut cmd)
+    let status_ok = crate::platform::silent_command(&mut cmd)
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false);
