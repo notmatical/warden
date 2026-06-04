@@ -4,20 +4,20 @@
 
 use tauri::{AppHandle, State};
 
+use crate::cli::{self, Source, ToolStatus};
 use crate::error::{AppError, Result};
-use crate::providers::{self, Provider, ProviderStatus, Source};
+use crate::providers::{self, Provider};
 use crate::state::AppState;
 
 #[tauri::command]
-pub async fn list_provider_status() -> Result<Vec<ProviderStatus>> {
+pub async fn list_provider_status() -> Result<Vec<ToolStatus>> {
     providers::status_all().await
 }
 
 /// Install warden's managed copy of a provider CLI (latest version).
 #[tauri::command]
 pub async fn install_provider(app: AppHandle, id: String) -> Result<()> {
-    let provider = parse_provider(&id)?;
-    providers::install::install(&app, provider, None)
+    cli::install(&app, parse_provider(&id)?.tool(), None)
         .await
         .map_err(AppError::Agent)
 }
@@ -36,13 +36,13 @@ pub async fn set_provider_source(
     id: String,
     source: String,
 ) -> Result<()> {
-    let provider = parse_provider(&id)?;
+    let tool = parse_provider(&id)?.tool();
     let source = Source::parse(&source)
         .ok_or_else(|| AppError::Invalid(format!("unknown CLI source: {source}")))?;
     state
         .store
-        .set_setting(&Source::setting_key(provider), source.as_str())?;
-    providers::manage::set_source(provider, source);
+        .set_setting(&Source::setting_key(tool), source.as_str())?;
+    cli::set_source(tool, source);
     Ok(())
 }
 

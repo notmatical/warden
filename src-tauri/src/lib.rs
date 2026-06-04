@@ -1,9 +1,11 @@
 mod agent;
+mod cli;
 mod commands;
 mod domain;
 mod error;
 mod events;
 mod git;
+mod github;
 mod providers;
 mod provision;
 mod recipes;
@@ -37,22 +39,21 @@ pub fn run() {
             std::fs::create_dir_all(&data_dir)?;
             let store = Store::open(&data_dir.join("warden.db"))?;
 
-            // Seed the managed-CLI resolver with the app data dir and each
-            // provider's persisted source preference (defaulting to Auto).
-            let sources = providers::Provider::ALL
+            // Seed the managed-CLI resolver with the app data dir and each tool's
+            // persisted source preference (defaulting to Auto).
+            let sources = cli::Tool::ALL
                 .iter()
-                .map(|&p| {
-                    let key = providers::Source::setting_key(p);
+                .map(|&tool| {
                     let source = store
-                        .get_setting(&key)
+                        .get_setting(&cli::Source::setting_key(tool))
                         .ok()
                         .flatten()
-                        .and_then(|v| providers::Source::parse(&v))
-                        .unwrap_or(providers::Source::Auto);
-                    (p, source)
+                        .and_then(|v| cli::Source::parse(&v))
+                        .unwrap_or(cli::Source::Auto);
+                    (tool, source)
                 })
                 .collect();
-            providers::manage::init(data_dir.clone(), sources);
+            cli::init(data_dir.clone(), sources);
 
             app.manage(AppState {
                 store,
@@ -95,6 +96,10 @@ pub fn run() {
             commands::install_provider,
             commands::update_provider,
             commands::set_provider_source,
+            commands::github_status,
+            commands::install_github_cli,
+            commands::update_github_cli,
+            commands::set_github_source,
             commands::start_terminal,
             commands::terminal_write,
             commands::terminal_resize,

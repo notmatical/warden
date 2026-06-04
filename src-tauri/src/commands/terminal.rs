@@ -4,9 +4,9 @@ use tauri::ipc::Channel;
 use tauri::State;
 
 use crate::agent::codex_history;
+use crate::cli::{self, Tool};
 use crate::domain::{Backend, Session};
 use crate::error::Result;
-use crate::providers::Provider;
 use crate::state::AppState;
 use crate::store::Store;
 use crate::terminal::{self, TerminalEvent};
@@ -22,15 +22,13 @@ fn launch_recipe(store: &Store, session: &Session) -> Result<(Option<String>, Ve
     if session.terminal_command.is_none() {
         return Ok((None, Vec::new()));
     }
-    // Resolve the provider's effective binary (managed or system) so a native
+    // Resolve the tool's effective binary (managed or system) so a native
     // terminal launches the same CLI as headless turns.
-    let provider = match session.backend {
-        Backend::Claude => Provider::Claude,
-        Backend::Codex => Provider::Codex,
+    let tool = match session.backend {
+        Backend::Claude => Tool::Claude,
+        Backend::Codex => Tool::Codex,
     };
-    let program = crate::providers::resolve(provider)
-        .to_string_lossy()
-        .into_owned();
+    let program = cli::resolve(tool).to_string_lossy().into_owned();
     let args = match (session.backend, session.terminal_started) {
         // Claude owns its session id, so we pin it on first launch and resume by
         // that exact id afterwards.

@@ -5,14 +5,14 @@ use std::process::Stdio;
 
 use tokio::process::Command;
 
+use crate::cli::{self, Tool};
 use crate::domain::Session;
 use crate::error::Result;
-use crate::providers::{self, Provider};
 
 /// The `claude` binary to run — warden's managed copy or the system PATH one,
-/// per the provider's source preference.
+/// per the tool's source preference.
 pub(crate) fn resolve_claude() -> PathBuf {
-    providers::resolve(Provider::Claude)
+    cli::resolve(Tool::Claude)
 }
 
 /// Assemble the CLI argument vector for a turn. A session's first turn opens a

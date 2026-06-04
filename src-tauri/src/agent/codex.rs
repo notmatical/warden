@@ -51,9 +51,9 @@ struct CodexServer {
 static SERVER: OnceLock<CodexServer> = OnceLock::new();
 
 /// The `codex` binary to run — warden's managed copy or the system PATH one,
-/// per the provider's source preference.
+/// per the tool's source preference.
 fn resolve_codex() -> std::path::PathBuf {
-    crate::providers::resolve(crate::providers::Provider::Codex)
+    crate::cli::resolve(crate::cli::Tool::Codex)
 }
 
 /// Spawn + initialize the app-server if it isn't already running. Idempotent;

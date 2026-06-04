@@ -3,6 +3,7 @@
 
 mod external;
 mod git;
+mod github;
 mod group;
 mod mentions;
 mod project;
@@ -13,6 +14,7 @@ mod terminal;
 
 pub use external::*;
 pub use git::*;
+pub use github::*;
 pub use group::*;
 pub use mentions::*;
 pub use project::*;
