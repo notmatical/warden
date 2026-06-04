@@ -20,6 +20,7 @@ import type {
   RepoStatus,
   RepoRefBody,
   Session,
+  SyncOutcome,
   SessionKind,
   SessionRole,
   SlashCommand,
@@ -142,6 +143,13 @@ export function getSessionCommits(
   limit?: number
 ): Promise<GitCommit[]> {
   return invoke("get_session_commits", { sessionId, limit: limit ?? null })
+}
+
+export function syncWorktree(
+  sessionId: string,
+  mode?: MergeMode
+): Promise<SyncOutcome> {
+  return invoke("sync_worktree", { sessionId, mode: mode ?? null })
 }
 
 export function integrateSession(

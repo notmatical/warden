@@ -100,6 +100,7 @@ pub fn run() {
             git::commands::integrate_session,
             git::commands::get_session_diff,
             git::commands::get_session_commits,
+            git::commands::sync_worktree,
             // agent recipes
             agent::commands::run_plan_to_code,
             // mentions

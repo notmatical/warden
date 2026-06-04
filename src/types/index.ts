@@ -154,6 +154,11 @@ export type IntegrateOutcome =
   | { status: "merged" }
   | { status: "conflict"; files: string[] }
 
+/** Result of syncing a worktree with the latest base branch. */
+export type SyncOutcome =
+  | { status: "synced" }
+  | { status: "conflict"; files: string[] }
+
 /** A generated PR title + body, for review before opening. */
 export interface PrContent {
   title: string

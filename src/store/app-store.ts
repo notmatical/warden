@@ -31,6 +31,7 @@ import type {
 	Session,
 	SessionKind,
 	SessionRole,
+	SyncOutcome,
 } from "@/types";
 
 function reportError(scope: string, error: unknown) {
@@ -174,6 +175,10 @@ interface AppState {
 		sessionId: string,
 		strategy: MergeMode,
 	) => Promise<boolean>;
+	syncWorktree: (
+		sessionId: string,
+		mode?: MergeMode,
+	) => Promise<SyncOutcome | null>;
 	loadGroupData: (groupId: string) => Promise<void>;
 	createGroup: (name: string) => Promise<Group | null>;
 	selectGroup: (id: string) => Promise<void>;
@@ -422,6 +427,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 		} catch (error) {
 			reportError("Failed to merge pull request", error);
 			return false;
+		}
+	},
+
+	syncWorktree: async (sessionId, mode) => {
+		try {
+			return await ipc.syncWorktree(sessionId, mode);
+		} catch (error) {
+			reportError("Failed to sync with base", error);
+			return null;
 		}
 	},
 

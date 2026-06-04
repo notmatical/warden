@@ -292,3 +292,32 @@ pub fn push_branch(worktree: &Path) -> Result<()> {
     }
     Ok(())
 }
+
+/// Fetch the latest `base` branch from origin (best-effort; ignores failure when
+/// there's no remote).
+pub fn fetch_origin(worktree: &Path, base: &str) {
+    let _ = run_raw(worktree, &["fetch", "origin", base]);
+}
+
+/// Bring the worktree's branch up to date with `origin/<base>` by rebase (or
+/// merge). Refuses on a dirty tree; aborts cleanly on conflict, leaving the
+/// branch untouched. (Squash has no meaning here and is treated as rebase.)
+pub fn sync_onto_base(worktree: &Path, base: &str, mode: MergeMode) -> Result<MergeOutcome> {
+    if has_uncommitted_changes(worktree) {
+        return Err(AppError::Git(
+            "commit or discard the worktree's changes before syncing".to_string(),
+        ));
+    }
+    let target = format!("origin/{base}");
+    let (op, abort): (Vec<&str>, &[&str]) = match mode {
+        MergeMode::MergeCommit => (vec!["merge", &target], &["merge", "--abort"]),
+        _ => (vec!["rebase", &target], &["rebase", "--abort"]),
+    };
+    let out = run_raw(worktree, &op)?;
+    if !out.status.success() {
+        let files = conflicted_files(worktree);
+        let _ = run_raw(worktree, abort);
+        return Ok(MergeOutcome::Conflict(files));
+    }
+    Ok(MergeOutcome::Merged)
+}

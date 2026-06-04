@@ -189,3 +189,45 @@ pub async fn get_session_commits(
     };
     git::diff::commits_since(Path::new(&session.working_dir), base, limit.unwrap_or(100))
 }
+
+/// Result of syncing a worktree with its base branch.
+#[derive(Serialize)]
+#[serde(tag = "status", rename_all = "camelCase")]
+pub enum SyncOutcome {
+    Synced,
+    Conflict { files: Vec<String> },
+}
+
+/// Bring a session's worktree up to date with the latest base branch (fetch +
+/// rebase by default). Aborts cleanly and reports files on conflict.
+#[tauri::command]
+pub async fn sync_worktree(
+    state: State<'_, AppState>,
+    session_id: String,
+    mode: Option<String>,
+) -> Result<SyncOutcome> {
+    let session = state.store.get_session(&session_id)?;
+    if session.merged_at.is_some() {
+        return Err(AppError::Invalid("session is already merged".to_string()));
+    }
+    if !session.is_isolated {
+        return Err(AppError::Invalid(
+            "only isolated worktree sessions can sync".to_string(),
+        ));
+    }
+    let base = session
+        .base_branch
+        .clone()
+        .ok_or_else(|| AppError::Invalid("session has no base branch".to_string()))?;
+    let worktree = Path::new(&session.working_dir);
+    let mode = mode
+        .as_deref()
+        .and_then(git::MergeMode::parse)
+        .unwrap_or(git::MergeMode::Rebase);
+
+    git::fetch_origin(worktree, &base);
+    match git::sync_onto_base(worktree, &base, mode)? {
+        git::MergeOutcome::Conflict(files) => Ok(SyncOutcome::Conflict { files }),
+        git::MergeOutcome::Merged => Ok(SyncOutcome::Synced),
+    }
+}

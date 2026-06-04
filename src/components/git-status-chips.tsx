@@ -10,7 +10,8 @@ import {
 	X,
 	XCircle,
 } from "lucide-react";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
 
 import { LandSessionButton } from "@/components/land-session-dialog";
 import { SessionDiffButton } from "@/components/session-diff-dialog";
@@ -155,6 +156,51 @@ function PrChip({
 	);
 }
 
+/** Rebase the session's worktree onto the latest base when it's behind. */
+function SyncButton({
+	sessionId,
+	behind,
+	refresh,
+}: {
+	sessionId: string;
+	behind: number;
+	refresh: () => void;
+}) {
+	const sync = useAppStore((s) => s.syncWorktree);
+	const [busy, setBusy] = useState(false);
+	const run = async () => {
+		setBusy(true);
+		const outcome = await sync(sessionId);
+		setBusy(false);
+		if (!outcome) return;
+		if (outcome.status === "conflict") {
+			toast.error("Sync stopped on conflicts", {
+				description: `${outcome.files.join(", ")} — nothing was changed.`,
+			});
+			return;
+		}
+		toast.success("Synced with base");
+		refresh();
+	};
+	return (
+		<Button
+			variant="ghost"
+			size="xs"
+			onClick={() => void run()}
+			disabled={busy}
+			title="Rebase onto the latest base branch"
+			className="gap-1 text-muted-foreground hover:text-foreground"
+		>
+			{busy ? (
+				<Loader2 className="size-3.5 animate-spin" />
+			) : (
+				<ArrowDown className="size-3.5" />
+			)}
+			Sync {behind}
+		</Button>
+	);
+}
+
 // The session's roots are exactly the git-status rows; non-primary project ids
 // are the editable set handed to `set_session_roots`.
 function nonPrimaryIds(statuses: RepoStatus[]): string[] {
@@ -230,7 +276,10 @@ export function GitStatusChips({
 }: GitStatusChipsProps) {
 	const session = useAppStore((s) => s.sessions[sessionId]);
 	const refreshPrStatus = useAppStore((s) => s.refreshPrStatus);
-	const hasRemote = statuses.some((s) => s.isPrimary && s.hasRemote);
+	const primary = statuses.find((s) => s.isPrimary);
+	const hasRemote = primary?.hasRemote ?? false;
+	const canSync =
+		!!session?.isIsolated && !session.mergedAt && (primary?.behind ?? 0) > 0;
 
 	// Re-check the PR's state whenever this session's view mounts.
 	const prNumber = session?.prNumber ?? null;
@@ -273,6 +322,13 @@ export function GitStatusChips({
 				refresh={refresh}
 			/>
 			<div className="ml-auto flex items-center gap-1.5">
+				{canSync ? (
+					<SyncButton
+						sessionId={sessionId}
+						behind={primary?.behind ?? 0}
+						refresh={refresh}
+					/>
+				) : null}
 				{session?.prNumber ? (
 					<PrChip
 						number={session.prNumber}
