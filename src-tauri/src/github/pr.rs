@@ -5,8 +5,10 @@ use std::path::Path;
 use std::process::Command;
 
 use serde::Serialize;
+use serde_json::Value;
 
 use crate::cli::{self, Tool};
+use crate::domain::CheckStatus;
 use crate::error::{AppError, Result};
 
 /// A pull request's identity and state, as surfaced to the UI.
@@ -18,6 +20,41 @@ pub struct PrInfo {
     /// GitHub's PR state: `OPEN`, `MERGED`, or `CLOSED`.
     pub state: String,
     pub title: String,
+    /// Aggregate CI-check state, or `None` when the PR has no checks.
+    pub check_status: Option<CheckStatus>,
+}
+
+/// Distill `gh`'s `statusCheckRollup` array into one aggregate state: any failing
+/// check ⇒ Failure, else any in-flight ⇒ Pending, else Success. Empty ⇒ None.
+fn rollup_to_status(rollup: Option<&Value>) -> Option<CheckStatus> {
+    let items = rollup?.as_array()?;
+    if items.is_empty() {
+        return None;
+    }
+    let mut any_pending = false;
+    for item in items {
+        // CheckRun carries `conclusion` (once done) then `status`; StatusContext
+        // carries `state`. Prefer the most specific present.
+        let raw = item
+            .get("conclusion")
+            .and_then(Value::as_str)
+            .filter(|s| !s.is_empty())
+            .or_else(|| item.get("state").and_then(Value::as_str))
+            .or_else(|| item.get("status").and_then(Value::as_str))
+            .unwrap_or("")
+            .to_uppercase();
+        match raw.as_str() {
+            "FAILURE" | "ERROR" | "CANCELLED" | "TIMED_OUT" | "ACTION_REQUIRED"
+            | "STARTUP_FAILURE" => return Some(CheckStatus::Failure),
+            "SUCCESS" | "NEUTRAL" | "SKIPPED" | "" => {}
+            _ => any_pending = true,
+        }
+    }
+    Some(if any_pending {
+        CheckStatus::Pending
+    } else {
+        CheckStatus::Success
+    })
 }
 
 /// A `gh` command rooted in `cwd`, with the brokered token injected so it's
@@ -61,7 +98,12 @@ pub fn create_pr(worktree: &Path, base: &str, title: &str, body: &str) -> Result
 pub fn status(worktree: &Path) -> Result<Option<PrInfo>> {
     let out = gh(
         worktree,
-        &["pr", "view", "--json", "number,url,state,title"],
+        &[
+            "pr",
+            "view",
+            "--json",
+            "number,url,state,title,statusCheckRollup",
+        ],
     )
     .output()
     .map_err(|e| AppError::Git(format!("failed to run gh: {e}")))?;
@@ -70,24 +112,25 @@ pub fn status(worktree: &Path) -> Result<Option<PrInfo>> {
         return Ok(None);
     }
 
-    let value: serde_json::Value = serde_json::from_slice(&out.stdout)
+    let value: Value = serde_json::from_slice(&out.stdout)
         .map_err(|e| AppError::Git(format!("could not parse gh output: {e}")))?;
     Ok(Some(PrInfo {
-        number: value.get("number").and_then(|v| v.as_i64()).unwrap_or(0),
+        number: value.get("number").and_then(Value::as_i64).unwrap_or(0),
         url: value
             .get("url")
-            .and_then(|v| v.as_str())
+            .and_then(Value::as_str)
             .unwrap_or_default()
             .to_string(),
         state: value
             .get("state")
-            .and_then(|v| v.as_str())
+            .and_then(Value::as_str)
             .unwrap_or("OPEN")
             .to_string(),
         title: value
             .get("title")
-            .and_then(|v| v.as_str())
+            .and_then(Value::as_str)
             .unwrap_or_default()
             .to_string(),
+        check_status: rollup_to_status(value.get("statusCheckRollup")),
     }))
 }

@@ -66,6 +66,8 @@ const MIGRATIONS: &[&str] = &[
         pr_number         INTEGER,
         pr_url            TEXT,
         pr_state          TEXT,
+        pr_check_status   TEXT,
+        pr_checked_at     INTEGER,
         created_at        TEXT NOT NULL,
         updated_at        TEXT NOT NULL
     );

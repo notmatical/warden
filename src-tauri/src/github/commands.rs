@@ -89,9 +89,13 @@ pub async fn open_pull_request(
     crate::git::push_branch(worktree)?;
     let info = pr::create_pr(worktree, &base, &title, &body)?;
 
-    state
-        .store
-        .set_session_pr(&session_id, info.number, &info.url, &info.state)?;
+    state.store.set_session_pr(
+        &session_id,
+        info.number,
+        &info.url,
+        &info.state,
+        info.check_status,
+    )?;
     if let Ok(updated) = state.store.get_session(&session_id) {
         emit_session(&app, &updated);
     }
@@ -108,9 +112,13 @@ pub async fn refresh_pr_status(
     let session = state.store.get_session(&session_id)?;
     let info = pr::status(Path::new(&session.working_dir))?;
     if let Some(ref info) = info {
-        state
-            .store
-            .set_session_pr(&session_id, info.number, &info.url, &info.state)?;
+        state.store.set_session_pr(
+            &session_id,
+            info.number,
+            &info.url,
+            &info.state,
+            info.check_status,
+        )?;
         if let Ok(updated) = state.store.get_session(&session_id) {
             emit_session(&app, &updated);
         }

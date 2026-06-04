@@ -136,9 +136,15 @@ export interface Session {
   prNumber: number | null
   prUrl: string | null
   prState: string | null
+  /** Aggregate CI-check state for the PR, refreshed by background polling. */
+  prCheckStatus: CheckStatus | null
+  prCheckedAt: number | null
   createdAt: string
   updatedAt: string
 }
+
+/** Aggregate CI-check state for a PR. */
+export type CheckStatus = "success" | "failure" | "pending"
 
 /** How a session's branch is folded into its base when merging. */
 export type MergeMode = "squash" | "merge" | "rebase"

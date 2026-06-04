@@ -6,8 +6,8 @@ use std::sync::{Arc, Mutex};
 use rusqlite::{Connection, OptionalExtension, Row};
 
 use crate::domain::{
-    AgentEvent, Backend, EffortLevel, EventRecord, Group, PermissionMode, Project, Session,
-    SessionKind, SessionRole, SessionStatus,
+    AgentEvent, Backend, CheckStatus, EffortLevel, EventRecord, Group, PermissionMode, Project,
+    Session, SessionKind, SessionRole, SessionStatus,
 };
 use crate::error::{AppError, Result};
 use crate::util::{now_rfc3339, uuid};
@@ -304,6 +304,8 @@ impl Store {
             pr_number: None,
             pr_url: None,
             pr_state: None,
+            pr_check_status: None,
+            pr_checked_at: None,
             created_at: now.clone(),
             updated_at: now,
         };
@@ -444,15 +446,50 @@ impl Store {
         Ok(())
     }
 
-    /// Record (or refresh) the pull request bound to a session's branch.
-    pub fn set_session_pr(&self, id: &str, number: i64, url: &str, state: &str) -> Result<()> {
+    /// Record (or refresh) the pull request bound to a session's branch, with its
+    /// CI-check rollup and the poll time.
+    pub fn set_session_pr(
+        &self,
+        id: &str,
+        number: i64,
+        url: &str,
+        state: &str,
+        check_status: Option<CheckStatus>,
+    ) -> Result<()> {
+        let checked_at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or_default();
         let conn = self.lock();
         conn.execute(
-            "UPDATE sessions SET pr_number = ?2, pr_url = ?3, pr_state = ?4, updated_at = ?5
+            "UPDATE sessions
+             SET pr_number = ?2, pr_url = ?3, pr_state = ?4, pr_check_status = ?5,
+                 pr_checked_at = ?6, updated_at = ?7
              WHERE id = ?1",
-            (id, number, url, state, now_rfc3339()),
+            (
+                id,
+                number,
+                url,
+                state,
+                check_status.map(|c| c.as_str()),
+                checked_at,
+                now_rfc3339(),
+            ),
         )?;
         Ok(())
+    }
+
+    /// Sessions with an open pull request whose worktree still exists — the set
+    /// the background poller refreshes.
+    pub fn sessions_with_open_pr(&self) -> Result<Vec<Session>> {
+        let conn = self.lock();
+        let sql = format!(
+            "{SESSION_SELECT_ALL} WHERE pr_number IS NOT NULL AND merged_at IS NULL \
+             AND (pr_state IS NULL OR pr_state = 'OPEN')"
+        );
+        let mut stmt = conn.prepare(&sql)?;
+        let rows = stmt.query_map([], map_session)?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
     /// User-initiated rename — also locks the title against background naming.
@@ -637,13 +674,15 @@ const SESSION_SELECT: &str =
     "SELECT id, group_id, project_id, title, backend, model, permission_mode, status, role, \
     agent_session_id, working_dir, branch, base_sha, is_isolated, allowed_tools, turns, cost_usd, \
     parent_id, created_at, updated_at, effort, auto_named, kind, terminal_command, terminal_started, \
-    terminal_resume_id, base_branch, merged_at, pr_number, pr_url, pr_state FROM sessions WHERE id = ?1";
+    terminal_resume_id, base_branch, merged_at, pr_number, pr_url, pr_state, pr_check_status, \
+    pr_checked_at FROM sessions WHERE id = ?1";
 
 const SESSION_SELECT_ALL: &str =
     "SELECT id, group_id, project_id, title, backend, model, permission_mode, status, role, \
     agent_session_id, working_dir, branch, base_sha, is_isolated, allowed_tools, turns, cost_usd, \
     parent_id, created_at, updated_at, effort, auto_named, kind, terminal_command, terminal_started, \
-    terminal_resume_id, base_branch, merged_at, pr_number, pr_url, pr_state FROM sessions";
+    terminal_resume_id, base_branch, merged_at, pr_number, pr_url, pr_state, pr_check_status, \
+    pr_checked_at FROM sessions";
 
 fn map_project(row: &Row<'_>) -> rusqlite::Result<Project> {
     Ok(Project {
@@ -702,6 +741,10 @@ fn map_session(row: &Row<'_>) -> rusqlite::Result<Session> {
         pr_number: row.get("pr_number")?,
         pr_url: row.get("pr_url")?,
         pr_state: row.get("pr_state")?,
+        pr_check_status: row
+            .get::<_, Option<String>>("pr_check_status")?
+            .and_then(|s| CheckStatus::parse(&s)),
+        pr_checked_at: row.get("pr_checked_at")?,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
     })

@@ -64,6 +64,9 @@ pub fn run() {
                 store,
                 manager: AgentManager::new(),
             });
+
+            // Keep open PRs' state + CI checks fresh in the background.
+            github::poll::spawn(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

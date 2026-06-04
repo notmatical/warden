@@ -130,6 +130,35 @@ impl SessionStatus {
     }
 }
 
+/// Aggregate CI-check state for a session's pull request, distilled from `gh`'s
+/// `statusCheckRollup`. Absent when the PR has no checks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CheckStatus {
+    Success,
+    Failure,
+    Pending,
+}
+
+impl CheckStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            CheckStatus::Success => "success",
+            CheckStatus::Failure => "failure",
+            CheckStatus::Pending => "pending",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "success" => Some(CheckStatus::Success),
+            "failure" => Some(CheckStatus::Failure),
+            "pending" => Some(CheckStatus::Pending),
+            _ => None,
+        }
+    }
+}
+
 /// Whether a session is a headless agent (stream-json adapter) or an
 /// interactive terminal running the native `claude` TUI in a PTY.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -238,8 +267,11 @@ pub struct Session {
     /// The open pull request for this session's branch, once one is created.
     pub pr_number: Option<i64>,
     pub pr_url: Option<String>,
-    /// GitHub's PR state (`OPEN`/`MERGED`/`CLOSED`), refreshed on demand.
+    /// GitHub's PR state (`OPEN`/`MERGED`/`CLOSED`), refreshed by polling.
     pub pr_state: Option<String>,
+    /// Aggregate CI-check state for the PR, and when it was last polled (epoch s).
+    pub pr_check_status: Option<CheckStatus>,
+    pub pr_checked_at: Option<i64>,
     pub created_at: String,
     pub updated_at: String,
 }

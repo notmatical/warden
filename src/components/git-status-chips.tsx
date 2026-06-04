@@ -2,10 +2,13 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import {
 	ArrowDown,
 	ArrowUp,
+	CheckCircle2,
 	GitBranch,
 	GitPullRequest,
+	Loader2,
 	Plus,
 	X,
+	XCircle,
 } from "lucide-react";
 import { useCallback, useEffect } from "react";
 
@@ -22,7 +25,7 @@ import {
 import * as ipc from "@/lib/ipc";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app-store";
-import type { Project, RepoStatus } from "@/types";
+import type { CheckStatus, Project, RepoStatus } from "@/types";
 
 // Stable empty reference so the `?? EMPTY` fallback doesn't allocate each run.
 const EMPTY: Project[] = [];
@@ -105,15 +108,27 @@ function StatusChip({
 	);
 }
 
-/** A link chip to the session's pull request, tinted by its state. */
+/** The PR's CI-check rollup, as a small leading glyph. */
+function CheckGlyph({ status }: { status: CheckStatus | null }) {
+	if (status === "pending")
+		return <Loader2 className="size-3 animate-spin text-amber-500" />;
+	if (status === "failure") return <XCircle className="size-3 text-red-500" />;
+	if (status === "success")
+		return <CheckCircle2 className="size-3 text-emerald-500" />;
+	return null;
+}
+
+/** A link chip to the session's pull request, tinted by its state, with CI status. */
 function PrChip({
 	number,
 	url,
 	state,
+	checkStatus,
 }: {
 	number: number;
 	url: string | null;
 	state: string | null;
+	checkStatus: CheckStatus | null;
 }) {
 	const tone =
 		state === "MERGED"
@@ -135,6 +150,7 @@ function PrChip({
 					{state.toLowerCase()}
 				</span>
 			) : null}
+			<CheckGlyph status={checkStatus} />
 		</button>
 	);
 }
@@ -262,6 +278,7 @@ export function GitStatusChips({
 						number={session.prNumber}
 						url={session.prUrl}
 						state={session.prState}
+						checkStatus={session.prCheckStatus}
 					/>
 				) : null}
 				{session?.isIsolated && !session.mergedAt ? (
