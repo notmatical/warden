@@ -273,3 +273,5 @@ impl AgentManager {
         was_running
     }
 }
+
+pub mod commands;

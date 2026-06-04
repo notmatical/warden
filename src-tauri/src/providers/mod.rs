@@ -65,3 +65,5 @@ pub async fn status_all() -> Result<Vec<ToolStatus>> {
     }
     Ok(statuses)
 }
+
+pub mod commands;

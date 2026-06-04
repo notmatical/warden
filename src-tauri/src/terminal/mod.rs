@@ -16,3 +16,5 @@ pub enum TerminalEvent {
 
 pub use pty::spawn;
 pub use registry::{kill, kill_all, resize, write};
+
+pub mod commands;

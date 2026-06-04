@@ -30,3 +30,5 @@ pub async fn status() -> ToolStatus {
     cli::fill_latest(&mut status, Tool::Gh, LATEST_TIMEOUT).await;
     status
 }
+
+pub mod commands;

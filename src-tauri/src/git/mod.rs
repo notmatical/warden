@@ -6,3 +6,5 @@ mod worktree;
 
 pub use cli::*;
 pub use worktree::{provision_working_dir, ProvisionedDir};
+
+pub mod commands;
