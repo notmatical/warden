@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app-store";
 import type { MergeMode } from "@/types";
 
-type LandMode = "merge" | "pr";
+type LandMode = "pr" | "mergePr" | "merge";
 
 const MERGE_MODES: { value: MergeMode; label: string; hint: string }[] = [
 	{ value: "squash", label: "Squash", hint: "Collapse the work into one commit on the base." },
@@ -24,8 +24,42 @@ const MERGE_MODES: { value: MergeMode; label: string; hint: string }[] = [
 	{ value: "rebase", label: "Rebase", hint: "Replay the commits onto the base, then fast-forward." },
 ];
 
-/** Trigger + dialog to land an isolated session: fold its branch into the base
- *  locally, or open a pull request from it. */
+function StrategyPicker({
+	mode,
+	setMode,
+}: {
+	mode: MergeMode;
+	setMode: (m: MergeMode) => void;
+}) {
+	return (
+		<div className="flex flex-col gap-1.5">
+			<span className="text-xs font-medium text-muted-foreground">Strategy</span>
+			<div className="grid grid-cols-3 gap-0.5 rounded-md border border-border/70 bg-muted/30 p-0.5">
+				{MERGE_MODES.map((m) => (
+					<button
+						key={m.value}
+						type="button"
+						onClick={() => setMode(m.value)}
+						className={cn(
+							"rounded-[5px] px-2 py-1 text-[11px] font-medium transition-colors",
+							mode === m.value
+								? "bg-background text-foreground shadow-[0_1px_2px_rgb(0_0_0/0.06)]"
+								: "text-muted-foreground hover:text-foreground",
+						)}
+					>
+						{m.label}
+					</button>
+				))}
+			</div>
+			<span className="text-[11px] text-muted-foreground">
+				{MERGE_MODES.find((m) => m.value === mode)?.hint}
+			</span>
+		</div>
+	);
+}
+
+/** Trigger + dialog to land an isolated session: merge its open PR, open a new
+ *  PR, or fold its branch into the base locally. */
 export function LandSessionButton({
 	sessionId,
 	hasRemote,
@@ -38,6 +72,7 @@ export function LandSessionButton({
 	const session = useAppStore((s) => s.sessions[sessionId]);
 	const integrate = useAppStore((s) => s.integrateSession);
 	const openPr = useAppStore((s) => s.openPullRequest);
+	const mergePr = useAppStore((s) => s.mergePullRequest);
 
 	const [open, setOpen] = useState(false);
 	const [tab, setTab] = useState<LandMode>("merge");
@@ -48,7 +83,6 @@ export function LandSessionButton({
 	const [busy, setBusy] = useState(false);
 	const [conflicts, setConflicts] = useState<string[] | null>(null);
 
-	// Only isolated sessions that have run and aren't already merged can land.
 	if (
 		!session ||
 		!session.isIsolated ||
@@ -59,11 +93,13 @@ export function LandSessionButton({
 		return null;
 	}
 	const base = session.baseBranch ?? "base";
+	const prNumber = session.prNumber;
+	const primary: LandMode = prNumber != null ? "mergePr" : "pr";
 
 	const onOpenChange = (next: boolean) => {
 		setOpen(next);
 		if (next) {
-			setTab(hasRemote ? "pr" : "merge");
+			setTab(prNumber != null ? "mergePr" : hasRemote ? "pr" : "merge");
 			setMessage(session.title);
 			setMode("squash");
 			setPrTitle(session.title);
@@ -97,13 +133,23 @@ export function LandSessionButton({
 		refresh();
 	};
 
+	const runMergePr = async () => {
+		setBusy(true);
+		const ok = await mergePr(sessionId, mode);
+		setBusy(false);
+		if (!ok) return;
+		toast.success(`Merged pull request #${prNumber}`);
+		setOpen(false);
+		refresh();
+	};
+
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogTrigger asChild>
 				<Button
 					variant="ghost"
 					size="xs"
-					className="ml-auto gap-1.5 text-muted-foreground hover:text-foreground"
+					className="gap-1.5 text-muted-foreground hover:text-foreground"
 				>
 					<GitPullRequest className="size-3.5" />
 					Land
@@ -113,27 +159,32 @@ export function LandSessionButton({
 				<DialogHeader>
 					<DialogTitle>Land session</DialogTitle>
 					<DialogDescription>
-						Open a pull request from this session's branch, or fold it into{" "}
-						{base} locally.
+						{prNumber != null
+							? `Merge pull request #${prNumber}, or fold the branch into ${base} locally.`
+							: `Open a pull request from this session's branch, or fold it into ${base} locally.`}
 					</DialogDescription>
 				</DialogHeader>
 
 				<div className="grid grid-cols-2 gap-0.5 rounded-md border border-border/70 bg-muted/30 p-0.5">
 					<button
 						type="button"
-						onClick={() => hasRemote && setTab("pr")}
-						disabled={!hasRemote}
-						title={hasRemote ? undefined : "No git remote to push to"}
+						onClick={() => setTab(primary)}
+						disabled={primary === "pr" && !hasRemote}
+						title={
+							primary === "pr" && !hasRemote ? "No git remote to push to" : undefined
+						}
 						className={cn(
 							"flex items-center justify-center gap-1.5 rounded-[5px] px-2 py-1.5 text-xs font-medium transition-colors",
-							tab === "pr"
+							tab !== "merge"
 								? "bg-background text-foreground shadow-[0_1px_2px_rgb(0_0_0/0.06)]"
 								: "text-muted-foreground hover:text-foreground",
-							!hasRemote && "cursor-not-allowed opacity-40 hover:text-muted-foreground",
+							primary === "pr" &&
+								!hasRemote &&
+								"cursor-not-allowed opacity-40 hover:text-muted-foreground",
 						)}
 					>
 						<GitPullRequest className="size-3.5" />
-						Pull request
+						{primary === "mergePr" ? "Merge PR" : "Pull request"}
 					</button>
 					<button
 						type="button"
@@ -150,7 +201,14 @@ export function LandSessionButton({
 					</button>
 				</div>
 
-				{tab === "pr" ? (
+				{tab === "mergePr" ? (
+					<div className="flex flex-col gap-3">
+						<StrategyPicker mode={mode} setMode={setMode} />
+						<span className="text-[11px] text-muted-foreground">
+							Merges PR #{prNumber} on GitHub, then removes the worktree.
+						</span>
+					</div>
+				) : tab === "pr" ? (
 					<div className="flex flex-col gap-3">
 						<label className="flex flex-col gap-1.5">
 							<span className="text-xs font-medium text-muted-foreground">Title</span>
@@ -188,31 +246,7 @@ export function LandSessionButton({
 								className="h-8 rounded-md border border-border bg-input/40 px-2.5 text-sm outline-none focus-visible:border-ring"
 							/>
 						</label>
-
-						<div className="flex flex-col gap-1.5">
-							<span className="text-xs font-medium text-muted-foreground">Strategy</span>
-							<div className="grid grid-cols-3 gap-0.5 rounded-md border border-border/70 bg-muted/30 p-0.5">
-								{MERGE_MODES.map((m) => (
-									<button
-										key={m.value}
-										type="button"
-										onClick={() => setMode(m.value)}
-										className={cn(
-											"rounded-[5px] px-2 py-1 text-[11px] font-medium transition-colors",
-											mode === m.value
-												? "bg-background text-foreground shadow-[0_1px_2px_rgb(0_0_0/0.06)]"
-												: "text-muted-foreground hover:text-foreground",
-										)}
-									>
-										{m.label}
-									</button>
-								))}
-							</div>
-							<span className="text-[11px] text-muted-foreground">
-								{MERGE_MODES.find((m) => m.value === mode)?.hint}
-							</span>
-						</div>
-
+						<StrategyPicker mode={mode} setMode={setMode} />
 						{conflicts && (
 							<div className="flex flex-col gap-1 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2">
 								<span className="text-xs font-medium text-amber-600 dark:text-amber-500">
@@ -235,12 +269,20 @@ export function LandSessionButton({
 
 				<DialogFooter>
 					<Button
-						onClick={() => void (tab === "pr" ? runPr() : runMerge())}
+						onClick={() =>
+							void (tab === "mergePr"
+								? runMergePr()
+								: tab === "pr"
+									? runPr()
+									: runMerge())
+						}
 						disabled={busy}
 						className="bg-foreground text-background hover:bg-foreground/90"
 					>
 						{busy ? (
 							<Loader2 className="size-3.5 animate-spin" />
+						) : tab === "mergePr" ? (
+							`Merge PR #${prNumber}`
 						) : tab === "pr" ? (
 							"Open pull request"
 						) : (

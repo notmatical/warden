@@ -169,6 +169,10 @@ interface AppState {
 		body: string,
 	) => Promise<PrInfo | null>;
 	refreshPrStatus: (sessionId: string) => Promise<PrInfo | null>;
+	mergePullRequest: (
+		sessionId: string,
+		strategy: MergeMode,
+	) => Promise<boolean>;
 	loadGroupData: (groupId: string) => Promise<void>;
 	createGroup: (name: string) => Promise<Group | null>;
 	selectGroup: (id: string) => Promise<void>;
@@ -406,6 +410,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 			return await ipc.refreshPrStatus(sessionId);
 		} catch {
 			return null;
+		}
+	},
+
+	mergePullRequest: async (sessionId, strategy) => {
+		// Success marks the session merged via the session-updated event.
+		try {
+			await ipc.mergePullRequest(sessionId, strategy);
+			return true;
+		} catch (error) {
+			reportError("Failed to merge pull request", error);
+			return false;
 		}
 	},
 

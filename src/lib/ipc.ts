@@ -163,6 +163,13 @@ export function refreshPrStatus(sessionId: string): Promise<PrInfo | null> {
   return invoke("refresh_pr_status", { sessionId })
 }
 
+export function mergePullRequest(
+  sessionId: string,
+  strategy: MergeMode
+): Promise<void> {
+  return invoke("merge_pull_request", { sessionId, strategy })
+}
+
 export function getEvents(sessionId: string): Promise<EventRecord[]> {
   return invoke("get_events", { sessionId })
 }

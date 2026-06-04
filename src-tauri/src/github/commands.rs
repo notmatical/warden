@@ -125,3 +125,47 @@ pub async fn refresh_pr_status(
     }
     Ok(info)
 }
+
+/// Merge the session's open PR from the app, then clean up the worktree and
+/// branch and mark the session merged — mirroring local integrate cleanup.
+#[tauri::command]
+pub async fn merge_pull_request(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: String,
+    strategy: String,
+) -> Result<()> {
+    let session = state.store.get_session(&session_id)?;
+    if session.merged_at.is_some() {
+        return Err(AppError::Invalid("session is already merged".to_string()));
+    }
+    if session.pr_number.is_none() {
+        return Err(AppError::Invalid(
+            "session has no open pull request".to_string(),
+        ));
+    }
+    let branch = session
+        .branch
+        .clone()
+        .ok_or_else(|| AppError::Invalid("session has no branch".to_string()))?;
+    let mode = crate::git::MergeMode::parse(&strategy)
+        .ok_or_else(|| AppError::Invalid(format!("unknown merge strategy: {strategy}")))?;
+
+    let project = state.store.get_project(&session.project_id)?;
+    let repo = std::path::Path::new(&project.path);
+    let worktree = std::path::Path::new(&session.working_dir);
+
+    // Stop in-flight work, then merge the PR on GitHub.
+    state.manager.cancel(&app, &state.store, &session_id);
+    crate::terminal::kill(&session_id);
+    crate::github::pr::merge(worktree, mode)?;
+
+    // Land & clean up locally (best-effort; the PR is already merged).
+    let _ = crate::git::remove_worktree(repo, worktree);
+    let _ = crate::git::delete_branch(repo, &branch);
+    state.store.mark_session_merged(&session_id)?;
+    if let Ok(updated) = state.store.get_session(&session_id) {
+        emit_session(&app, &updated);
+    }
+    Ok(())
+}
