@@ -10,7 +10,7 @@ use crate::domain::{
 };
 use crate::error::Result;
 use crate::events::{emit_event, emit_session};
-use crate::provision::{provision_working_dir, ProvisionedDir};
+use crate::git::{provision_working_dir, ProvisionedDir};
 use crate::store::{NewSession, Store};
 use crate::util::uuid;
 

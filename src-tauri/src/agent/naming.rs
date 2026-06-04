@@ -5,7 +5,7 @@ use std::process::Stdio;
 
 use tokio::process::Command;
 
-use super::claude::resolve_claude;
+use crate::providers::claude::agent::resolve_claude;
 
 /// A small, fast model is plenty for a few-word title.
 const NAMING_MODEL: &str = "haiku";

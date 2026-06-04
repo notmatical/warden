@@ -1,10 +1,8 @@
 //! Orchestrates agent turns: spawning the CLI, translating its stream into
 //! persisted events, and tracking which sessions have a turn in flight.
 
-mod claude;
-mod codex;
-pub mod codex_history;
 mod naming;
+pub mod recipes;
 mod session_proc;
 mod stream;
 
@@ -17,6 +15,10 @@ use crate::domain::{AgentEvent, Backend, Session, SessionStatus};
 use crate::error::{AppError, Result};
 use crate::events::{emit_delta, emit_event, emit_session};
 use crate::store::Store;
+
+// The per-provider turn adapters live with the rest of each provider's code.
+use crate::providers::claude::agent as claude;
+use crate::providers::codex::agent as codex;
 
 use stream::parse_line;
 

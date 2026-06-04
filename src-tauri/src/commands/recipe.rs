@@ -2,8 +2,8 @@
 
 use tauri::{AppHandle, State};
 
+use crate::agent::recipes::{self, PlanToCodeResult};
 use crate::error::Result;
-use crate::recipes::{self, PlanToCodeResult};
 use crate::state::AppState;
 
 #[tauri::command]

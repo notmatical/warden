@@ -1,6 +1,7 @@
 //! GitHub integration. Phase 0: manage the `gh` CLI and broker the user's token
 //! for authenticated API calls. PR/issue operations build on this later.
 
+pub mod download;
 mod token;
 
 use std::time::Duration;

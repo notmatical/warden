@@ -3,7 +3,7 @@
 //! GitHub CLI are all [`Tool`]s; this module is the tool-agnostic machinery
 //! (paths, source preference, download, install, status) they share.
 
-mod download;
+pub mod archive;
 pub mod install;
 mod paths;
 mod source;
@@ -14,7 +14,7 @@ use std::time::Duration;
 
 use serde::Serialize;
 
-pub use install::{current_version, install, is_newer, latest_version};
+pub use install::{current_version, emit_progress, install, is_newer, latest_version};
 pub use paths::{managed_installed, resolve, system_binary};
 pub use source::{set_source, source, Source};
 

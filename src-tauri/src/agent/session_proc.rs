@@ -20,8 +20,8 @@ use crate::error::{AppError, Result};
 use crate::events::{emit_delta, emit_event, emit_session};
 use crate::store::Store;
 
-use super::claude;
 use super::stream::parse_line;
+use crate::providers::claude::agent as claude;
 
 struct Proc {
     /// Queued user-message lines headed for the process stdin.

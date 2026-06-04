@@ -8,8 +8,7 @@ use crate::domain::{
 };
 use crate::error::{AppError, Result};
 use crate::events::emit_session;
-use crate::git;
-use crate::provision::provision_working_dir;
+use crate::git::{self, provision_working_dir};
 use crate::state::AppState;
 use crate::store::NewSession;
 use crate::util::uuid;

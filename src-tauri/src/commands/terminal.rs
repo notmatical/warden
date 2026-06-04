@@ -3,10 +3,10 @@
 use tauri::ipc::Channel;
 use tauri::State;
 
-use crate::agent::codex_history;
 use crate::cli::{self, Tool};
 use crate::domain::{Backend, Session};
 use crate::error::Result;
+use crate::providers::codex::history as codex_history;
 use crate::state::AppState;
 use crate::store::Store;
 use crate::terminal::{self, TerminalEvent};

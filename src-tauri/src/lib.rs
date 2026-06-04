@@ -1,18 +1,17 @@
 mod agent;
 mod cli;
 mod commands;
+mod core;
 mod domain;
-mod error;
-mod events;
 mod git;
 mod github;
 mod providers;
-mod provision;
-mod recipes;
-mod state;
 mod store;
 mod terminal;
-mod util;
+
+// Keep the foundation modules reachable at their familiar crate-root paths
+// (`crate::error`, `crate::util`, …) while they live under `core/`.
+pub use core::{error, events, state, util};
 
 use tauri::Manager;
 

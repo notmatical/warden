@@ -8,8 +8,9 @@ use tauri::{AppHandle, Manager};
 
 use crate::domain::Project;
 use crate::error::Result;
-use crate::git;
 use crate::util::{short_id, uuid};
+
+use super::cli as git;
 
 /// The working directory chosen for a session, plus the git context it carries.
 pub struct ProvisionedDir {

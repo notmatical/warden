@@ -1,11 +1,12 @@
 //! Install orchestration shared by every managed tool: emit progress, write the
-//! downloaded binary atomically, make it runnable, and verify it. The bytes for
-//! a given tool/version come from [`super::download`].
+//! downloaded binary atomically, make it runnable, and verify it. The bytes and
+//! latest-version lookup for a given tool come from that tool's own module (see
+//! [`fetch`] / [`latest_version`]).
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
-use super::{download, paths, Tool};
+use super::{paths, Tool};
 
 /// Progress payload emitted to the frontend during an install.
 #[derive(Debug, Clone, Serialize)]
@@ -39,11 +40,11 @@ pub async fn install(app: &AppHandle, tool: Tool, version: Option<String>) -> Re
     emit_progress(app, tool, "starting", "Preparing installation…", 0);
     let version = match version {
         Some(v) => v,
-        None => download::latest_version(tool).await?,
+        None => latest_version(tool).await?,
     };
 
-    // The download layer emits the download/extract/verify stages it knows about.
-    let binary = download::fetch(app, tool, &version).await?;
+    // The tool's own module emits the download/extract/verify stages it knows about.
+    let binary = fetch(app, tool, &version).await?;
 
     emit_progress(
         app,
@@ -64,9 +65,22 @@ pub async fn install(app: &AppHandle, tool: Tool, version: Option<String>) -> Re
     Ok(())
 }
 
-/// The latest published version string for a tool.
+/// Download (and verify/extract) a tool's binary, dispatching to its module.
+async fn fetch(app: &AppHandle, tool: Tool, version: &str) -> Result<Vec<u8>, String> {
+    match tool {
+        Tool::Claude => crate::providers::claude::download::fetch(app, version).await,
+        Tool::Codex => crate::providers::codex::download::fetch(app, version).await,
+        Tool::Gh => crate::github::download::fetch(app, version).await,
+    }
+}
+
+/// The latest published version string for a tool, dispatching to its module.
 pub async fn latest_version(tool: Tool) -> Result<String, String> {
-    download::latest_version(tool).await
+    match tool {
+        Tool::Claude => crate::providers::claude::download::latest_version().await,
+        Tool::Codex => crate::providers::codex::download::latest_version().await,
+        Tool::Gh => crate::github::download::latest_version().await,
+    }
 }
 
 /// The version a binary reports via `--version` (digits-and-dots extracted).
