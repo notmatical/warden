@@ -1,5 +1,5 @@
-//! Thin wrapper over the `git` CLI for isolating each session in its own
-//! worktree. (Diffing lives in a future, focused iteration.)
+//! Thin wrapper over the `git` CLI: worktree lifecycle, status, integrate-back
+//! (merge/rebase), PR fetch, and sync. Diff/commit reading lives in `diff.rs`.
 
 use std::path::Path;
 use std::process::Command;
