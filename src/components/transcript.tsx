@@ -11,6 +11,7 @@ import { StreamingStatus } from "@/components/streaming-status";
 import { ToolActivity } from "@/components/tool-activity";
 import { Markdown } from "@/components/ui/markdown";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { copyText } from "@/lib/clipboard";
 import { relativeTime } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app-store";
@@ -38,10 +39,11 @@ function MessageMeta({
 				type="button"
 				aria-label="Copy message"
 				title="Copy message"
-				onClick={() => {
-					void navigator.clipboard.writeText(text);
-					setCopied(true);
-					setTimeout(() => setCopied(false), 1500);
+				onClick={async () => {
+					if (await copyText(text, "")) {
+						setCopied(true);
+						setTimeout(() => setCopied(false), 1500);
+					}
 				}}
 				className="flex size-5 items-center justify-center rounded text-muted-foreground/60 transition hover:bg-muted hover:text-foreground"
 			>

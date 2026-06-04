@@ -9,6 +9,11 @@
     "core:window:default",
     "opener:default",
     "dialog:default",
-    "os:default"
+    "os:default",
+    "notification:default",
+    "clipboard-manager:allow-write-text",
+    "clipboard-manager:allow-read-text",
+    "process:default",
+    "window-state:default"
   ]
 }

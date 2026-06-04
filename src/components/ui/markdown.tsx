@@ -4,6 +4,7 @@ import ReactMarkdown, { type Components } from "react-markdown";
 import rehypeRaw from "rehype-raw";
 import remarkGfm from "remark-gfm";
 
+import { copyText } from "@/lib/clipboard";
 import { highlightCode } from "@/lib/shiki";
 import { cn } from "@/lib/utils";
 
@@ -26,10 +27,11 @@ function CopyButton({ value }: { value: string }) {
 		<button
 			type="button"
 			aria-label="Copy code"
-			onClick={() => {
-				void navigator.clipboard.writeText(value);
-				setCopied(true);
-				setTimeout(() => setCopied(false), 1500);
+			onClick={async () => {
+				if (await copyText(value, "")) {
+					setCopied(true);
+					setTimeout(() => setCopied(false), 1500);
+				}
 			}}
 			className="absolute top-2 right-2 rounded-lg p-1.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-background/80 hover:text-foreground"
 		>
