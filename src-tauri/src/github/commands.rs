@@ -7,10 +7,13 @@ use std::path::Path;
 use tauri::{AppHandle, State};
 
 use crate::cli::{self, Source, Tool, ToolStatus};
+use crate::domain::{Backend, EffortLevel, PermissionMode, Session, SessionKind, SessionRole};
 use crate::error::{AppError, Result};
 use crate::events::emit_session;
 use crate::github::pr::{self, PrInfo};
 use crate::state::AppState;
+use crate::store::NewSession;
+use crate::util::uuid;
 
 #[tauri::command]
 pub async fn github_status() -> Result<ToolStatus> {
@@ -189,4 +192,80 @@ pub async fn generate_pr_content(
         &session.title,
     )
     .await
+}
+
+/// Open PRs in a project's repo, for the review-checkout picker.
+#[tauri::command]
+pub async fn list_open_prs(
+    state: State<'_, AppState>,
+    project_id: String,
+) -> Result<Vec<pr::PrSummary>> {
+    let project = state.store.get_project(&project_id)?;
+    Ok(pr::list_prs(Path::new(&project.path)))
+}
+
+/// Check out an existing PR into a fresh isolated worktree and open a session on
+/// it, for reviewing/running the PR locally.
+#[tauri::command]
+pub async fn checkout_pr(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    project_id: String,
+    number: i64,
+    model: String,
+) -> Result<Session> {
+    let project = state.store.get_project(&project_id)?;
+    let repo = Path::new(&project.path);
+    if !crate::git::has_remote(repo) {
+        return Err(AppError::Invalid(
+            "this repository has no git remote".to_string(),
+        ));
+    }
+    let base = pr::pr_base_ref(repo, number).unwrap_or_else(|| "main".to_string());
+    let dir = crate::git::provision_pr_worktree(&app, &project, number, &base)?;
+    let group_id = state
+        .store
+        .ensure_group_for_project(&project_id, &project.name)?;
+
+    let lower = model.to_ascii_lowercase();
+    let backend = if lower.starts_with("gpt") || lower.starts_with("codex") {
+        Backend::Codex
+    } else {
+        Backend::Claude
+    };
+    let working_dir = dir.working_dir.clone();
+    let session = state.store.create_session(NewSession {
+        group_id,
+        project_id,
+        title: format!("Review PR #{number}"),
+        kind: SessionKind::Agent,
+        backend,
+        model,
+        permission_mode: PermissionMode::BypassPermissions,
+        effort: EffortLevel::High,
+        role: SessionRole::Chat,
+        auto_named: false,
+        agent_session_id: uuid(),
+        terminal_command: None,
+        working_dir: dir.working_dir,
+        branch: dir.branch,
+        base_sha: dir.base_sha,
+        base_branch: dir.base_branch,
+        is_isolated: dir.is_isolated,
+        parent_id: None,
+    })?;
+
+    // Light up the PR chip + merge controls for the reviewed PR.
+    if let Ok(Some(info)) = pr::status(Path::new(&working_dir)) {
+        let _ = state.store.set_session_pr(
+            &session.id,
+            info.number,
+            &info.url,
+            &info.state,
+            info.check_status,
+        );
+    }
+    let session = state.store.get_session(&session.id)?;
+    emit_session(&app, &session);
+    Ok(session)
 }

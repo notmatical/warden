@@ -25,6 +25,83 @@ pub struct PrInfo {
     pub check_status: Option<CheckStatus>,
 }
 
+/// An open PR in a repo, for the review-checkout picker.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrSummary {
+    pub number: i64,
+    pub title: String,
+    pub author: String,
+    pub head_ref: String,
+}
+
+/// List open PRs in the repo (empty when there's no remote / not a gh repo).
+pub fn list_prs(repo: &Path) -> Vec<PrSummary> {
+    let Ok(out) = gh(
+        repo,
+        &[
+            "pr",
+            "list",
+            "--state",
+            "open",
+            "--limit",
+            "100",
+            "--json",
+            "number,title,author,headRefName",
+        ],
+    )
+    .output() else {
+        return Vec::new();
+    };
+    if !out.status.success() {
+        return Vec::new();
+    }
+    serde_json::from_slice::<Value>(&out.stdout)
+        .ok()
+        .and_then(|v| v.as_array().cloned())
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| {
+                    Some(PrSummary {
+                        number: item.get("number")?.as_i64()?,
+                        title: item.get("title")?.as_str()?.to_string(),
+                        author: item
+                            .get("author")
+                            .and_then(|a| a.get("login"))
+                            .and_then(Value::as_str)
+                            .unwrap_or("unknown")
+                            .to_string(),
+                        head_ref: item
+                            .get("headRefName")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default()
+                            .to_string(),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// The base branch a PR targets (e.g. `main`), via `gh pr view`.
+pub fn pr_base_ref(repo: &Path, number: i64) -> Option<String> {
+    let out = gh(
+        repo,
+        &["pr", "view", &number.to_string(), "--json", "baseRefName"],
+    )
+    .output()
+    .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    serde_json::from_slice::<Value>(&out.stdout)
+        .ok()?
+        .get("baseRefName")?
+        .as_str()
+        .map(str::to_string)
+}
+
 /// Distill `gh`'s `statusCheckRollup` array into one aggregate state: any failing
 /// check ⇒ Failure, else any in-flight ⇒ Pending, else Success. Empty ⇒ None.
 fn rollup_to_status(rollup: Option<&Value>) -> Option<CheckStatus> {

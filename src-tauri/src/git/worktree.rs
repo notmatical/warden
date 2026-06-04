@@ -28,6 +28,36 @@ fn worktrees_root(app: &AppHandle) -> Result<PathBuf> {
     Ok(app.path().home_dir()?.join("warden"))
 }
 
+/// Provision an isolated worktree checked out to an existing PR's head branch,
+/// for reviewing it. `base` is the PR's base branch (its merge target).
+pub fn provision_pr_worktree(
+    app: &AppHandle,
+    project: &Project,
+    number: i64,
+    base: &str,
+) -> Result<ProvisionedDir> {
+    let repo = Path::new(&project.path);
+    let branch = format!("warden-pr-{number}");
+    git::fetch_pr(repo, number, &branch)?;
+
+    let dest = worktrees_root(app)?
+        .join(sanitize(&project.name))
+        .join(format!("pr-{number}"));
+    if let Some(parent) = dest.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    git::add_worktree(repo, &dest, &branch)?;
+
+    Ok(ProvisionedDir {
+        working_dir: dest.to_string_lossy().into_owned(),
+        branch: Some(branch),
+        // Diff/sync against the PR's base tip.
+        base_sha: git::rev_parse(repo, base),
+        base_branch: Some(base.to_string()),
+        is_isolated: true,
+    })
+}
+
 /// Reduce a name to a filesystem-safe directory segment.
 fn sanitize(name: &str) -> String {
     let cleaned: String = name

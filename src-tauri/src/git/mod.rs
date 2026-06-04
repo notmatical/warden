@@ -6,6 +6,6 @@ pub mod diff;
 mod worktree;
 
 pub use cli::*;
-pub use worktree::{provision_working_dir, ProvisionedDir};
+pub use worktree::{provision_pr_worktree, provision_working_dir, ProvisionedDir};
 
 pub mod commands;

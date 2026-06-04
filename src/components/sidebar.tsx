@@ -3,6 +3,7 @@ import {
 	ChevronRight,
 	FolderGit2,
 	FolderPlus,
+	GitPullRequest,
 	Layers,
 	Pencil,
 	Plus,
@@ -14,6 +15,7 @@ import {
 import { type KeyboardEvent, type ReactNode, useEffect, useState } from "react";
 
 import { useConfirm } from "@/components/confirm-dialog";
+import { ReviewPrDialog } from "@/components/review-pr-dialog";
 import { StatusDot } from "@/components/status-dot";
 import { Button } from "@/components/ui/button";
 import {
@@ -219,6 +221,8 @@ function RootRow({
 		s.providers.some((p) => p.id === "codex" && p.authed),
 	);
 
+	const [reviewOpen, setReviewOpen] = useState(false);
+
 	const rootSessions = (sessionIds ?? []).filter(
 		(id) => sessions[id]?.projectId === project.id,
 	);
@@ -304,8 +308,18 @@ function RootRow({
 							Native Codex
 						</DropdownMenuItem>
 					) : null}
+					<DropdownMenuSeparator />
+					<DropdownMenuItem onSelect={() => setReviewOpen(true)}>
+						<GitPullRequest />
+						Review a PR…
+					</DropdownMenuItem>
 				</DropdownMenuContent>
 			</DropdownMenu>
+			<ReviewPrDialog
+				projectId={project.id}
+				open={reviewOpen}
+				onOpenChange={setReviewOpen}
+			/>
 
 			{expanded ? (
 				<SidebarMenuSub className={SUB_CLASS}>

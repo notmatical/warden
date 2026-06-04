@@ -179,6 +179,7 @@ interface AppState {
 		sessionId: string,
 		mode?: MergeMode,
 	) => Promise<SyncOutcome | null>;
+	checkoutPr: (projectId: string, number: number) => Promise<Session | null>;
 	loadGroupData: (groupId: string) => Promise<void>;
 	createGroup: (name: string) => Promise<Group | null>;
 	selectGroup: (id: string) => Promise<void>;
@@ -435,6 +436,42 @@ export const useAppStore = create<AppState>((set, get) => ({
 			return await ipc.syncWorktree(sessionId, mode);
 		} catch (error) {
 			reportError("Failed to sync with base", error);
+			return null;
+		}
+	},
+
+	checkoutPr: async (projectId, number) => {
+		try {
+			const session = await ipc.checkoutPr(
+				projectId,
+				number,
+				DEFAULT_CHAT_MODEL,
+			);
+			const groupId = session.groupId;
+			set((state) => ({
+				sessions: { ...state.sessions, [session.id]: session },
+				sessionsByGroup: {
+					...state.sessionsByGroup,
+					[groupId]: [
+						...(state.sessionsByGroup[groupId] ?? []),
+						session.id,
+					],
+				},
+				tabsByGroup: {
+					...state.tabsByGroup,
+					[groupId]: [...(state.tabsByGroup[groupId] ?? []), session.id],
+				},
+				activeSessionByGroup: {
+					...state.activeSessionByGroup,
+					[groupId]: session.id,
+				},
+				eventsBySession: { ...state.eventsBySession, [session.id]: [] },
+			}));
+			get().saveGroupView(groupId);
+			if (get().activeGroupId !== groupId) await get().selectGroup(groupId);
+			return session;
+		} catch (error) {
+			reportError("Failed to check out PR", error);
 			return null;
 		}
 	},

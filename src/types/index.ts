@@ -159,6 +159,14 @@ export type SyncOutcome =
   | { status: "synced" }
   | { status: "conflict"; files: string[] }
 
+/** An open PR in a repo, for the review-checkout picker. */
+export interface PrSummary {
+  number: number
+  title: string
+  author: string
+  headRef: string
+}
+
 /** A generated PR title + body, for review before opening. */
 export interface PrContent {
   title: string

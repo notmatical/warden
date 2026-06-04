@@ -11,6 +11,7 @@ import type {
   MergeMode,
   PrContent,
   PrInfo,
+  PrSummary,
   PermissionMode,
   PlanToCodeResult,
   Provider,
@@ -176,6 +177,18 @@ export function openPullRequest(
 
 export function generatePrContent(sessionId: string): Promise<PrContent> {
   return invoke("generate_pr_content", { sessionId })
+}
+
+export function listOpenPrs(projectId: string): Promise<PrSummary[]> {
+  return invoke("list_open_prs", { projectId })
+}
+
+export function checkoutPr(
+  projectId: string,
+  number: number,
+  model: string
+): Promise<Session> {
+  return invoke("checkout_pr", { projectId, number, model })
 }
 
 export function refreshPrStatus(sessionId: string): Promise<PrInfo | null> {
