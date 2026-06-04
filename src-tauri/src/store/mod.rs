@@ -29,6 +29,8 @@ pub struct NewSession {
     pub role: SessionRole,
     pub auto_named: bool,
     pub agent_session_id: String,
+    /// Provider CLI for a native terminal session (`claude`/`codex`); `None` runs the shell.
+    pub terminal_command: Option<String>,
     pub working_dir: String,
     pub branch: Option<String>,
     pub base_sha: Option<String>,
@@ -159,10 +161,7 @@ impl Store {
 
     pub fn update_group_layout(&self, id: &str, layout: &str) -> Result<()> {
         let conn = self.lock();
-        conn.execute(
-            "UPDATE groups SET layout = ?2 WHERE id = ?1",
-            (id, layout),
-        )?;
+        conn.execute("UPDATE groups SET layout = ?2 WHERE id = ?1", (id, layout))?;
         Ok(())
     }
 
@@ -288,6 +287,9 @@ impl Store {
             role: new.role,
             auto_named: new.auto_named,
             agent_session_id: new.agent_session_id,
+            terminal_command: new.terminal_command,
+            terminal_started: false,
+            terminal_resume_id: None,
             working_dir: new.working_dir,
             branch: new.branch,
             base_sha: new.base_sha,
@@ -305,9 +307,10 @@ impl Store {
             "INSERT INTO sessions (
                 id, group_id, project_id, title, backend, model, permission_mode, status, role,
                 agent_session_id, working_dir, branch, base_sha, is_isolated, allowed_tools, turns,
-                cost_usd, parent_id, created_at, updated_at, effort, auto_named, kind
+                cost_usd, parent_id, created_at, updated_at, effort, auto_named, kind,
+                terminal_command
              ) VALUES (
-                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23
+                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24
              )",
             rusqlite::params![
                 session.id,
@@ -333,6 +336,7 @@ impl Store {
                 session.effort.as_str(),
                 session.auto_named as i64,
                 session.kind.as_str(),
+                session.terminal_command,
             ],
         )?;
         // Seed the primary root. Additional roots are added via set_session_roots.
@@ -461,6 +465,64 @@ impl Store {
         Ok(())
     }
 
+    /// Mark a native terminal session's CLI as launched, so the next spawn resumes
+    /// the conversation rather than starting a fresh one.
+    pub fn set_terminal_started(&self, id: &str) -> Result<()> {
+        let conn = self.lock();
+        conn.execute(
+            "UPDATE sessions SET terminal_started = 1, updated_at = ?2 WHERE id = ?1",
+            (id, now_rfc3339()),
+        )?;
+        Ok(())
+    }
+
+    /// Bind a native terminal session to the provider's own conversation id, so
+    /// later launches resume that exact session.
+    pub fn set_terminal_resume_id(&self, id: &str, resume_id: &str) -> Result<()> {
+        let conn = self.lock();
+        conn.execute(
+            "UPDATE sessions SET terminal_resume_id = ?2, updated_at = ?3 WHERE id = ?1",
+            (id, resume_id, now_rfc3339()),
+        )?;
+        Ok(())
+    }
+
+    // ----- settings ---------------------------------------------------------
+
+    /// Read an app-wide setting by key.
+    pub fn get_setting(&self, key: &str) -> Result<Option<String>> {
+        let conn = self.lock();
+        Ok(conn
+            .query_row("SELECT value FROM settings WHERE key = ?1", [key], |row| {
+                row.get::<_, String>(0)
+            })
+            .optional()?)
+    }
+
+    /// Write an app-wide setting, replacing any existing value.
+    pub fn set_setting(&self, key: &str, value: &str) -> Result<()> {
+        let conn = self.lock();
+        conn.execute(
+            "INSERT INTO settings (key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, value),
+        )?;
+        Ok(())
+    }
+
+    /// Every provider conversation id already claimed by a session, so a newly
+    /// resumed terminal doesn't bind to a session another tab already owns.
+    pub fn taken_resume_ids(&self) -> Result<std::collections::HashSet<String>> {
+        let conn = self.lock();
+        let mut stmt = conn.prepare(
+            "SELECT terminal_resume_id FROM sessions WHERE terminal_resume_id IS NOT NULL",
+        )?;
+        let ids = stmt
+            .query_map([], |row| row.get::<_, String>(0))?
+            .collect::<rusqlite::Result<std::collections::HashSet<String>>>()?;
+        Ok(ids)
+    }
+
     /// Add approved tool patterns to a session's allowlist (deduped), returning
     /// the full updated list.
     pub fn add_allowed_tools(&self, id: &str, patterns: &[String]) -> Result<Vec<String>> {
@@ -542,12 +604,14 @@ impl Store {
 const SESSION_SELECT: &str =
     "SELECT id, group_id, project_id, title, backend, model, permission_mode, status, role, \
     agent_session_id, working_dir, branch, base_sha, is_isolated, allowed_tools, turns, cost_usd, \
-    parent_id, created_at, updated_at, effort, auto_named, kind FROM sessions WHERE id = ?1";
+    parent_id, created_at, updated_at, effort, auto_named, kind, terminal_command, terminal_started, \
+    terminal_resume_id FROM sessions WHERE id = ?1";
 
 const SESSION_SELECT_ALL: &str =
     "SELECT id, group_id, project_id, title, backend, model, permission_mode, status, role, \
     agent_session_id, working_dir, branch, base_sha, is_isolated, allowed_tools, turns, cost_usd, \
-    parent_id, created_at, updated_at, effort, auto_named, kind FROM sessions";
+    parent_id, created_at, updated_at, effort, auto_named, kind, terminal_command, terminal_started, \
+    terminal_resume_id FROM sessions";
 
 fn map_project(row: &Row<'_>) -> rusqlite::Result<Project> {
     Ok(Project {
@@ -589,6 +653,9 @@ fn map_session(row: &Row<'_>) -> rusqlite::Result<Session> {
         role: SessionRole::parse(&role_str).unwrap_or(SessionRole::Chat),
         auto_named: row.get::<_, i64>("auto_named")? != 0,
         agent_session_id: row.get("agent_session_id")?,
+        terminal_command: row.get("terminal_command")?,
+        terminal_started: row.get::<_, i64>("terminal_started")? != 0,
+        terminal_resume_id: row.get("terminal_resume_id")?,
         working_dir: row.get("working_dir")?,
         branch: row.get("branch")?,
         base_sha: row.get("base_sha")?,

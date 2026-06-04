@@ -7,12 +7,12 @@ use crate::domain::{
     Backend, EffortLevel, EventRecord, PermissionMode, Session, SessionKind, SessionRole,
 };
 use crate::error::{AppError, Result};
+use crate::events::emit_session;
 use crate::git;
 use crate::provision::provision_working_dir;
 use crate::state::AppState;
 use crate::store::NewSession;
 use crate::util::uuid;
-use crate::events::emit_session;
 
 /// Default reasoning effort for a new session.
 const DEFAULT_EFFORT: EffortLevel = EffortLevel::High;
@@ -50,6 +50,7 @@ pub async fn create_session(
     kind: Option<String>,
     backend: Option<String>,
     isolate: Option<bool>,
+    native_command: Option<String>,
 ) -> Result<Session> {
     let project = state.store.get_project(&project_id)?;
     let group_id = match group_id {
@@ -95,6 +96,7 @@ pub async fn create_session(
         role,
         auto_named: true,
         agent_session_id: uuid(),
+        terminal_command: native_command,
         working_dir: dir.working_dir,
         branch: dir.branch,
         base_sha: dir.base_sha,
@@ -232,10 +234,9 @@ pub async fn send_message(
 
     // A brand-new chat session gets a clean title generated from its first
     // message, in the background, unless the user has already named it.
-    let naming_ctx = (session.turns == 0
-        && session.auto_named
-        && session.role == SessionRole::Chat)
-        .then(|| (session.working_dir.clone(), text.clone()));
+    let naming_ctx =
+        (session.turns == 0 && session.auto_named && session.role == SessionRole::Chat)
+            .then(|| (session.working_dir.clone(), text.clone()));
 
     state
         .manager
@@ -280,5 +281,8 @@ pub async fn approve_tools(
 ) -> Result<()> {
     state.store.add_allowed_tools(&session_id, &patterns)?;
     let session = state.store.get_session(&session_id)?;
-    state.manager.resume(app, state.store.clone(), session).await
+    state
+        .manager
+        .resume(app, state.store.clone(), session)
+        .await
 }

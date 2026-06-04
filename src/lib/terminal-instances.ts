@@ -47,7 +47,7 @@ function theme() {
   }
 }
 
-function create(id: string, workingDir: string, command?: string): Instance {
+function create(id: string, workingDir: string): Instance {
   const term = new Terminal({
     fontFamily: '"JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace',
     fontSize: 13,
@@ -71,16 +71,11 @@ function create(id: string, workingDir: string, command?: string): Instance {
   instances.set(id, inst)
 
   // Spawn the PTY once, sized to the current terminal.
-  startPty(id, workingDir, inst, command)
+  startPty(id, workingDir, inst)
   return inst
 }
 
-function startPty(
-  id: string,
-  workingDir: string,
-  inst: Instance,
-  command?: string
-) {
+function startPty(id: string, workingDir: string, inst: Instance) {
   inst.started = true
   const channel = new Channel<ipc.TerminalEvent>()
   channel.onmessage = (msg) => {
@@ -92,7 +87,7 @@ function startPty(
   }
   const cols = inst.term.cols || 80
   const rows = inst.term.rows || 24
-  void ipc.startTerminal(id, workingDir, cols, rows, channel, command)
+  void ipc.startTerminal(id, workingDir, cols, rows, channel)
 }
 
 /** Fit to the container, pushing the new size to the PTY only when it changed. */
@@ -105,15 +100,10 @@ function pushResize(id: string, inst: Instance) {
   void ipc.terminalResize(id, cols, rows)
 }
 
-/** Mount the terminal into `container` (creating it on first use). A native
- *  session passes the provider CLI to launch instead of the shell. */
-export function attach(
-  id: string,
-  container: HTMLElement,
-  workingDir: string,
-  command?: string
-) {
-  const inst = instances.get(id) ?? create(id, workingDir, command)
+/** Mount the terminal into `container` (creating it on first use). The launch
+ *  command (shell vs provider CLI) is resolved backend-side from the session. */
+export function attach(id: string, container: HTMLElement, workingDir: string) {
+  const inst = instances.get(id) ?? create(id, workingDir)
   container.appendChild(inst.el)
   // Defer the fit until the element has laid out.
   requestAnimationFrame(() => {

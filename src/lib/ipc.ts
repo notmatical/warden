@@ -9,6 +9,7 @@ import type {
   PermissionMode,
   PlanToCodeResult,
   Provider,
+  ProviderSource,
   ProviderStatus,
   RepoRef,
   RepoStatus,
@@ -44,6 +45,13 @@ export function installProvider(id: Provider): Promise<void> {
 
 export function updateProvider(id: Provider): Promise<void> {
   return invoke("update_provider", { id })
+}
+
+export function setProviderSource(
+  id: Provider,
+  source: ProviderSource
+): Promise<void> {
+  return invoke("set_provider_source", { id, source })
 }
 
 // ----- groups --------------------------------------------------------------
@@ -120,6 +128,8 @@ export interface CreateSessionInput {
   backend?: Backend
   /** Run the agent in an isolated git worktree instead of the repo's checkout. */
   isolate?: boolean
+  /** Provider CLI a native terminal session launches instead of the shell. */
+  nativeCommand?: string
 }
 
 export function createSession(input: CreateSessionInput): Promise<Session> {
@@ -134,6 +144,7 @@ export function createSession(input: CreateSessionInput): Promise<Session> {
     kind: input.kind ?? null,
     backend: input.backend ?? null,
     isolate: input.isolate ?? false,
+    nativeCommand: input.nativeCommand ?? null,
   })
 }
 
@@ -148,15 +159,14 @@ export function startTerminal(
   workingDir: string,
   cols: number,
   rows: number,
-  onOutput: Channel<TerminalEvent>,
-  /** A program to launch instead of the shell — a provider CLI for native sessions. */
-  command?: string
+  onOutput: Channel<TerminalEvent>
 ): Promise<void> {
+  // The launch command (shell vs provider CLI, fresh vs resume) is derived
+  // backend-side from the persisted session, so none is passed here.
   return invoke("start_terminal", {
     onOutput,
     terminalId,
     workingDir,
-    command: command ?? null,
     cols,
     rows,
   })

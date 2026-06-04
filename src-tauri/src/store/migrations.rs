@@ -50,6 +50,9 @@ const MIGRATIONS: &[&str] = &[
         role              TEXT NOT NULL,
         auto_named        INTEGER NOT NULL DEFAULT 1,
         agent_session_id  TEXT NOT NULL,
+        terminal_command  TEXT,
+        terminal_started  INTEGER NOT NULL DEFAULT 0,
+        terminal_resume_id TEXT,
         working_dir       TEXT NOT NULL,
         branch            TEXT,
         base_sha          TEXT,
@@ -82,6 +85,12 @@ const MIGRATIONS: &[&str] = &[
         UNIQUE(session_id, seq)
     );
     CREATE INDEX idx_events_session ON events(session_id, seq);
+
+    -- App-wide key/value settings (e.g. each provider's CLI source preference).
+    CREATE TABLE settings (
+        key    TEXT PRIMARY KEY,
+        value  TEXT NOT NULL
+    );
     "#,
 ];
 
@@ -143,7 +152,9 @@ mod tests {
     use rusqlite::Connection;
 
     fn columns(conn: &Connection, table: &str) -> Vec<String> {
-        let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})")).unwrap();
+        let mut stmt = conn
+            .prepare(&format!("PRAGMA table_info({table})"))
+            .unwrap();
         let rows = stmt.query_map([], |row| row.get::<_, String>(1)).unwrap();
         rows.map(|r| r.unwrap()).collect()
     }

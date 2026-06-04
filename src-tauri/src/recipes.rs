@@ -47,6 +47,7 @@ fn session_in_dir(
         // Planner/Coder carry role labels; don't auto-rename them.
         auto_named: false,
         agent_session_id: uuid(),
+        terminal_command: None,
         working_dir: dir.working_dir.clone(),
         branch: dir.branch.clone(),
         base_sha: dir.base_sha.clone(),

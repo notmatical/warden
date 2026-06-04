@@ -208,6 +208,16 @@ pub struct Session {
     pub auto_named: bool,
     /// The CLI conversation id we own (passed as `--session-id`, then `--resume`).
     pub agent_session_id: String,
+    /// For a native CLI terminal, the provider program to launch (`claude`/`codex`)
+    /// instead of the shell. `None` for plain shell terminals and agent sessions.
+    pub terminal_command: Option<String>,
+    /// Whether this terminal's CLI has been launched at least once — drives the
+    /// switch from "start a new conversation" to "resume the existing one".
+    pub terminal_started: bool,
+    /// The provider's own conversation id, recovered after first launch so the
+    /// terminal resumes that exact session. Used for Codex, which assigns its id
+    /// (Claude pins `agent_session_id` up front and resumes by that instead).
+    pub terminal_resume_id: Option<String>,
     /// Absolute path the agent runs in (an isolated worktree, or the repo root).
     pub working_dir: String,
     pub branch: Option<String>,

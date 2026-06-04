@@ -1,23 +1,104 @@
 //! Commands driving interactive PTY terminal sessions.
 
 use tauri::ipc::Channel;
+use tauri::State;
 
+use crate::agent::codex_history;
+use crate::domain::{Backend, Session};
 use crate::error::Result;
+use crate::providers::Provider;
+use crate::state::AppState;
+use crate::store::Store;
 use crate::terminal::{self, TerminalEvent};
 
+/// The program + args a session's terminal should launch. A native CLI session
+/// runs its provider binary — starting a fresh conversation the first time and
+/// resuming it thereafter; everything else runs the user's shell.
+///
+/// Codex assigns its own session id, so on first resume we recover it from
+/// Codex's rollout history (newest session for this cwd, not already claimed by
+/// another tab) and persist it; later launches reuse the bound id.
+fn launch_recipe(store: &Store, session: &Session) -> Result<(Option<String>, Vec<String>)> {
+    if session.terminal_command.is_none() {
+        return Ok((None, Vec::new()));
+    }
+    // Resolve the provider's effective binary (managed or system) so a native
+    // terminal launches the same CLI as headless turns.
+    let provider = match session.backend {
+        Backend::Claude => Provider::Claude,
+        Backend::Codex => Provider::Codex,
+    };
+    let program = crate::providers::resolve(provider)
+        .to_string_lossy()
+        .into_owned();
+    let args = match (session.backend, session.terminal_started) {
+        // Claude owns its session id, so we pin it on first launch and resume by
+        // that exact id afterwards.
+        (Backend::Claude, false) => {
+            vec!["--session-id".to_string(), session.agent_session_id.clone()]
+        }
+        (Backend::Claude, true) => vec!["--resume".to_string(), session.agent_session_id.clone()],
+        // Codex: a fresh session the first time; afterwards resume the bound id.
+        (Backend::Codex, false) => Vec::new(),
+        (Backend::Codex, true) => match codex_resume_id(store, session)? {
+            Some(id) => vec!["resume".to_string(), id],
+            // No rollout matched yet (e.g. nothing was sent last time): fall back
+            // to Codex's own "most recent for this cwd".
+            None => vec!["resume".to_string(), "--last".to_string()],
+        },
+    };
+    Ok((Some(program), args))
+}
+
+/// The Codex conversation id this terminal should resume, binding it on first use.
+fn codex_resume_id(store: &Store, session: &Session) -> Result<Option<String>> {
+    if session.terminal_resume_id.is_some() {
+        return Ok(session.terminal_resume_id.clone());
+    }
+    let taken = store.taken_resume_ids()?;
+    let found = codex_history::newest_session_for_cwd(&session.working_dir, &taken);
+    if let Some(id) = &found {
+        store.set_terminal_resume_id(&session.id, id)?;
+    }
+    Ok(found)
+}
+
 /// Spawn a PTY in `working_dir` (the session's root) and stream its output over
-/// `on_output`. The terminal id is the session id. With no `command` the user's
-/// shell runs; with one (a provider's CLI) that program runs natively instead.
+/// `on_output`. The terminal id is the session id; the launch command is derived
+/// from the persisted session, so a native CLI session relaunches (and resumes)
+/// its provider across app restarts instead of falling back to a bare shell.
 #[tauri::command]
 pub async fn start_terminal(
     on_output: Channel<TerminalEvent>,
+    state: State<'_, AppState>,
     terminal_id: String,
     working_dir: String,
-    command: Option<String>,
     cols: u16,
     rows: u16,
 ) -> Result<()> {
-    terminal::spawn(on_output, terminal_id, working_dir, command, cols, rows)
+    let session = state.store.get_session(&terminal_id).ok();
+    let (command, args) = match session.as_ref() {
+        Some(session) => launch_recipe(&state.store, session)?,
+        None => (None, Vec::new()),
+    };
+
+    terminal::spawn(
+        on_output,
+        terminal_id.clone(),
+        working_dir,
+        command,
+        args,
+        cols,
+        rows,
+    )?;
+
+    // First launch of a native CLI session: flip to resume mode for next time.
+    if let Some(session) = session {
+        if session.terminal_command.is_some() && !session.terminal_started {
+            state.store.set_terminal_started(&terminal_id)?;
+        }
+    }
+    Ok(())
 }
 
 #[tauri::command]

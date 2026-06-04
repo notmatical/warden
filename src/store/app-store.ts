@@ -22,6 +22,7 @@ import type {
   Layout,
   PermissionMode,
   Provider,
+  ProviderSource,
   ProviderStatus,
   Session,
   SessionKind,
@@ -115,9 +116,6 @@ interface AppState {
   /** The active tab per group. */
   activeSessionByGroup: Record<string, string | null>
   sessions: Record<string, Session>
-  /** Provider CLI to launch in a native terminal session, by session id. Absent
-   *  for plain-shell terminals. Lives in memory — set when the session is made. */
-  nativeCommandBySession: Record<string, string>
   /** Install/auth status of each agent CLI provider. */
   providers: ProviderStatus[]
   eventsBySession: Record<string, EventRecord[]>
@@ -141,6 +139,7 @@ interface AppState {
   loadProviders: () => Promise<void>
   installProvider: (id: Provider) => Promise<void>
   updateProvider: (id: Provider) => Promise<void>
+  setProviderSource: (id: Provider, source: ProviderSource) => Promise<void>
   loadGroupData: (groupId: string) => Promise<void>
   createGroup: (name: string) => Promise<Group | null>
   selectGroup: (id: string) => Promise<void>
@@ -186,7 +185,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   tabsByGroup: {},
   activeSessionByGroup: {},
   sessions: {},
-  nativeCommandBySession: {},
   providers: [],
   eventsBySession: {},
   approvalResolvedBySession: {},
@@ -278,9 +276,26 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       await ipc.updateProvider(id)
       await get().loadProviders()
-      toast.success(`${name} is up to date`)
+      toast.success(`Updated ${name}`)
     } catch (error) {
       reportError(`Failed to update ${name}`, error)
+    }
+  },
+
+  setProviderSource: async (id, source) => {
+    // Optimistically reflect the choice; loadProviders reconciles the resolved
+    // binary, version, and update availability for the new source.
+    set((state) => ({
+      providers: state.providers.map((p) =>
+        p.id === id ? { ...p, source } : p,
+      ),
+    }))
+    try {
+      await ipc.setProviderSource(id, source)
+      await get().loadProviders()
+    } catch (error) {
+      reportError("Failed to change CLI source", error)
+      await get().loadProviders()
     }
   },
 
@@ -511,6 +526,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         kind: opts.kind,
         backend: opts.backend,
         isolate: opts.isolate,
+        nativeCommand: opts.nativeCommand,
       })
       set((state) => ({
         sessions: { ...state.sessions, [session.id]: session },
@@ -534,13 +550,6 @@ export const useAppStore = create<AppState>((set, get) => ({
           ? { ...state.layoutByGroup, [groupId]: DEFAULT_LAYOUT }
           : state.layoutByGroup,
         eventsBySession: { ...state.eventsBySession, [session.id]: [] },
-        // Set before the pane mounts so the terminal spawns the CLI, not a shell.
-        nativeCommandBySession: opts.nativeCommand
-          ? {
-              ...state.nativeCommandBySession,
-              [session.id]: opts.nativeCommand,
-            }
-          : state.nativeCommandBySession,
       }))
       get().saveGroupView(groupId)
       if (

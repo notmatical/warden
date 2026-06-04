@@ -14,10 +14,14 @@ use crate::error::{AppError, Result};
 /// Build the PTY command, started in `cwd`. With no `program`, runs the user's
 /// default shell — Windows uses PowerShell; elsewhere `$SHELL` (falling back to
 /// bash). When `program` is set (e.g. a provider's `claude`/`codex` CLI), it is
-/// launched directly instead of the shell.
-fn build_command(cwd: &str, program: Option<&str>) -> CommandBuilder {
+/// launched directly with `args` instead of the shell.
+fn build_command(cwd: &str, program: Option<&str>, args: &[String]) -> CommandBuilder {
     let mut cmd = match program {
-        Some(program) => CommandBuilder::new(program),
+        Some(program) => {
+            let mut cmd = CommandBuilder::new(program);
+            cmd.args(args);
+            cmd
+        }
         None if cfg!(windows) => CommandBuilder::new("powershell.exe"),
         None => {
             let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
@@ -35,6 +39,7 @@ pub fn spawn(
     terminal_id: String,
     working_dir: String,
     command: Option<String>,
+    args: Vec<String>,
     cols: u16,
     rows: u16,
 ) -> Result<()> {
@@ -50,7 +55,7 @@ pub fn spawn(
 
     let child = pair
         .slave
-        .spawn_command(build_command(&working_dir, command.as_deref()))
+        .spawn_command(build_command(&working_dir, command.as_deref(), &args))
         .map_err(|e| AppError::Agent(format!("failed to launch terminal: {e}")))?;
     // Drop the slave in the parent so EOF is observed when the child exits.
     drop(pair.slave);
