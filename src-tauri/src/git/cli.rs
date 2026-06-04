@@ -15,7 +15,7 @@ fn git(cwd: &Path, args: &[&str]) -> Command {
 }
 
 /// Run a git subcommand in `cwd`, returning stdout or a descriptive error.
-fn run(cwd: &Path, args: &[&str]) -> Result<String> {
+pub(crate) fn run(cwd: &Path, args: &[&str]) -> Result<String> {
     let output = git(cwd, args).output()?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);

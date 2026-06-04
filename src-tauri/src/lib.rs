@@ -95,6 +95,8 @@ pub fn run() {
             // git
             git::commands::session_git_status,
             git::commands::integrate_session,
+            git::commands::get_session_diff,
+            git::commands::get_session_commits,
             // agent recipes
             agent::commands::run_plan_to_code,
             // mentions

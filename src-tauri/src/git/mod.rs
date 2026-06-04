@@ -2,6 +2,7 @@
 //! isolated sessions.
 
 mod cli;
+pub mod diff;
 mod worktree;
 
 pub use cli::*;

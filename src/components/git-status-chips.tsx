@@ -10,6 +10,7 @@ import {
 import { useCallback, useEffect } from "react";
 
 import { LandSessionButton } from "@/components/land-session-dialog";
+import { SessionDiffButton } from "@/components/session-diff-dialog";
 import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
@@ -262,6 +263,9 @@ export function GitStatusChips({
 						url={session.prUrl}
 						state={session.prState}
 					/>
+				) : null}
+				{session?.isIsolated && !session.mergedAt ? (
+					<SessionDiffButton sessionId={sessionId} />
 				) : null}
 				<LandSessionButton
 					sessionId={sessionId}

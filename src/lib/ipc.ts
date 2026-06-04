@@ -1,5 +1,6 @@
 import { Channel, invoke } from "@tauri-apps/api/core"
 
+import type { DiffFile, GitCommit } from "@/types/git-diff"
 import type {
   Backend,
   EffortLevel,
@@ -129,6 +130,17 @@ export function setSessionRoots(
 
 export function sessionGitStatus(sessionId: string): Promise<RepoStatus[]> {
   return invoke("session_git_status", { sessionId })
+}
+
+export function getSessionDiff(sessionId: string): Promise<DiffFile[]> {
+  return invoke("get_session_diff", { sessionId })
+}
+
+export function getSessionCommits(
+  sessionId: string,
+  limit?: number
+): Promise<GitCommit[]> {
+  return invoke("get_session_commits", { sessionId, limit: limit ?? null })
 }
 
 export function integrateSession(

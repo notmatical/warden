@@ -161,3 +161,31 @@ pub async fn integrate_session(
         }
     }
 }
+
+/// Every change a session has made since it forked, for the diff view. Empty
+/// when the session has no base commit (non-git or merged).
+#[tauri::command]
+pub async fn get_session_diff(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Result<Vec<git::diff::DiffFile>> {
+    let session = state.store.get_session(&session_id)?;
+    let Some(base) = session.base_sha.as_deref() else {
+        return Ok(Vec::new());
+    };
+    git::diff::worktree_diff(Path::new(&session.working_dir), base)
+}
+
+/// The commits a session has made on its branch since it forked from base.
+#[tauri::command]
+pub async fn get_session_commits(
+    state: State<'_, AppState>,
+    session_id: String,
+    limit: Option<u32>,
+) -> Result<Vec<git::diff::Commit>> {
+    let session = state.store.get_session(&session_id)?;
+    let Some(base) = session.base_sha.as_deref() else {
+        return Ok(Vec::new());
+    };
+    git::diff::commits_since(Path::new(&session.working_dir), base, limit.unwrap_or(100))
+}
