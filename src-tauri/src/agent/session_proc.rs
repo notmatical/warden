@@ -29,8 +29,7 @@ struct Proc {
     child: Arc<Mutex<Child>>,
 }
 
-static PROCS: LazyLock<Mutex<HashMap<String, Proc>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+static PROCS: LazyLock<Mutex<HashMap<String, Proc>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
 fn registry() -> std::sync::MutexGuard<'static, HashMap<String, Proc>> {
     PROCS.lock().unwrap_or_else(|p| p.into_inner())
@@ -129,7 +128,10 @@ async fn writer_loop(mut stdin: ChildStdin, mut rx: mpsc::UnboundedReceiver<Stri
     }
 }
 
-async fn drain_stderr(mut stderr: tokio::process::ChildStderr, buf: Arc<tokio::sync::Mutex<String>>) {
+async fn drain_stderr(
+    mut stderr: tokio::process::ChildStderr,
+    buf: Arc<tokio::sync::Mutex<String>>,
+) {
     let mut s = String::new();
     let _ = stderr.read_to_string(&mut s).await;
     *buf.lock().await = s;

@@ -5,7 +5,7 @@ use std::path::Path;
 
 use tauri::State;
 
-use crate::domain::{Session, Project};
+use crate::domain::{Project, Session};
 use crate::error::{AppError, Result};
 use crate::git;
 use crate::state::AppState;
@@ -31,9 +31,6 @@ pub async fn open_project(state: State<'_, AppState>, path: String) -> Result<Pr
 }
 
 #[tauri::command]
-pub async fn list_sessions(
-    state: State<'_, AppState>,
-    project_id: String,
-) -> Result<Vec<Session>> {
+pub async fn list_sessions(state: State<'_, AppState>, project_id: String) -> Result<Vec<Session>> {
     state.store.list_sessions(&project_id)
 }

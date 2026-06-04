@@ -116,7 +116,12 @@ pub async fn list_commands(app: AppHandle, working_dir: String) -> Result<Vec<Sl
     Ok(out)
 }
 
-fn collect_commands(dir: PathBuf, scope: &str, out: &mut Vec<SlashCommand>, seen: &mut HashSet<String>) {
+fn collect_commands(
+    dir: PathBuf,
+    scope: &str,
+    out: &mut Vec<SlashCommand>,
+    seen: &mut HashSet<String>,
+) {
     let Ok(entries) = std::fs::read_dir(&dir) else {
         return;
     };
@@ -242,11 +247,7 @@ fn gh_list(working_dir: &str, kind: &str) -> Vec<RepoRef> {
 
 /// Fetch the title and body of a single issue or PR via the `gh` CLI.
 #[tauri::command]
-pub async fn fetch_repo_ref(
-    working_dir: String,
-    kind: String,
-    number: u64,
-) -> Result<RepoRefBody> {
+pub async fn fetch_repo_ref(working_dir: String, kind: String, number: u64) -> Result<RepoRefBody> {
     let sub = if kind == "pr" { "pr" } else { "issue" };
     let output = Command::new("gh")
         .current_dir(&working_dir)

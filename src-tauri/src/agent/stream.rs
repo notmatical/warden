@@ -46,8 +46,14 @@ pub fn parse_line(line: &str) -> Option<ParsedLine> {
 
     match value.get("type").and_then(Value::as_str) {
         Some("system") => Some(parse_system(&value)),
-        Some("assistant") => Some(ParsedLine::events(parse_content_blocks(&value, parse_assistant_block))),
-        Some("user") => Some(ParsedLine::events(parse_content_blocks(&value, parse_user_block))),
+        Some("assistant") => Some(ParsedLine::events(parse_content_blocks(
+            &value,
+            parse_assistant_block,
+        ))),
+        Some("user") => Some(ParsedLine::events(parse_content_blocks(
+            &value,
+            parse_user_block,
+        ))),
         Some("stream_event") => Some(parse_stream_event(&value)),
         Some("result") => Some(parse_result(&value)),
         _ => Some(ParsedLine::empty()),
@@ -125,7 +131,10 @@ fn parse_user_block(block: &Value) -> Option<AgentEvent> {
     if block.get("type").and_then(Value::as_str)? != "tool_result" {
         return None;
     }
-    let content = block.get("content").map(stringify_content).unwrap_or_default();
+    let content = block
+        .get("content")
+        .map(stringify_content)
+        .unwrap_or_default();
     Some(AgentEvent::ToolResult {
         tool_use_id: block
             .get("tool_use_id")
@@ -169,10 +178,8 @@ fn clip(mut s: String) -> String {
 
 fn parse_stream_event(value: &Value) -> ParsedLine {
     let event = value.get("event");
-    let is_delta = event
-        .and_then(|e| e.get("type"))
-        .and_then(Value::as_str)
-        == Some("content_block_delta");
+    let is_delta =
+        event.and_then(|e| e.get("type")).and_then(Value::as_str) == Some("content_block_delta");
     let delta = event.and_then(|e| e.get("delta"));
     let is_text = delta.and_then(|d| d.get("type")).and_then(Value::as_str) == Some("text_delta");
     if is_delta && is_text {

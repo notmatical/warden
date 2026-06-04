@@ -13,4 +13,3 @@ pub struct Group {
     pub layout: String,
     pub created_at: String,
 }
-
