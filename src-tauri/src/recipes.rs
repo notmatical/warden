@@ -51,6 +51,7 @@ fn session_in_dir(
         working_dir: dir.working_dir.clone(),
         branch: dir.branch.clone(),
         base_sha: dir.base_sha.clone(),
+        base_branch: dir.base_branch.clone(),
         is_isolated: dir.is_isolated,
         parent_id,
     }

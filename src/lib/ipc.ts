@@ -6,6 +6,8 @@ import type {
   EventRecord,
   FileEntry,
   Group,
+  IntegrateOutcome,
+  MergeMode,
   PermissionMode,
   PlanToCodeResult,
   Provider,
@@ -126,6 +128,14 @@ export function setSessionRoots(
 
 export function sessionGitStatus(sessionId: string): Promise<RepoStatus[]> {
   return invoke("session_git_status", { sessionId })
+}
+
+export function integrateSession(
+  sessionId: string,
+  message: string,
+  mode: MergeMode
+): Promise<IntegrateOutcome> {
+  return invoke("integrate_session", { sessionId, message, mode })
 }
 
 export function getEvents(sessionId: string): Promise<EventRecord[]> {

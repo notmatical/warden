@@ -222,6 +222,8 @@ pub struct Session {
     pub working_dir: String,
     pub branch: Option<String>,
     pub base_sha: Option<String>,
+    /// The repo branch an isolated session merges back into.
+    pub base_branch: Option<String>,
     pub is_isolated: bool,
     /// Tool patterns the user has approved for this session (`--allowedTools`),
     /// accumulated as denied tools are approved.
@@ -230,6 +232,9 @@ pub struct Session {
     pub cost_usd: f64,
     /// Set when this session was produced by a handoff from another session.
     pub parent_id: Option<String>,
+    /// When the session's branch was merged back into its base — `None` until
+    /// then. A merged session's worktree is gone, so it becomes read-only.
+    pub merged_at: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }

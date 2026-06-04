@@ -77,6 +77,7 @@ pub fn run() {
             commands::list_session_roots,
             commands::set_session_roots,
             commands::session_git_status,
+            commands::integrate_session,
             commands::get_events,
             commands::create_session,
             commands::update_session,

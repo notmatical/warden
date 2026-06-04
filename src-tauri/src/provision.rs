@@ -16,6 +16,8 @@ pub struct ProvisionedDir {
     pub working_dir: String,
     pub branch: Option<String>,
     pub base_sha: Option<String>,
+    /// The repo branch this session was rooted on — its merge target.
+    pub base_branch: Option<String>,
     pub is_isolated: bool,
 }
 
@@ -64,17 +66,20 @@ pub fn provision_working_dir(
             working_dir: ws.path.clone(),
             branch: None,
             base_sha: None,
+            base_branch: None,
             is_isolated: false,
         });
     }
 
     let base = git::head_sha(repo)?;
+    let base_branch = git::current_branch(repo);
 
     if !isolate {
         return Ok(ProvisionedDir {
             working_dir: ws.path.clone(),
             branch: None,
             base_sha: Some(base),
+            base_branch,
             is_isolated: false,
         });
     }
@@ -91,6 +96,7 @@ pub fn provision_working_dir(
         working_dir: dest.to_string_lossy().into_owned(),
         branch: Some(branch),
         base_sha: Some(base),
+        base_branch,
         is_isolated: true,
     })
 }

@@ -100,6 +100,7 @@ pub async fn create_session(
         working_dir: dir.working_dir,
         branch: dir.branch,
         base_sha: dir.base_sha,
+        base_branch: dir.base_branch,
         is_isolated: dir.is_isolated,
         parent_id: None,
     })?;
@@ -215,6 +216,7 @@ pub async fn set_session_isolation(
         &dir.working_dir,
         dir.branch.as_deref(),
         dir.base_sha.as_deref(),
+        dir.base_branch.as_deref(),
         dir.is_isolated,
     )?;
 

@@ -118,14 +118,25 @@ export interface Session {
   workingDir: string
   branch: string | null
   baseSha: string | null
+  baseBranch: string | null
   isIsolated: boolean
   allowedTools: string[]
   turns: number
   costUsd: number
   parentId: string | null
+  /** Set once the session's branch has been merged back; the worktree is gone. */
+  mergedAt: string | null
   createdAt: string
   updatedAt: string
 }
+
+/** How a session's branch is folded into its base when merging. */
+export type MergeMode = "squash" | "merge" | "rebase"
+
+/** Result of merging a session's branch back into its base. */
+export type IntegrateOutcome =
+  | { status: "merged" }
+  | { status: "conflict"; files: string[] }
 
 export interface RepoStatus {
   projectId: string

@@ -1,4 +1,4 @@
-import { CornerDownLeft, GitBranch, Square } from "lucide-react";
+import { CornerDownLeft, GitBranch, GitMerge, Square } from "lucide-react";
 import { type KeyboardEvent, useLayoutEffect, useRef, useState } from "react";
 import { EffortMenu } from "@/components/controls/effort-menu";
 import { ModeMenu } from "@/components/controls/mode-menu";
@@ -91,6 +91,18 @@ export function Composer({ sessionId }: { sessionId: string }) {
 
 	if (!session) {
 		return null;
+	}
+
+	// A merged session's worktree is gone — it becomes read-only.
+	if (session.mergedAt) {
+		return (
+			<div className="mx-auto w-full max-w-6xl px-3 pb-3">
+				<div className="flex items-center justify-center gap-2 rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
+					<GitMerge className="size-3.5" />
+					Merged into {session.baseBranch ?? "base"} · read-only
+				</div>
+			</div>
+		);
 	}
 
 	const isolated = session.isIsolated;

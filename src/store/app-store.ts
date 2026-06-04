@@ -19,7 +19,9 @@ import type {
   EventRecord,
   Group,
   GroupView,
+  IntegrateOutcome,
   Layout,
+  MergeMode,
   PermissionMode,
   Provider,
   ProviderSource,
@@ -152,6 +154,11 @@ interface AppState {
   setGithubSource: (source: ProviderSource) => Promise<void>
   openSettings: (section?: string) => void
   setSettingsOpen: (open: boolean) => void
+  integrateSession: (
+    sessionId: string,
+    message: string,
+    mode: MergeMode,
+  ) => Promise<IntegrateOutcome | null>
   loadGroupData: (groupId: string) => Promise<void>
   createGroup: (name: string) => Promise<Group | null>
   selectGroup: (id: string) => Promise<void>
@@ -359,6 +366,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   openSettings: (section = "providers") => set({ settingsOpen: true, settingsSection: section }),
   setSettingsOpen: (open) => set({ settingsOpen: open }),
+
+  integrateSession: async (sessionId, message, mode) => {
+    // Success updates the session (mergedAt) via the session-updated event.
+    try {
+      return await ipc.integrateSession(sessionId, message, mode)
+    } catch (error) {
+      reportError("Failed to merge session", error)
+      return null
+    }
+  },
 
   // Loads a group's roots and sessions into the store for the sidebar tree.
   // Does not change which tabs are open — that's driven by openSession.

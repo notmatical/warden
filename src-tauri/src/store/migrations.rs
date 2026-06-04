@@ -56,11 +56,13 @@ const MIGRATIONS: &[&str] = &[
         working_dir       TEXT NOT NULL,
         branch            TEXT,
         base_sha          TEXT,
+        base_branch       TEXT,
         is_isolated       INTEGER NOT NULL,
         allowed_tools     TEXT NOT NULL DEFAULT '[]',
         turns             INTEGER NOT NULL DEFAULT 0,
         cost_usd          REAL NOT NULL DEFAULT 0,
         parent_id         TEXT REFERENCES sessions(id) ON DELETE SET NULL,
+        merged_at         TEXT,
         created_at        TEXT NOT NULL,
         updated_at        TEXT NOT NULL
     );

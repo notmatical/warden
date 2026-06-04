@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowUp, GitBranch, Plus, X } from "lucide-react";
 import { useCallback } from "react";
 
+import { MergeSessionButton } from "@/components/merge-session-dialog";
 import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
@@ -202,6 +203,7 @@ export function GitStatusChips({
 				statuses={statuses}
 				refresh={refresh}
 			/>
+			<MergeSessionButton sessionId={sessionId} refresh={refresh} />
 		</div>
 	);
 }

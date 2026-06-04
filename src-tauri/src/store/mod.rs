@@ -34,6 +34,7 @@ pub struct NewSession {
     pub working_dir: String,
     pub branch: Option<String>,
     pub base_sha: Option<String>,
+    pub base_branch: Option<String>,
     pub is_isolated: bool,
     pub parent_id: Option<String>,
 }
@@ -293,11 +294,13 @@ impl Store {
             working_dir: new.working_dir,
             branch: new.branch,
             base_sha: new.base_sha,
+            base_branch: new.base_branch,
             is_isolated: new.is_isolated,
             allowed_tools: Vec::new(),
             turns: 0,
             cost_usd: 0.0,
             parent_id: new.parent_id,
+            merged_at: None,
             created_at: now.clone(),
             updated_at: now,
         };
@@ -308,9 +311,9 @@ impl Store {
                 id, group_id, project_id, title, backend, model, permission_mode, status, role,
                 agent_session_id, working_dir, branch, base_sha, is_isolated, allowed_tools, turns,
                 cost_usd, parent_id, created_at, updated_at, effort, auto_named, kind,
-                terminal_command
+                terminal_command, base_branch
              ) VALUES (
-                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24
+                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25
              )",
             rusqlite::params![
                 session.id,
@@ -337,6 +340,7 @@ impl Store {
                 session.auto_named as i64,
                 session.kind.as_str(),
                 session.terminal_command,
+                session.base_branch,
             ],
         )?;
         // Seed the primary root. Additional roots are added via set_session_roots.
@@ -404,21 +408,35 @@ impl Store {
         working_dir: &str,
         branch: Option<&str>,
         base_sha: Option<&str>,
+        base_branch: Option<&str>,
         is_isolated: bool,
     ) -> Result<()> {
         let conn = self.lock();
         conn.execute(
             "UPDATE sessions
-             SET working_dir = ?2, branch = ?3, base_sha = ?4, is_isolated = ?5, updated_at = ?6
+             SET working_dir = ?2, branch = ?3, base_sha = ?4, base_branch = ?5,
+                 is_isolated = ?6, updated_at = ?7
              WHERE id = ?1",
             (
                 id,
                 working_dir,
                 branch,
                 base_sha,
+                base_branch,
                 is_isolated as i64,
                 now_rfc3339(),
             ),
+        )?;
+        Ok(())
+    }
+
+    /// Mark a session as merged back into its base branch (its worktree is gone).
+    pub fn mark_session_merged(&self, id: &str) -> Result<()> {
+        let conn = self.lock();
+        let now = now_rfc3339();
+        conn.execute(
+            "UPDATE sessions SET merged_at = ?2, updated_at = ?2 WHERE id = ?1",
+            (id, now),
         )?;
         Ok(())
     }
@@ -605,13 +623,13 @@ const SESSION_SELECT: &str =
     "SELECT id, group_id, project_id, title, backend, model, permission_mode, status, role, \
     agent_session_id, working_dir, branch, base_sha, is_isolated, allowed_tools, turns, cost_usd, \
     parent_id, created_at, updated_at, effort, auto_named, kind, terminal_command, terminal_started, \
-    terminal_resume_id FROM sessions WHERE id = ?1";
+    terminal_resume_id, base_branch, merged_at FROM sessions WHERE id = ?1";
 
 const SESSION_SELECT_ALL: &str =
     "SELECT id, group_id, project_id, title, backend, model, permission_mode, status, role, \
     agent_session_id, working_dir, branch, base_sha, is_isolated, allowed_tools, turns, cost_usd, \
     parent_id, created_at, updated_at, effort, auto_named, kind, terminal_command, terminal_started, \
-    terminal_resume_id FROM sessions";
+    terminal_resume_id, base_branch, merged_at FROM sessions";
 
 fn map_project(row: &Row<'_>) -> rusqlite::Result<Project> {
     Ok(Project {
@@ -659,12 +677,14 @@ fn map_session(row: &Row<'_>) -> rusqlite::Result<Session> {
         working_dir: row.get("working_dir")?,
         branch: row.get("branch")?,
         base_sha: row.get("base_sha")?,
+        base_branch: row.get("base_branch")?,
         is_isolated: row.get::<_, i64>("is_isolated")? != 0,
         allowed_tools: serde_json::from_str(&row.get::<_, String>("allowed_tools")?)
             .unwrap_or_default(),
         turns: row.get("turns")?,
         cost_usd: row.get("cost_usd")?,
         parent_id: row.get("parent_id")?,
+        merged_at: row.get("merged_at")?,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
     })
