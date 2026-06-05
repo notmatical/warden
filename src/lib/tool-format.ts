@@ -205,9 +205,17 @@ export function describeTool(
 		case "Write": {
 			const path = asStr(inp.file_path) ?? asStr(inp.path);
 			const content = asStr(inp.content) ?? "";
+			// A new file reads as an all-addition diff (green, line-numbered).
+			const lines = content.replace(/\n$/, "");
+			const patch = lines
+				? lines
+						.split("\n")
+						.map((l) => `+${l}`)
+						.join("\n")
+				: "";
 			return fileView("Wrote", path, {
-				added: content ? content.split("\n").length : 0,
-				detail: content ? { kind: "code", path, text: content } : undefined,
+				added: lines ? lines.split("\n").length : 0,
+				detail: patch ? { kind: "diff", path, patch } : undefined,
 			});
 		}
 

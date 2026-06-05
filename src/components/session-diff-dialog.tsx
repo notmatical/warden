@@ -124,7 +124,7 @@ export function SessionDiffButton({ sessionId }: { sessionId: string }) {
 										Binary file — no textual diff.
 									</p>
 								) : current ? (
-									<DiffLines patch={current.patch} />
+									<DiffLines patch={current.patch} path={current.path} />
 								) : null}
 							</div>
 						</div>
