@@ -259,14 +259,21 @@ impl AgentManager {
     /// whether a turn was actually running. The conversation resumes on the next
     /// message (the process re-spawns with `--resume`).
     pub fn cancel(&self, app: &AppHandle, store: &Store, session_id: &str) -> bool {
+        let session = store.get_session(session_id).ok();
         let was_running = matches!(
-            store.get_session(session_id).map(|s| s.status),
-            Ok(SessionStatus::Running)
+            session.as_ref().map(|s| s.status),
+            Some(SessionStatus::Running)
         );
-        // Settle the status before killing so the reader's EOF handler reads this
+        // Settle the status before stopping so the reader's EOF handler reads this
         // as a cancel rather than a crash.
         let _ = store.set_session_status(session_id, SessionStatus::Idle);
-        session_proc::kill(session_id);
+        // Codex turns run on the shared app-server — interrupt the turn; Claude
+        // turns run a per-session process — kill it.
+        if matches!(session.as_ref().map(|s| s.backend), Some(Backend::Codex)) {
+            codex::interrupt(session_id);
+        } else {
+            session_proc::kill(session_id);
+        }
         if let Ok(session) = store.get_session(session_id) {
             emit_session(app, &session);
         }

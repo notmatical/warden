@@ -46,6 +46,9 @@ struct CodexServer {
     pending: Mutex<HashMap<u64, oneshot::Sender<std::result::Result<Value, String>>>>,
     /// Active threads: threadId → notification sink for the owning turn.
     threads: Mutex<HashMap<String, mpsc::UnboundedSender<Notification>>>,
+    /// In-flight turns: session id → (threadId, turnId). The turnId is empty
+    /// until `turn/started`; used to send `turn/interrupt` on cancel.
+    turns: Mutex<HashMap<String, (String, String)>>,
 }
 
 static SERVER: OnceLock<CodexServer> = OnceLock::new();
@@ -92,6 +95,7 @@ pub async fn ensure_running() -> Result<()> {
         next_id: AtomicU64::new(1),
         pending: Mutex::new(HashMap::new()),
         threads: Mutex::new(HashMap::new()),
+        turns: Mutex::new(HashMap::new()),
     };
 
     // Another task may have raced us here; if so, drop ours (its child is killed
@@ -324,6 +328,67 @@ fn unregister_thread(thread_id: &str) {
     }
 }
 
+fn register_turn(session_id: &str, thread_id: &str) {
+    if let Some(server) = SERVER.get() {
+        server
+            .turns
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .insert(session_id.to_string(), (thread_id.to_string(), String::new()));
+    }
+}
+
+/// Record the turn id once `turn/started` arrives, so a cancel can address it.
+fn set_turn_id(session_id: &str, turn_id: &str) {
+    if let Some(server) = SERVER.get() {
+        if let Some(entry) = server
+            .turns
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .get_mut(session_id)
+        {
+            entry.1 = turn_id.to_string();
+        }
+    }
+}
+
+fn unregister_turn(session_id: &str) {
+    if let Some(server) = SERVER.get() {
+        server
+            .turns
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .remove(session_id);
+    }
+}
+
+/// Interrupt a session's in-flight Codex turn (`turn/interrupt`). Returns whether
+/// a turn was found. The server ends the turn and emits a terminating
+/// `turn/completed`, which settles the session to idle and breaks its drain loop.
+pub fn interrupt(session_id: &str) -> bool {
+    let Some(server) = SERVER.get() else {
+        return false;
+    };
+    let entry = server
+        .turns
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .get(session_id)
+        .cloned();
+    let Some((thread_id, turn_id)) = entry else {
+        return false;
+    };
+    if turn_id.is_empty() {
+        return false;
+    }
+    let params = json!({ "threadId": thread_id, "turnId": turn_id });
+    // Fire-and-forget — we don't need the response, only for the server to stop.
+    tauri::async_runtime::spawn(async move {
+        let _ = send_request("turn/interrupt", params).await;
+    });
+    true
+}
+
 /// Kill the shared app-server (app shutdown). Idempotent.
 pub fn kill_all() {
     if let Some(server) = SERVER.get() {
@@ -415,6 +480,9 @@ pub async fn run_turn(
 
     let (tx, mut rx) = mpsc::unbounded_channel::<Notification>();
     register_thread(&thread_id, tx);
+    // Track the turn so a cancel can `turn/interrupt` it (turn id filled in on
+    // the `turn/started` notification).
+    register_turn(&session.id, &thread_id);
 
     let turn_params = json!({
         "threadId": thread_id,
@@ -423,6 +491,7 @@ pub async fn run_turn(
     });
     if let Err(e) = send_request("turn/start", turn_params).await {
         unregister_thread(&thread_id);
+        unregister_turn(&session.id);
         return Err(e);
     }
 
@@ -432,6 +501,7 @@ pub async fn run_turn(
         }
     }
     unregister_thread(&thread_id);
+    unregister_turn(&session.id);
     Ok(())
 }
 
@@ -445,6 +515,16 @@ fn handle_notification(
     params: &Value,
 ) -> bool {
     match method {
+        "turn/started" => {
+            if let Some(turn_id) = params
+                .get("turn")
+                .and_then(|t| t.get("id"))
+                .and_then(Value::as_str)
+            {
+                set_turn_id(session_id, turn_id);
+            }
+            false
+        }
         "item/agentMessage/delta" => {
             if let Some(delta) = params.get("delta").and_then(Value::as_str) {
                 emit_delta(app, session_id, delta);
