@@ -147,7 +147,7 @@ function SessionRow({ sessionId }: { sessionId: string }) {
 			<ContextMenuTrigger asChild>
 				<SidebarMenuSubItem>
 					{editing ? (
-						<div className="flex h-7 items-center gap-2 rounded-xl bg-sidebar-accent pr-2 pl-2.5 ring-1 ring-transparent ring-inset focus-within:ring-ring/50">
+						<div className="flex h-7 items-center gap-2 rounded-lg bg-sidebar-accent pr-2 pl-2.5 ring-1 ring-transparent ring-inset focus-within:ring-ring/50">
 							<SessionFavicon
 								kind={session.kind}
 								backend={session.backend}
@@ -413,7 +413,7 @@ function GroupRow({
 			<ContextMenu>
 				<ContextMenuTrigger asChild>
 					{editing ? (
-						<div className="flex h-8 items-center gap-2 rounded-xl bg-sidebar-accent pr-2 pl-2.5 ring-1 ring-transparent ring-inset focus-within:ring-ring/50">
+						<div className="flex h-8 items-center gap-2 rounded-lg bg-sidebar-accent pr-2 pl-2.5 ring-1 ring-transparent ring-inset focus-within:ring-ring/50">
 							<Layers className="size-4 shrink-0 opacity-70" />
 							<Input
 								autoFocus
