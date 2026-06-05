@@ -1,4 +1,3 @@
-import { open } from "@tauri-apps/plugin-dialog";
 import { create } from "zustand";
 import { onAgentDelta, onAgentEvent, onSessionUpdated } from "@/lib/events";
 import * as ipc from "@/lib/ipc";
@@ -21,6 +20,8 @@ import * as terminals from "@/lib/terminal-instances";
 import { readView, writeView } from "@/lib/view";
 
 import { NATIVE_CLI, NATIVE_TITLE, reportError, showSession } from "./shared";
+import { createGitSlice } from "./slices/git";
+import { createGroupsSlice } from "./slices/groups";
 import { createProvidersSlice } from "./slices/providers";
 import { createUiSlice } from "./slices/ui";
 import type { AppState } from "./types";
@@ -36,11 +37,9 @@ let listenersWired = false;
 export const useAppStore = create<AppState>((set, get, store) => ({
 	...createUiSlice(set, get, store),
 	...createProvidersSlice(set, get, store),
+	...createGroupsSlice(set, get, store),
+	...createGitSlice(set, get, store),
 
-	groups: [],
-	activeGroupId: null,
-	rootsByGroup: {},
-	sessionsByGroup: {},
 	openTabs: [],
 	activeSessionId: null,
 	layout: emptyTree(),
@@ -52,7 +51,6 @@ export const useAppStore = create<AppState>((set, get, store) => ({
 	startedAtBySession: {},
 
 	initialized: false,
-	loadingGroups: false,
 	loadingEventsBySession: {},
 
 	init: async () => {
@@ -110,244 +108,6 @@ export const useAppStore = create<AppState>((set, get, store) => ({
 		set({ openTabs, activeSessionId, layout });
 		if (activeSessionId && !get().eventsBySession[activeSessionId]) {
 			void get().loadEvents(activeSessionId);
-		}
-	},
-
-	integrateSession: async (sessionId, message, mode) => {
-		// Success updates the session (mergedAt) via the session-updated event.
-		try {
-			return await ipc.integrateSession(sessionId, message, mode);
-		} catch (error) {
-			reportError("Failed to merge session", error);
-			return null;
-		}
-	},
-
-	openPullRequest: async (sessionId, title, body, draft) => {
-		// Success records the PR on the session via the session-updated event.
-		try {
-			return await ipc.openPullRequest(sessionId, title, body, draft);
-		} catch (error) {
-			reportError("Failed to open pull request", error);
-			return null;
-		}
-	},
-
-	refreshPrStatus: async (sessionId) => {
-		try {
-			return await ipc.refreshPrStatus(sessionId);
-		} catch {
-			return null;
-		}
-	},
-
-	mergePullRequest: async (sessionId, strategy) => {
-		// Success marks the session merged via the session-updated event.
-		try {
-			await ipc.mergePullRequest(sessionId, strategy);
-			return true;
-		} catch (error) {
-			reportError("Failed to merge pull request", error);
-			return false;
-		}
-	},
-
-	syncWorktree: async (sessionId, mode) => {
-		try {
-			return await ipc.syncWorktree(sessionId, mode);
-		} catch (error) {
-			reportError("Failed to sync with base", error);
-			return null;
-		}
-	},
-
-	checkoutPr: async (projectId, number) => {
-		try {
-			const session = await ipc.checkoutPr(
-				projectId,
-				number,
-				DEFAULT_CHAT_MODEL,
-			);
-			const groupId = session.groupId;
-			set((state) => ({
-				sessions: { ...state.sessions, [session.id]: session },
-				sessionsByGroup: {
-					...state.sessionsByGroup,
-					[groupId]: [
-						...(state.sessionsByGroup[groupId] ?? []),
-						session.id,
-					],
-				},
-				openTabs: state.openTabs.includes(session.id)
-					? state.openTabs
-					: [...state.openTabs, session.id],
-				activeSessionId: session.id,
-				layout: showSession(state.layout, state.activeSessionId, session.id),
-				eventsBySession: { ...state.eventsBySession, [session.id]: [] },
-			}));
-			get().saveView();
-			if (get().activeGroupId !== groupId) await get().selectGroup(groupId);
-			return session;
-		} catch (error) {
-			reportError("Failed to check out PR", error);
-			return null;
-		}
-	},
-
-	// Loads a group's roots and sessions into the store for the sidebar tree.
-	// Purely organizational — the open tabs/layout are global (see restoreView).
-	loadGroupData: async (groupId) => {
-		try {
-			const [roots, sessions] = await Promise.all([
-				ipc.listGroupRoots(groupId),
-				ipc.listGroupSessions(groupId),
-			]);
-			set((state) => {
-				const nextSessions = { ...state.sessions };
-				for (const session of sessions) {
-					nextSessions[session.id] = session;
-				}
-				return {
-					sessions: nextSessions,
-					rootsByGroup: { ...state.rootsByGroup, [groupId]: roots },
-					sessionsByGroup: {
-						...state.sessionsByGroup,
-						[groupId]: sessions.map((s) => s.id),
-					},
-				};
-			});
-		} catch (error) {
-			reportError("Failed to load group", error);
-		}
-	},
-
-	createGroup: async (name) => {
-		try {
-			const group = await ipc.createGroup(name);
-			set((state) => ({
-				groups: [...state.groups, group],
-				activeGroupId: group.id,
-				rootsByGroup: { ...state.rootsByGroup, [group.id]: [] },
-				sessionsByGroup: { ...state.sessionsByGroup, [group.id]: [] },
-			}));
-			return group;
-		} catch (error) {
-			reportError("Failed to create group", error);
-			return null;
-		}
-	},
-
-	selectGroup: async (id) => {
-		if (get().activeGroupId === id) {
-			return;
-		}
-		set({ activeGroupId: id });
-		if (!get().rootsByGroup[id]) {
-			await get().loadGroupData(id);
-		}
-	},
-
-	renameGroup: async (id, name) => {
-		const trimmed = name.trim();
-		const current = get().groups.find((g) => g.id === id);
-		if (!current || !trimmed || trimmed === current.name) return;
-		set((state) => ({
-			groups: state.groups.map((g) =>
-				g.id === id ? { ...g, name: trimmed } : g,
-			),
-		}));
-		try {
-			await ipc.renameGroup(id, trimmed);
-		} catch (error) {
-			set((state) => ({
-				groups: state.groups.map((g) => (g.id === id ? current : g)),
-			}));
-			reportError("Failed to rename group", error);
-		}
-	},
-
-	deleteGroup: async (id) => {
-		const { groups, sessionsByGroup, sessions } = get();
-		const ownedSessions = sessionsByGroup[id] ?? [];
-		for (const sid of ownedSessions) {
-			if (sessions[sid]?.kind === "terminal") {
-				terminals.dispose(sid);
-			}
-		}
-		const removed = new Set(get().sessionsByGroup[id] ?? []);
-		set((state) => {
-			const nextGroups = state.groups.filter((g) => g.id !== id);
-			let activeGroupId = state.activeGroupId;
-			if (activeGroupId === id) {
-				activeGroupId = nextGroups[0]?.id ?? null;
-			}
-			const omit = <T>(record: Record<string, T>): Record<string, T> =>
-				Object.fromEntries(
-					Object.entries(record).filter(([gid]) => gid !== id),
-				);
-			// The deleted group's sessions leave the global viewport too.
-			const openTabs = state.openTabs.filter((sid) => !removed.has(sid));
-			let layout = state.layout;
-			for (const sid of removed) layout = detachSession(layout, sid);
-			const activeSessionId =
-				state.activeSessionId && removed.has(state.activeSessionId)
-					? (firstLeaf(layout).sessionId ?? openTabs[0] ?? null)
-					: state.activeSessionId;
-			return {
-				groups: nextGroups,
-				activeGroupId,
-				rootsByGroup: omit(state.rootsByGroup),
-				sessionsByGroup: omit(state.sessionsByGroup),
-				openTabs,
-				activeSessionId,
-				layout,
-			};
-		});
-		get().saveView();
-		try {
-			await ipc.deleteGroup(id);
-		} catch (error) {
-			reportError("Failed to delete group", error);
-			set({ groups });
-		}
-	},
-
-	addRoot: async (groupId) => {
-		try {
-			const selected = await open({ directory: true, multiple: false });
-			if (typeof selected !== "string") {
-				return;
-			}
-			const project = await ipc.addGroupRoot(groupId, selected);
-			set((state) => {
-				const roots = state.rootsByGroup[groupId] ?? [];
-				return {
-					rootsByGroup: {
-						...state.rootsByGroup,
-						[groupId]: roots.some((p) => p.id === project.id)
-							? roots.map((p) => (p.id === project.id ? project : p))
-							: [...roots, project],
-					},
-				};
-			});
-		} catch (error) {
-			reportError("Failed to add folder", error);
-		}
-	},
-
-	removeRoot: async (groupId, projectId) => {
-		try {
-			await ipc.removeGroupRoot(groupId, projectId);
-			set((state) => ({
-				rootsByGroup: {
-					...state.rootsByGroup,
-					[groupId]: (state.rootsByGroup[groupId] ?? []).filter(
-						(p) => p.id !== projectId,
-					),
-				},
-			}));
-		} catch (error) {
-			reportError("Failed to remove folder", error);
 		}
 	},
 
