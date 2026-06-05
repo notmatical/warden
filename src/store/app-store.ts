@@ -246,6 +246,7 @@ interface AppState {
 	sendMessage: (sessionId: string, text: string) => Promise<void>;
 	cancel: (sessionId: string) => Promise<void>;
 	approveTools: (sessionId: string, patterns: string[]) => Promise<void>;
+	approvePlan: (sessionId: string) => Promise<void>;
 	resolveApproval: (sessionId: string, eventId: string) => void;
 	runPlanToCode: (opts: RunPlanToCodeOptions) => Promise<void>;
 	loadEvents: (sessionId: string) => Promise<void>;
@@ -1047,6 +1048,30 @@ export const useAppStore = create<AppState>((set, get) => ({
 			await ipc.approveTools(sessionId, patterns);
 		} catch (error) {
 			reportError("Failed to approve tools", error);
+		}
+	},
+
+	approvePlan: async (sessionId) => {
+		// Optimistically leave plan mode so the composer's mode chip updates
+		// instantly; the backend emits the authoritative session-updated.
+		const current = get().sessions[sessionId];
+		if (current && current.permissionMode === "plan") {
+			set((state) => ({
+				sessions: {
+					...state.sessions,
+					[sessionId]: { ...current, permissionMode: "acceptEdits" },
+				},
+			}));
+		}
+		try {
+			await ipc.approvePlan(sessionId);
+		} catch (error) {
+			if (current) {
+				set((state) => ({
+					sessions: { ...state.sessions, [sessionId]: current },
+				}));
+			}
+			reportError("Failed to approve plan", error);
 		}
 	},
 

@@ -11,11 +11,12 @@ import {
 	AskUserQuestion,
 	parseQuestions,
 } from "@/components/ask-user-question";
+import { PlanApproval } from "@/components/plan-approval";
 import { StreamingStatus } from "@/components/streaming-status";
 import { ToolActivity } from "@/components/tool-activity";
 import { Markdown } from "@/components/ui/markdown";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { isSpecialTool } from "@/lib/agent-tools";
+import { isSpecialTool, resolvePlanContent } from "@/lib/agent-tools";
 import { copyText } from "@/lib/clipboard";
 import { relativeTime } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -155,6 +156,29 @@ function QuestionBlock({
 	);
 }
 
+/** An agent's ExitPlanMode tool call, rendered as a reviewable plan. Approving
+ *  flips the session out of plan mode and resumes it to implement; the agent
+ *  paused after presenting, so it continues on the approval message. */
+function PlanBlock({
+	event,
+	sessionId,
+	answered,
+}: {
+	event: EventRecord;
+	sessionId: string;
+	answered: boolean;
+}) {
+	const approvePlan = useAppStore((s) => s.approvePlan);
+	if (event.type !== "tool_use") return null;
+	return (
+		<PlanApproval
+			plan={resolvePlanContent(event.input)}
+			answered={answered}
+			onApprove={() => void approvePlan(sessionId)}
+		/>
+	);
+}
+
 /** True if the user sends a message anywhere after index `i` — i.e. an
  *  AskUserQuestion at `i` has since been answered. */
 function repliedAfter(events: EventRecord[], i: number): boolean {
@@ -177,6 +201,7 @@ function renderTimeline(events: EventRecord[], sessionId: string): ReactNode[] {
 	const droppedResults = new Set<string>();
 	let toolRun: EventRecord[] = [];
 	let awaitingReply = false; // inside an unanswered AskUserQuestion
+	let pendingPlan = false; // stopped on an unapproved plan, awaiting approval
 
 	const flushTools = () => {
 		if (toolRun.length === 0) return;
@@ -185,8 +210,11 @@ function renderTimeline(events: EventRecord[], sessionId: string): ReactNode[] {
 	};
 
 	events.forEach((event, i) => {
-		// A reply closes the open question, re-enabling assistant text.
-		if (event.type === "user_message") awaitingReply = false;
+		// A reply closes the open question/plan, re-enabling assistant text.
+		if (event.type === "user_message") {
+			awaitingReply = false;
+			pendingPlan = false;
+		}
 		if (event.type === "assistant_text" && awaitingReply) return;
 		// A subagent's narration is folded under its Task (its tools nest in the
 		// accordion); don't render it standalone, and don't break the tool run.
@@ -194,6 +222,9 @@ function renderTimeline(events: EventRecord[], sessionId: string): ReactNode[] {
 		if (event.type === "tool_result" && droppedResults.has(event.tool_use_id)) {
 			return;
 		}
+		// A plan pause ends the turn with an error result (ExitPlanMode was
+		// "denied"); that's expected, not a failure — don't render it as one.
+		if (event.type === "result" && event.is_error && pendingPlan) return;
 
 		// Special tools lift out into their own widget. Only AskUserQuestion has
 		// one today; future ones (plan/todo) add a branch here. Anything in the
@@ -207,6 +238,21 @@ function renderTimeline(events: EventRecord[], sessionId: string): ReactNode[] {
 				nodes.push(
 					<QuestionBlock
 						key={`q-${event.id}`}
+						event={event}
+						sessionId={sessionId}
+						answered={repliedAfter(events, i)}
+					/>,
+				);
+				return;
+			}
+			if (event.name === "ExitPlanMode") {
+				// The plan lives in the call's input; drop its auto-denied result.
+				flushTools();
+				droppedResults.add(event.id);
+				pendingPlan = !repliedAfter(events, i);
+				nodes.push(
+					<PlanBlock
+						key={`plan-${event.id}`}
 						event={event}
 						sessionId={sessionId}
 						answered={repliedAfter(events, i)}

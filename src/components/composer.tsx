@@ -3,6 +3,7 @@ import {
 	type KeyboardEvent,
 	useCallback,
 	useLayoutEffect,
+	useMemo,
 	useRef,
 	useState,
 } from "react";
@@ -83,6 +84,15 @@ export function Composer({ sessionId }: { sessionId: string }) {
 		if (last?.type !== "permission_request") return null;
 		return s.approvalResolvedBySession[sessionId] === last.id ? null : last;
 	});
+	// ExitPlanMode is approved via the in-transcript plan widget, so drop it from
+	// the generic approval bar — otherwise the same denial surfaces twice.
+	const approvalDenials = useMemo(
+		() =>
+			pendingApproval?.denials.filter((d) => d.toolName !== "ExitPlanMode") ??
+			[],
+		[pendingApproval],
+	);
+	const showApproval = approvalDenials.length > 0;
 
 	// Grow the textarea with its content, from a single line up to a cap.
 	const autosize = useCallback(() => {
@@ -158,11 +168,11 @@ export function Composer({ sessionId }: { sessionId: string }) {
 	return (
 		<div className="mx-auto w-full max-w-6xl px-3 pb-3">
 			<div className="flex flex-col">
-				{pendingApproval ? (
+				{showApproval && pendingApproval ? (
 					<PermissionApproval
 						sessionId={sessionId}
 						eventId={pendingApproval.id}
-						denials={pendingApproval.denials}
+						denials={approvalDenials}
 					/>
 				) : (
 					<GitStatusChips

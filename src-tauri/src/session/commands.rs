@@ -295,3 +295,33 @@ pub async fn approve_tools(
         .resume(app, state.store.clone(), session)
         .await
 }
+
+/// Approve the agent's plan: leave `plan` mode for `acceptEdits` and resume so
+/// the agent implements it. The persistent process is killed inside
+/// `resume_with`, so it respawns with the new permission mode.
+#[tauri::command]
+pub async fn approve_plan(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Result<()> {
+    let session = state.store.get_session(&session_id)?;
+    state.store.update_session_settings(
+        &session_id,
+        &session.model,
+        session.backend,
+        PermissionMode::AcceptEdits,
+        session.effort,
+    )?;
+    let updated = state.store.get_session(&session_id)?;
+    emit_session(&app, &updated);
+    state
+        .manager
+        .resume_with(
+            app,
+            state.store.clone(),
+            updated,
+            "The plan is approved. Please implement it now.".to_string(),
+        )
+        .await
+}

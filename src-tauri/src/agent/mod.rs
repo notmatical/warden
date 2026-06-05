@@ -230,14 +230,23 @@ impl AgentManager {
     /// process so it re-spawns with the updated `--allowedTools`, then nudge the
     /// agent to continue (it retries the denied step).
     pub async fn resume(&self, app: AppHandle, store: Store, session: Session) -> Result<()> {
+        self.resume_with(app, store, session, "Approved — please continue.".to_string())
+            .await
+    }
+
+    /// Kill the session's process so it re-spawns with the session's current
+    /// settings (model, permission mode, allowlist), then run `prompt` as the
+    /// next turn. Backs both tool approval (continue) and plan approval (which
+    /// flips the mode out of `plan` before calling this).
+    pub async fn resume_with(
+        &self,
+        app: AppHandle,
+        store: Store,
+        session: Session,
+        prompt: String,
+    ) -> Result<()> {
         session_proc::kill(&session.id);
-        self.run_turn(
-            app,
-            store,
-            session,
-            "Approved — please continue.".to_string(),
-        )
-        .await
+        self.run_turn(app, store, session, prompt).await
     }
 
     /// Run a turn to completion and return its assistant text. Used by recipes,

@@ -96,6 +96,7 @@ pub fn run() {
             session::commands::send_message,
             session::commands::cancel_session,
             session::commands::approve_tools,
+            session::commands::approve_plan,
             // git
             git::commands::session_git_status,
             git::commands::integrate_session,

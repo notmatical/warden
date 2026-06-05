@@ -337,6 +337,10 @@ export function approveTools(
   return invoke("approve_tools", { sessionId, patterns })
 }
 
+export function approvePlan(sessionId: string): Promise<void> {
+  return invoke("approve_plan", { sessionId })
+}
+
 export interface RunPlanToCodeInput {
   projectId: string
   task: string
