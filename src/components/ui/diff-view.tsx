@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { type CSSProperties, useEffect, useMemo, useState } from "react";
 
 import {
 	type Highlighted,
@@ -84,7 +84,7 @@ const SIGN_CLASS = {
 } as const;
 
 /** The highlighted diff surface — colored rows with a sign + line-number gutter
- *  on the app's warm `--code` surface. Owns no scrolling/border; a wrapper
+ *  on the app's `muted` surface. Owns no scrolling/border; a wrapper
  *  provides those. */
 export function DiffLines({
 	patch,
@@ -99,7 +99,7 @@ export function DiffLines({
 	const hl = useHighlighted(code, lang ?? langFromPath(path));
 
 	return (
-		<div className="w-max min-w-full bg-code font-mono text-[12px] leading-[1.6] text-code-foreground">
+		<div className="w-max min-w-full bg-muted/40 font-mono text-[12px] leading-[1.6] text-foreground">
 			{rows.map((row, i) => {
 				if (row.kind === "hunk") {
 					return (
@@ -140,10 +140,8 @@ export function DiffLines({
 										<span
 											// biome-ignore lint/suspicious/noArrayIndexKey: tokens are positional
 											key={ti}
-											style={{
-												color: t.color,
-												fontStyle: t.italic ? "italic" : undefined,
-											}}
+											data-tok
+											style={t.style as CSSProperties | undefined}
 										>
 											{t.content}
 										</span>

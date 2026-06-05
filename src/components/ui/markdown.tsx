@@ -59,7 +59,7 @@ function CodeBlock({ code, lang }: { code: string; lang?: string }) {
 		<div className="group not-prose relative my-3 text-[13px]">
 			{html ? (
 				<div
-					className="overflow-x-auto rounded-lg bg-code [&>pre]:rounded-lg [&>pre]:!bg-transparent [&>pre]:p-3.5"
+					className="overflow-x-auto rounded-lg bg-muted/40 [&>pre]:rounded-lg [&>pre]:!bg-transparent [&>pre]:p-3.5"
 					dangerouslySetInnerHTML={{ __html: html }}
 				/>
 			) : (

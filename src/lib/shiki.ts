@@ -1,12 +1,14 @@
 import { type BundledLanguage, codeToHtml, codeToTokens } from "shiki"
 
-// Warm, low-saturation theme whose cream foreground matches the app's palette,
-// so highlighted code reads as part of the UI, not a pasted-in github block.
-const THEME = "vitesse-dark"
+// Warm, low-saturation light+dark pair so highlighted code reads as part of the
+// UI in either mode. Colors come back as `--shiki-light`/`--shiki-dark` CSS
+// variables (see `defaultColor: false`), resolved per-theme in globals.css — so
+// the surface can use the app's own tokens instead of a baked-in code color.
+const THEMES = { light: "vitesse-light", dark: "vitesse-dark" } as const
 
 /**
  * Highlight a code block to themed HTML. Shiki loads only the requested grammar
- * and theme on demand (the bundler code-splits them), so this stays cheap.
+ * and themes on demand (the bundler code-splits them), so this stays cheap.
  * Falls back to plain `text` highlighting, then to `null` so callers can render
  * an unstyled `<pre>` instead.
  */
@@ -17,29 +19,27 @@ export async function highlightCode(
   const language = lang?.toLowerCase() || "text"
 
   try {
-    return await codeToHtml(code, { lang: language, theme: THEME })
+    return await codeToHtml(code, { lang: language, themes: THEMES, defaultColor: false })
   } catch {
     try {
-      return await codeToHtml(code, { lang: "text", theme: THEME })
+      return await codeToHtml(code, { lang: "text", themes: THEMES, defaultColor: false })
     } catch {
       return null
     }
   }
 }
 
-/** One syntax-highlighted span: text plus its themed color/style. */
+/** One syntax-highlighted span: text plus its per-theme color CSS variables
+ *  (`--shiki-light`/`--shiki-dark`), resolved to `color` by theme in CSS. */
 export interface HlToken {
   content: string
-  color?: string
-  italic?: boolean
+  style?: Record<string, string>
 }
 
-/** A code block tokenized into per-line spans, with the theme's surface colors —
- *  used to render diffs/code with our own gutter and line decorations. */
+/** A code block tokenized into per-line spans — used to render diffs/code with
+ *  our own gutter and line decorations on the app's surface. */
 export interface Highlighted {
   lines: HlToken[][]
-  bg: string
-  fg: string
 }
 
 const EXT_LANG: Record<string, string> = {
@@ -65,21 +65,12 @@ export function langFromPath(path: string | undefined): string {
 }
 
 function toHighlighted(result: {
-  tokens: { content: string; color?: string; fontStyle?: number }[][]
-  bg?: string
-  fg?: string
+  tokens: { content: string; htmlStyle?: Record<string, string> }[][]
 }): Highlighted {
   return {
     lines: result.tokens.map((line) =>
-      line.map((t) => ({
-        content: t.content,
-        color: t.color,
-        // fontStyle is a bitmask; bit 1 is italic.
-        italic: ((t.fontStyle ?? 0) & 1) !== 0,
-      }))
+      line.map((t) => ({ content: t.content, style: t.htmlStyle }))
     ),
-    bg: result.bg ?? "#24292e",
-    fg: result.fg ?? "#e1e4e8",
   }
 }
 
@@ -92,11 +83,17 @@ export async function highlightTokens(
     // Shiki types `lang` as a union of bundled ids; ours is a runtime string —
     // a miss just throws and falls through to the plaintext path below.
     return toHighlighted(
-      await codeToTokens(code, { lang: (lang || "text") as BundledLanguage, theme: THEME })
+      await codeToTokens(code, {
+        lang: (lang || "text") as BundledLanguage,
+        themes: THEMES,
+        defaultColor: false,
+      })
     )
   } catch {
     try {
-      return toHighlighted(await codeToTokens(code, { lang: "text", theme: THEME }))
+      return toHighlighted(
+        await codeToTokens(code, { lang: "text", themes: THEMES, defaultColor: false })
+      )
     } catch {
       return null
     }
