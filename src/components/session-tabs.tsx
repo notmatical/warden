@@ -1,7 +1,12 @@
-import { useDraggable } from "@dnd-kit/core";
-import { Loader2, Pencil, SquareTerminal, X } from "lucide-react";
+import { useDraggable, useDroppable } from "@dnd-kit/core";
+import { Loader2, Pencil, X } from "lucide-react";
 import { type KeyboardEvent, useState } from "react";
-import { AnthropicIcon, OpenAIIcon } from "@/components/icons/brand";
+import {
+	AnthropicIcon,
+	ClaudeIcon,
+	CodexIcon,
+	OpenAIIcon,
+} from "@/components/icons/brand";
 import { Badge } from "@/components/ui/badge";
 import {
 	ContextMenu,
@@ -14,10 +19,6 @@ import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app-store";
 
-// Stable empty reference so the `?? EMPTY` fallback doesn't allocate a new array
-// each selector run (the store has no shallow-equality middleware).
-const EMPTY: string[] = [];
-
 function Tab({ sessionId }: { sessionId: string }) {
 	// Narrow primitive selectors — re-render only when the rendered fields change.
 	const title = useAppStore((s) => s.sessions[sessionId]?.title);
@@ -25,15 +26,15 @@ function Tab({ sessionId }: { sessionId: string }) {
 	const role = useAppStore((s) => s.sessions[sessionId]?.role);
 	const backend = useAppStore((s) => s.sessions[sessionId]?.backend);
 	const kind = useAppStore((s) => s.sessions[sessionId]?.kind);
-	const active = useAppStore(
-		(s) =>
-			!!s.activeGroupId &&
-			s.activeSessionByGroup[s.activeGroupId] === sessionId,
-	);
-	const hasOthers = useAppStore(
-		(s) =>
-			(s.activeGroupId ? (s.tabsByGroup[s.activeGroupId]?.length ?? 0) : 0) > 1,
-	);
+	const active = useAppStore((s) => s.activeSessionId === sessionId);
+	const hasOthers = useAppStore((s) => s.openTabs.length > 1);
+	// With a global tab strip, tabs from different workspaces sit side by side;
+	// label the workspace (only when more than one exists).
+	const workspace = useAppStore((s) => {
+		if (s.groups.length < 2) return undefined;
+		const groupId = s.sessions[sessionId]?.groupId;
+		return groupId ? s.groups.find((g) => g.id === groupId)?.name : undefined;
+	});
 	const selectSession = useAppStore((s) => s.selectSession);
 	const closeTab = useAppStore((s) => s.closeTab);
 	const closeOthers = useAppStore((s) => s.closeOthers);
@@ -43,6 +44,17 @@ function Tab({ sessionId }: { sessionId: string }) {
 		id: `tab:${sessionId}`,
 		data: { sessionId },
 	});
+	// Reorder target: dropping another tab here moves it before this one.
+	const { setNodeRef: setDropRef, isOver } = useDroppable({
+		id: `tabdrop:${sessionId}`,
+		data: { type: "tab", sessionId },
+	});
+	const draggingId = useAppStore((s) => s.draggingSessionId);
+	const setRefs = (node: HTMLElement | null) => {
+		setNodeRef(node);
+		setDropRef(node);
+	};
+	const showInsert = isOver && draggingId !== null && draggingId !== sessionId;
 
 	const [editing, setEditing] = useState(false);
 	const [draft, setDraft] = useState("");
@@ -51,13 +63,18 @@ function Tab({ sessionId }: { sessionId: string }) {
 		return null;
 	}
 
-	// Browser-favicons. Active sessions show a spinner, errors tint the icon red.
+	// Browser-favicons. Native terminals show the product logo (Claude/Codex);
+	// agent sessions show the model's provider mark (Anthropic/OpenAI). Running
+	// sessions show a spinner; errors tint the icon red.
 	const Brand =
 		kind === "terminal"
-			? SquareTerminal
+			? backend === "codex"
+				? CodexIcon
+				: ClaudeIcon
 			: backend === "codex"
 				? OpenAIIcon
 				: AnthropicIcon;
+	const colored = kind === "terminal";
 	const tabIcon =
 		status === "running" ? (
 			<Loader2 className="size-3.5 shrink-0 animate-spin text-amber-500" />
@@ -65,7 +82,9 @@ function Tab({ sessionId }: { sessionId: string }) {
 			<Brand
 				className={cn(
 					"size-3.5 shrink-0",
-					status === "error" ? "text-red-500" : "opacity-70",
+					// The colored terminal logos render full-strength; the monochrome
+					// provider marks stay subtle (and tint red on error).
+					colored ? null : status === "error" ? "text-red-500" : "opacity-70",
 				)}
 			/>
 		);
@@ -95,7 +114,7 @@ function Tab({ sessionId }: { sessionId: string }) {
 		<ContextMenu>
 			<ContextMenuTrigger asChild>
 				<div
-					ref={setNodeRef}
+					ref={setRefs}
 					{...attributes}
 					{...listeners}
 					role="tab"
@@ -110,33 +129,46 @@ function Tab({ sessionId }: { sessionId: string }) {
 						}
 					}}
 					className={cn(
-						"group relative flex h-9 max-w-52 min-w-32 shrink-0 cursor-pointer items-center gap-2 rounded-md px-2.5 text-[13px] transition-colors",
+						// The active tab grows to fit its title (never cut off); inactive
+						// tabs stay capped and truncate, like a browser's tab strip.
+						"group relative flex h-9 min-w-32 shrink-0 cursor-pointer items-center gap-2 rounded-md px-2.5 text-[13px] transition-[background-color,color]",
 						active
-							? "bg-muted/70 text-foreground"
-							: "text-muted-foreground hover:bg-muted/40 hover:text-foreground",
+							? "max-w-80 bg-muted text-foreground"
+							: "max-w-48 text-muted-foreground hover:bg-muted/40 hover:text-foreground",
 						isDragging ? "opacity-50" : null,
 					)}
 				>
-					{active ? (
-						<span className="pointer-events-none absolute inset-x-2.5 bottom-0 h-0.5 rounded-full bg-primary" />
+					{/* Reorder insertion marker — a full-height bar on the leading edge. */}
+					{showInsert ? (
+						<span className="pointer-events-none absolute inset-y-1 left-0 w-0.5 rounded-full bg-primary" />
 					) : null}
 					{tabIcon}
-					{editing ? (
-						<input
-							autoFocus
-							value={draft}
-							onChange={(e) => setDraft(e.target.value)}
-							onKeyDown={onEditKeyDown}
-							onBlur={commitRename}
-							onClick={(e) => e.stopPropagation()}
-							onFocus={(e) => e.target.select()}
-							className="min-w-0 flex-1 rounded-md bg-background px-1 text-sm ring-1 ring-border outline-none"
-						/>
-					) : (
-						<span className="truncate" title={title}>
-							{title}
-						</span>
-					)}
+					<span className="flex min-w-0 flex-1 flex-col justify-center leading-none">
+						{editing ? (
+							<input
+								autoFocus
+								value={draft}
+								onChange={(e) => setDraft(e.target.value)}
+								onKeyDown={onEditKeyDown}
+								onBlur={commitRename}
+								onClick={(e) => e.stopPropagation()}
+								onFocus={(e) => e.target.select()}
+								className="min-w-0 rounded-md bg-background px-1 text-[13px] ring-1 ring-border outline-none"
+							/>
+						) : (
+							<span className="truncate text-[13px]" title={title}>
+								{title}
+							</span>
+						)}
+						{workspace ? (
+							<span
+								className="truncate text-[10px] text-muted-foreground/55"
+								title={workspace}
+							>
+								{workspace}
+							</span>
+						) : null}
+					</span>
 					{role !== "chat" ? (
 						<Badge variant="outline" className="capitalize">
 							{role === "planner" ? "plan" : "code"}
@@ -177,9 +209,7 @@ function Tab({ sessionId }: { sessionId: string }) {
 }
 
 export function SessionTabs() {
-	const order = useAppStore((s) =>
-		s.activeGroupId ? (s.tabsByGroup[s.activeGroupId] ?? EMPTY) : EMPTY,
-	);
+	const order = useAppStore((s) => s.openTabs);
 
 	if (order.length === 0) {
 		return null;

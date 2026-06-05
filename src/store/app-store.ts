@@ -4,24 +4,32 @@ import { create } from "zustand";
 import { onAgentDelta, onAgentEvent, onSessionUpdated } from "@/lib/events";
 import * as ipc from "@/lib/ipc";
 import {
-	DEFAULT_LAYOUT,
-	detachSession,
-	parseGroupView,
-	serializeGroupView,
-} from "@/lib/layout";
-import { DEFAULT_CHAT_MODEL, DEFAULT_CODEX_MODEL } from "@/lib/models";
+	backendForModel,
+	DEFAULT_CHAT_MODEL,
+	DEFAULT_CODEX_MODEL,
+} from "@/lib/models";
 import { notify, windowFocused } from "@/lib/notify";
+import {
+	detachSession,
+	emptyTree,
+	findSessionLeaf,
+	firstLeaf,
+	leaves,
+	makeLeaf,
+	setLeafSession,
+	splitLeaf,
+} from "@/lib/pane-tree";
 import * as terminals from "@/lib/terminal-instances";
+import { readView, writeView } from "@/lib/view";
 import type {
 	Backend,
 	DeltaPayload,
 	EffortLevel,
 	EventRecord,
 	Group,
-	GroupView,
 	IntegrateOutcome,
-	Layout,
 	MergeMode,
+	PaneTree,
 	PermissionMode,
 	PrInfo,
 	Project,
@@ -37,6 +45,21 @@ import type {
 function reportError(scope: string, error: unknown) {
 	const message = error instanceof Error ? error.message : String(error);
 	toast.error(scope, { description: message });
+}
+
+/** Make `sessionId` visible and focused: if it's already in a pane, leave the
+ *  tree as-is (the caller focuses it); otherwise drop it into the focused pane
+ *  (the leaf showing `currentActive`, else the first leaf). */
+function showSession(
+	tree: PaneTree,
+	currentActive: string | null,
+	sessionId: string,
+): PaneTree {
+	if (findSessionLeaf(tree, sessionId)) return tree;
+	const focused =
+		(currentActive ? findSessionLeaf(tree, currentActive) : undefined) ??
+		firstLeaf(tree);
+	return setLeafSession(tree, focused.id, sessionId);
 }
 
 /** The interactive CLI a native terminal session launches, per provider. */
@@ -116,12 +139,14 @@ interface AppState {
 	rootsByGroup: Record<string, Project[]>;
 	/** All session ids in a group (for the sidebar tree, not just open tabs). */
 	sessionsByGroup: Record<string, string[]>;
-	/** Parsed, editable pane layout per group. */
-	layoutByGroup: Record<string, Layout>;
-	/** Open tabs per group, in order — the group owns its tabs. */
-	tabsByGroup: Record<string, string[]>;
-	/** The active tab per group. */
-	activeSessionByGroup: Record<string, string | null>;
+	/** Open tabs across every group, in order — the viewport is global. */
+	openTabs: string[];
+	/** The focused tab (must be in `openTabs`), or null. */
+	activeSessionId: string | null;
+	/** The global pane arrangement (recursive split-tree). */
+	layout: PaneTree;
+	/** Session id currently being dragged (drives drop zones + the drag clone). */
+	draggingSessionId: string | null;
 	sessions: Record<string, Session>;
 	/** Install/auth status of each agent CLI provider. */
 	providers: ProviderStatus[];
@@ -147,6 +172,8 @@ interface AppState {
 	loadingEventsBySession: Record<string, boolean>;
 
 	init: () => Promise<void>;
+	/** Restore the persisted global view once all groups are loaded. */
+	restoreView: () => void;
 	setSidebarCollapsed: (collapsed: boolean) => void;
 	setSidebarWidth: (width: number) => void;
 	loadProviders: () => Promise<void>;
@@ -187,9 +214,20 @@ interface AppState {
 	deleteGroup: (id: string) => Promise<void>;
 	addRoot: (groupId: string) => Promise<void>;
 	removeRoot: (groupId: string, projectId: string) => Promise<void>;
-	setLayout: (groupId: string, layout: Layout) => void;
-	/** Persist a group's full view-state (layout + open tabs + active tab). */
-	saveGroupView: (groupId: string) => void;
+	setLayout: (layout: PaneTree) => void;
+	/** Drop a session into a pane (by leaf id), opening + focusing it. */
+	assignToPane: (leafId: string, sessionId: string) => void;
+	/** Split a pane (by leaf id) on one edge, placing the session in the new half. */
+	splitPane: (
+		leafId: string,
+		side: "left" | "right" | "top" | "bottom",
+		sessionId: string,
+	) => void;
+	setDragging: (sessionId: string | null) => void;
+	/** Move an open tab to just before another in the strip. */
+	reorderTab: (draggedId: string, targetId: string) => void;
+	/** Persist the global view-state (layout + open tabs + active tab). */
+	saveView: () => void;
 	createSession: (opts: CreateSessionOptions) => Promise<Session | null>;
 	/** Create a terminal session that launches a provider's CLI natively. */
 	createNativeSession: (projectId: string, provider: Provider) => Promise<void>;
@@ -224,9 +262,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 	activeGroupId: null,
 	rootsByGroup: {},
 	sessionsByGroup: {},
-	layoutByGroup: {},
-	tabsByGroup: {},
-	activeSessionByGroup: {},
+	openTabs: [],
+	activeSessionId: null,
+	layout: emptyTree(),
+	draggingSessionId: null,
 	sessions: {},
 	providers: [],
 	githubStatus: null,
@@ -265,16 +304,40 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set({ loadingGroups: true });
 		try {
 			const groups = await ipc.listGroups();
-			set({ groups });
-			const first = groups[0];
-			if (first) {
-				set({ activeGroupId: first.id });
-				await get().loadGroupData(first.id);
-			}
+			set({ groups, activeGroupId: groups[0]?.id ?? null });
+			// The viewport is global, so every group's sessions must be loaded for a
+			// restored tab (from any group) to resolve.
+			await Promise.all(groups.map((g) => get().loadGroupData(g.id)));
+			get().restoreView();
 		} catch (error) {
 			reportError("Failed to load groups", error);
 		} finally {
 			set({ loadingGroups: false });
+		}
+	},
+
+	// Restore the persisted global view, dropping references to sessions that no
+	// longer exist. Called once after all groups load.
+	restoreView: () => {
+		const saved = readView();
+		if (!saved) return;
+		const { sessions } = get();
+		const exists = (id: string) => sessions[id] !== undefined;
+		const openTabs = saved.openTabs.filter(exists);
+		// Drop panes pointing at sessions that are gone or no longer open.
+		let layout = saved.layout;
+		for (const leaf of leaves(layout)) {
+			if (leaf.sessionId && !openTabs.includes(leaf.sessionId)) {
+				layout = detachSession(layout, leaf.sessionId);
+			}
+		}
+		const activeSessionId =
+			saved.activeSessionId && openTabs.includes(saved.activeSessionId)
+				? saved.activeSessionId
+				: (openTabs[0] ?? null);
+		set({ openTabs, activeSessionId, layout });
+		if (activeSessionId && !get().eventsBySession[activeSessionId]) {
+			void get().loadEvents(activeSessionId);
 		}
 	},
 
@@ -457,17 +520,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 						session.id,
 					],
 				},
-				tabsByGroup: {
-					...state.tabsByGroup,
-					[groupId]: [...(state.tabsByGroup[groupId] ?? []), session.id],
-				},
-				activeSessionByGroup: {
-					...state.activeSessionByGroup,
-					[groupId]: session.id,
-				},
+				openTabs: state.openTabs.includes(session.id)
+					? state.openTabs
+					: [...state.openTabs, session.id],
+				activeSessionId: session.id,
+				layout: showSession(state.layout, state.activeSessionId, session.id),
 				eventsBySession: { ...state.eventsBySession, [session.id]: [] },
 			}));
-			get().saveGroupView(groupId);
+			get().saveView();
 			if (get().activeGroupId !== groupId) await get().selectGroup(groupId);
 			return session;
 		} catch (error) {
@@ -477,7 +537,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	},
 
 	// Loads a group's roots and sessions into the store for the sidebar tree.
-	// Does not change which tabs are open — that's driven by openSession.
+	// Purely organizational — the open tabs/layout are global (see restoreView).
 	loadGroupData: async (groupId) => {
 		try {
 			const [roots, sessions] = await Promise.all([
@@ -489,40 +549,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 				for (const session of sessions) {
 					nextSessions[session.id] = session;
 				}
-				const group = state.groups.find((g) => g.id === groupId);
-				// Restore the saved view, dropping references to sessions that no
-				// longer exist. Already-loaded groups keep their live in-memory state.
-				const loaded = state.layoutByGroup[groupId] !== undefined;
-				const view = parseGroupView(group?.layout ?? "");
-				const ids = new Set(sessions.map((s) => s.id));
-				const openTabs = view.openTabs.filter((id) => ids.has(id));
-				const panes = view.panes.map((id) => (id && ids.has(id) ? id : null));
-				const activeSession =
-					view.activeSession && openTabs.includes(view.activeSession)
-						? view.activeSession
-						: (openTabs[0] ?? null);
 				return {
 					sessions: nextSessions,
 					rootsByGroup: { ...state.rootsByGroup, [groupId]: roots },
 					sessionsByGroup: {
 						...state.sessionsByGroup,
 						[groupId]: sessions.map((s) => s.id),
-					},
-					layoutByGroup: {
-						...state.layoutByGroup,
-						[groupId]: loaded
-							? state.layoutByGroup[groupId]
-							: { mode: view.mode, panes },
-					},
-					tabsByGroup: {
-						...state.tabsByGroup,
-						[groupId]: loaded ? (state.tabsByGroup[groupId] ?? []) : openTabs,
-					},
-					activeSessionByGroup: {
-						...state.activeSessionByGroup,
-						[groupId]: loaded
-							? (state.activeSessionByGroup[groupId] ?? null)
-							: activeSession,
 					},
 				};
 			});
@@ -539,12 +571,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 				activeGroupId: group.id,
 				rootsByGroup: { ...state.rootsByGroup, [group.id]: [] },
 				sessionsByGroup: { ...state.sessionsByGroup, [group.id]: [] },
-				layoutByGroup: { ...state.layoutByGroup, [group.id]: DEFAULT_LAYOUT },
-				tabsByGroup: { ...state.tabsByGroup, [group.id]: [] },
-				activeSessionByGroup: {
-					...state.activeSessionByGroup,
-					[group.id]: null,
-				},
 			}));
 			return group;
 		} catch (error) {
@@ -590,6 +616,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				terminals.dispose(sid);
 			}
 		}
+		const removed = new Set(get().sessionsByGroup[id] ?? []);
 		set((state) => {
 			const nextGroups = state.groups.filter((g) => g.id !== id);
 			let activeGroupId = state.activeGroupId;
@@ -600,16 +627,25 @@ export const useAppStore = create<AppState>((set, get) => ({
 				Object.fromEntries(
 					Object.entries(record).filter(([gid]) => gid !== id),
 				);
+			// The deleted group's sessions leave the global viewport too.
+			const openTabs = state.openTabs.filter((sid) => !removed.has(sid));
+			let layout = state.layout;
+			for (const sid of removed) layout = detachSession(layout, sid);
+			const activeSessionId =
+				state.activeSessionId && removed.has(state.activeSessionId)
+					? (firstLeaf(layout).sessionId ?? openTabs[0] ?? null)
+					: state.activeSessionId;
 			return {
 				groups: nextGroups,
 				activeGroupId,
 				rootsByGroup: omit(state.rootsByGroup),
 				sessionsByGroup: omit(state.sessionsByGroup),
-				layoutByGroup: omit(state.layoutByGroup),
-				tabsByGroup: omit(state.tabsByGroup),
-				activeSessionByGroup: omit(state.activeSessionByGroup),
+				openTabs,
+				activeSessionId,
+				layout,
 			};
 		});
+		get().saveView();
 		try {
 			await ipc.deleteGroup(id);
 		} catch (error) {
@@ -657,25 +693,63 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}
 	},
 
-	setLayout: (groupId, layout) => {
-		set((state) => ({
-			layoutByGroup: { ...state.layoutByGroup, [groupId]: layout },
-		}));
-		get().saveGroupView(groupId);
+	setLayout: (layout) => {
+		set({ layout });
+		get().saveView();
 	},
 
-	saveGroupView: (groupId) => {
-		const state = get();
-		const layout = state.layoutByGroup[groupId] ?? DEFAULT_LAYOUT;
-		const view: GroupView = {
-			mode: layout.mode,
-			panes: layout.panes,
-			openTabs: state.tabsByGroup[groupId] ?? [],
-			activeSession: state.activeSessionByGroup[groupId] ?? null,
-		};
-		void ipc
-			.setGroupLayout(groupId, serializeGroupView(view))
-			.catch((error) => reportError("Failed to save view", error));
+	assignToPane: (leafId, sessionId) => {
+		set((state) => {
+			const openTabs = state.openTabs.includes(sessionId)
+				? state.openTabs
+				: [...state.openTabs, sessionId];
+			// Move the session out of any pane it already occupies, then into the
+			// drop target (replacing whatever it held). If the target collapsed
+			// during the move, fall back to the focused pane.
+			let layout = detachSession(state.layout, sessionId);
+			const exists = leaves(layout).some((l) => l.id === leafId);
+			layout = exists
+				? setLeafSession(layout, leafId, sessionId)
+				: showSession(layout, state.activeSessionId, sessionId);
+			return { openTabs, activeSessionId: sessionId, layout };
+		});
+		get().saveView();
+	},
+
+	splitPane: (leafId, side, sessionId) => {
+		set((state) => {
+			const openTabs = state.openTabs.includes(sessionId)
+				? state.openTabs
+				: [...state.openTabs, sessionId];
+			// Move out of any current pane first so a session never shows twice.
+			let layout = detachSession(state.layout, sessionId);
+			const exists = leaves(layout).some((l) => l.id === leafId);
+			layout = exists
+				? splitLeaf(layout, leafId, side, sessionId)
+				: showSession(layout, state.activeSessionId, sessionId);
+			return { openTabs, activeSessionId: sessionId, layout };
+		});
+		get().saveView();
+	},
+
+	setDragging: (sessionId) => set({ draggingSessionId: sessionId }),
+
+	reorderTab: (draggedId, targetId) => {
+		if (draggedId === targetId) return;
+		set((state) => {
+			const tabs = [...state.openTabs];
+			const from = tabs.indexOf(draggedId);
+			if (from === -1 || !tabs.includes(targetId)) return {};
+			tabs.splice(from, 1);
+			tabs.splice(tabs.indexOf(targetId), 0, draggedId);
+			return { openTabs: tabs };
+		});
+		get().saveView();
+	},
+
+	saveView: () => {
+		const { openTabs, activeSessionId, layout } = get();
+		writeView({ openTabs, activeSessionId, layout });
 	},
 
 	createSession: async (opts) => {
@@ -688,7 +762,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 			reportError("No folder selected", "Add a folder to this group first.");
 			return null;
 		}
-		const wasEmpty = (get().tabsByGroup[groupId]?.length ?? 0) === 0;
 		try {
 			const session = await ipc.createSession({
 				projectId: opts.projectId,
@@ -709,21 +782,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 					...state.sessionsByGroup,
 					[groupId]: [...(state.sessionsByGroup[groupId] ?? []), session.id],
 				},
-				tabsByGroup: {
-					...state.tabsByGroup,
-					[groupId]: [...(state.tabsByGroup[groupId] ?? []), session.id],
-				},
-				activeSessionByGroup: {
-					...state.activeSessionByGroup,
-					[groupId]: session.id,
-				},
-				// Opening into an empty workspace resets to a full-screen single pane.
-				layoutByGroup: wasEmpty
-					? { ...state.layoutByGroup, [groupId]: DEFAULT_LAYOUT }
-					: state.layoutByGroup,
+				openTabs: [...state.openTabs, session.id],
+				activeSessionId: session.id,
+				// Show the new session in the focused pane (a fresh viewport places it
+				// in the lone empty leaf).
+				layout: showSession(state.layout, state.activeSessionId, session.id),
 				eventsBySession: { ...state.eventsBySession, [session.id]: [] },
 			}));
-			get().saveGroupView(groupId);
+			get().saveView();
 			if (
 				opts.kind !== "terminal" &&
 				opts.firstMessage &&
@@ -754,12 +820,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 	updateSession: async (sessionId, patch) => {
 		const current = get().sessions[sessionId];
 		if (!current) return;
+		// A model change re-homes the session to that model's backend (gpt → codex);
+		// reflect it optimistically so the provider icon/menu update instantly.
+		const backend = patch.model
+			? backendForModel(patch.model)
+			: current.backend;
 		// Optimistically apply so the controls feel instant; the backend emits the
 		// authoritative session-updated event which reconciles.
 		set((state) => ({
 			sessions: {
 				...state.sessions,
-				[sessionId]: { ...current, ...patch },
+				[sessionId]: { ...current, ...patch, backend },
 			},
 		}));
 		try {
@@ -781,106 +852,85 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}
 	},
 
-	// Open a session into a tab (from the sidebar) and focus it.
+	// Open a session into a tab (from the sidebar) and focus it. If it isn't
+	// already shown in a pane, it takes over the focused pane.
 	openSession: (id) => {
 		const session = get().sessions[id];
 		if (!session) {
 			return;
 		}
-		const groupId = session.groupId;
-		// Opening into an empty workspace shows the session full-screen; a
-		// multi-pane layout is something the user opts into explicitly.
-		const wasEmpty = (get().tabsByGroup[groupId]?.length ?? 0) === 0;
-		set((state) => {
-			const tabs = state.tabsByGroup[groupId] ?? [];
-			return {
-				activeGroupId: groupId,
-				tabsByGroup: {
-					...state.tabsByGroup,
-					[groupId]: tabs.includes(id) ? tabs : [...tabs, id],
-				},
-				activeSessionByGroup: {
-					...state.activeSessionByGroup,
-					[groupId]: id,
-				},
-			};
-		});
-		if (wasEmpty) {
-			get().setLayout(groupId, DEFAULT_LAYOUT);
-		} else {
-			get().saveGroupView(groupId);
-		}
+		set((state) => ({
+			// Focus the session's group in the sidebar (new sessions land there).
+			activeGroupId: session.groupId,
+			openTabs: state.openTabs.includes(id)
+				? state.openTabs
+				: [...state.openTabs, id],
+			activeSessionId: id,
+			layout: showSession(state.layout, state.activeSessionId, id),
+		}));
+		get().saveView();
 		if (!get().eventsBySession[id]) {
 			void get().loadEvents(id);
 		}
 	},
 
+	// Focus an open tab. If it's visible in a pane we just focus it; otherwise it
+	// swaps into the focused pane.
 	selectSession: (id) => {
-		const groupId = get().activeGroupId;
-		if (!groupId || !get().sessions[id]) {
+		if (!get().sessions[id]) {
 			return;
 		}
 		set((state) => ({
-			activeSessionByGroup: { ...state.activeSessionByGroup, [groupId]: id },
+			activeSessionId: id,
+			layout: showSession(state.layout, state.activeSessionId, id),
 		}));
-		get().saveGroupView(groupId);
+		get().saveView();
 		if (!get().eventsBySession[id]) {
 			void get().loadEvents(id);
 		}
 	},
 
 	closeTab: (id) => {
-		const groupId = get().activeGroupId;
-		if (!groupId) return;
 		// Closing a terminal tab kills its PTY (no orphan processes); the session
 		// row survives in the sidebar and reopens to a resume prompt.
 		if (get().sessions[id]?.kind === "terminal") {
 			terminals.dispose(id);
 		}
-		let detached: Layout | null = null;
 		set((state) => {
-			const prevTabs = state.tabsByGroup[groupId] ?? [];
-			const tabs = prevTabs.filter((sid) => sid !== id);
-			let active = state.activeSessionByGroup[groupId] ?? null;
-			if (active === id) {
+			const prevTabs = state.openTabs;
+			const openTabs = prevTabs.filter((sid) => sid !== id);
+			// Collapse the pane showing the closed session (or clear the sole pane).
+			let layout = detachSession(state.layout, id);
+			let activeSessionId = state.activeSessionId;
+			if (activeSessionId === id) {
 				const closedIndex = prevTabs.indexOf(id);
-				active = tabs[closedIndex] ?? tabs[closedIndex - 1] ?? tabs[0] ?? null;
+				const nextTab =
+					openTabs[closedIndex] ??
+					openTabs[closedIndex - 1] ??
+					openTabs[0] ??
+					null;
+				// Prefer a pane that's still visible; otherwise show the next tab.
+				activeSessionId = firstLeaf(layout).sessionId ?? nextTab;
+				if (activeSessionId) {
+					layout = showSession(layout, activeSessionId, activeSessionId);
+				}
 			}
-			const layout = state.layoutByGroup[groupId];
-			if (layout && layout.panes.includes(id)) {
-				detached = detachSession(layout, id);
-			}
-			return {
-				tabsByGroup: { ...state.tabsByGroup, [groupId]: tabs },
-				activeSessionByGroup: {
-					...state.activeSessionByGroup,
-					[groupId]: active,
-				},
-			};
+			return { openTabs, activeSessionId, layout };
 		});
-		if (detached) {
-			get().setLayout(groupId, detached);
-		} else {
-			get().saveGroupView(groupId);
-		}
+		get().saveView();
 	},
 
 	closeOthers: (id) => {
-		const groupId = get().activeGroupId;
-		if (!groupId) return;
-		const { tabsByGroup, sessions } = get();
-		const tabs = tabsByGroup[groupId] ?? [];
-		if (!tabs.includes(id)) return;
-		for (const sid of tabs) {
+		const { openTabs, sessions } = get();
+		if (!openTabs.includes(id)) return;
+		for (const sid of openTabs) {
 			if (sid !== id && sessions[sid]?.kind === "terminal") {
 				terminals.dispose(sid);
 			}
 		}
-		set((state) => ({
-			tabsByGroup: { ...state.tabsByGroup, [groupId]: [id] },
-			activeSessionByGroup: { ...state.activeSessionByGroup, [groupId]: id },
-		}));
-		get().saveGroupView(groupId);
+		// One tab left → collapse to a single full-screen pane showing it.
+		set({ openTabs: [id], activeSessionId: id, layout: makeLeaf(id) });
+		get().saveView();
 	},
 
 	renameSession: async (sessionId, title) => {
@@ -904,16 +954,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 	},
 
 	deleteSessions: async (sessionIds) => {
-		// Groups whose view-state may change, captured before the rows are removed.
-		const affected = new Set<string>();
 		const deleted = new Set<string>();
 		for (const id of sessionIds) {
 			try {
-				const session = get().sessions[id];
-				if (session?.kind === "terminal") {
+				if (get().sessions[id]?.kind === "terminal") {
 					terminals.dispose(id);
 				}
-				if (session) affected.add(session.groupId);
 				await ipc.deleteSession(id);
 				deleted.add(id);
 			} catch (error) {
@@ -935,46 +981,38 @@ export const useAppStore = create<AppState>((set, get) => ({
 				]),
 			);
 
-			const tabsByGroup: Record<string, string[]> = {};
-			const activeSessionByGroup: Record<string, string | null> = {};
-			const layoutByGroup = { ...state.layoutByGroup };
+			const prevTabs = state.openTabs;
+			const openTabs = prevTabs.filter((sid) => !deleted.has(sid));
 
-			for (const [gid, prevTabs] of Object.entries(state.tabsByGroup)) {
-				const tabs = prevTabs.filter((sid) => !deleted.has(sid));
-				tabsByGroup[gid] = tabs;
+			let layout = state.layout;
+			for (const sid of deleted) layout = detachSession(layout, sid);
 
-				let active = state.activeSessionByGroup[gid] ?? null;
-				if (active && deleted.has(active)) {
-					const idx = prevTabs.indexOf(active);
-					const surviving = (start: number, step: number) => {
-						for (let i = start; i >= 0 && i < prevTabs.length; i += step) {
-							const sid = prevTabs[i];
-							if (!deleted.has(sid)) return sid;
-						}
-						return null;
-					};
-					active = surviving(idx + 1, 1) ?? surviving(idx - 1, -1);
-				}
-				activeSessionByGroup[gid] = active;
-
-				const layout = state.layoutByGroup[gid];
-				if (layout) {
-					let next = layout;
-					for (const sid of deleted) {
-						next = detachSession(next, sid);
+			let activeSessionId = state.activeSessionId;
+			if (activeSessionId && deleted.has(activeSessionId)) {
+				const idx = prevTabs.indexOf(activeSessionId);
+				const surviving = (start: number, step: number) => {
+					for (let i = start; i >= 0 && i < prevTabs.length; i += step) {
+						const sid = prevTabs[i];
+						if (!deleted.has(sid)) return sid;
 					}
-					if (next !== layout) {
-						layoutByGroup[gid] = next;
-					}
+					return null;
+				};
+				// Prefer a still-visible pane; else the nearest surviving tab.
+				activeSessionId =
+					firstLeaf(layout).sessionId ??
+					surviving(idx + 1, 1) ??
+					surviving(idx - 1, -1);
+				if (activeSessionId) {
+					layout = showSession(layout, activeSessionId, activeSessionId);
 				}
 			}
 
 			return {
 				sessions: omit(state.sessions),
 				sessionsByGroup,
-				tabsByGroup,
-				activeSessionByGroup,
-				layoutByGroup,
+				openTabs,
+				activeSessionId,
+				layout,
 				eventsBySession: omit(state.eventsBySession),
 				approvalResolvedBySession: omit(state.approvalResolvedBySession),
 				streamingBySession: omit(state.streamingBySession),
@@ -983,7 +1021,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			};
 		});
 
-		affected.forEach((gid) => get().saveGroupView(gid));
+		get().saveView();
 	},
 
 	deleteSession: (sessionId) => get().deleteSessions([sessionId]),
@@ -1048,7 +1086,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 					result.planner.id,
 					result.coder.id,
 				];
-				const tabs = [...(state.tabsByGroup[groupId] ?? [])];
+				const tabs = [...state.openTabs];
 				for (const id of [result.planner.id, result.coder.id]) {
 					if (!tabs.includes(id)) {
 						tabs.push(id);
@@ -1060,11 +1098,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 						...state.sessionsByGroup,
 						[groupId]: groupSessions,
 					},
-					tabsByGroup: { ...state.tabsByGroup, [groupId]: tabs },
-					activeSessionByGroup: {
-						...state.activeSessionByGroup,
-						[groupId]: result.coder.id,
-					},
+					openTabs: tabs,
+					activeSessionId: result.coder.id,
+					layout: showSession(
+						state.layout,
+						state.activeSessionId,
+						result.coder.id,
+					),
 					eventsBySession: {
 						...state.eventsBySession,
 						[result.planner.id]: state.eventsBySession[result.planner.id] ?? [],
@@ -1072,7 +1112,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 					},
 				};
 			});
-			get().saveGroupView(groupId);
+			get().saveView();
 			void get().loadEvents(result.planner.id);
 			void get().loadEvents(result.coder.id);
 		} catch (error) {

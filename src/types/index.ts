@@ -80,30 +80,35 @@ export interface Project {
   createdAt: string
 }
 
-/** A pane layout saved on a group. `panes` maps each grid cell to a session id
- *  (or null when empty); its length matches the mode's cell count. */
-export type LayoutMode = "single" | "cols-2" | "rows-2" | "three" | "grid-4"
-
-export interface Layout {
-  mode: LayoutMode
-  panes: (string | null)[]
+/** The viewport pane arrangement: a recursive split-tree (VS Code / tmux style).
+ *  A leaf shows one session; a split divides space among children along one axis.
+ *  The viewport is global (browser-style), not per-group. */
+export interface Leaf {
+  type: "leaf"
+  id: string
+  sessionId: string | null
 }
 
-/** A group's full persisted view-state: its layout plus which tabs are open
- *  and which is focused. Stored (serialized) in `Group.layout`. */
-export interface GroupView extends Layout {
-  /** Open tab session ids, in order. */
-  openTabs: string[]
-  /** The focused session id (must be one of `openTabs`), or null. */
-  activeSession: string | null
+export interface Split {
+  type: "split"
+  id: string
+  dir: "row" | "col"
+  /** Percentage size of each child, summing to 100; same length as `children`. */
+  sizes: number[]
+  children: PaneTree[]
 }
 
-/** The top-level workspace: named set of repo roots + a saved pane layout. */
+export type PaneTree = Leaf | Split
+
+/** Where a dropped session lands relative to a pane: the four edges split it; the
+ *  center swaps the pane's session. */
+export type SplitSide = "left" | "right" | "top" | "bottom" | "center"
+
+/** The top-level workspace: a named set of repo roots. Organizational only —
+ *  the viewport (open tabs + layout) spans every group. */
 export interface Group {
   id: string
   name: string
-  /** Serialized {@link Layout}; parse with `parseLayout`. */
-  layout: string
   createdAt: string
 }
 

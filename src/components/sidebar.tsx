@@ -12,9 +12,11 @@ import {
 	SquareTerminal,
 	Trash2,
 } from "lucide-react";
+import { useDraggable } from "@dnd-kit/core";
 import { type KeyboardEvent, type ReactNode, useEffect, useState } from "react";
 
 import { useConfirm } from "@/components/confirm-dialog";
+import { UpdateBanner } from "@/components/update-banner";
 import { ReviewPrDialog } from "@/components/review-pr-dialog";
 import { StatusDot } from "@/components/status-dot";
 import { Button } from "@/components/ui/button";
@@ -56,9 +58,10 @@ import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app-store";
 import type { Group, Project, SessionKind } from "@/types";
 
-// Keep shadcn's left connector line; tighten the rhythm and drop the right
-// padding (pl only) to reclaim width for long names.
-const SUB_CLASS = "gap-0.5 pr-0";
+// Keep shadcn's left connector line + indent, but drop the right margin/padding
+// (default `mx-3.5 px-2.5`) so sub-rows reach the same right edge as the group
+// above — their hover actions then align with the group's. Tighten the rhythm.
+const SUB_CLASS = "mr-0 gap-0.5 pr-0";
 
 // A plain icon with a hover tint — no button chrome.
 const ROW_ICON =
@@ -97,15 +100,18 @@ function RowAction({
 
 function SessionRow({ sessionId }: { sessionId: string }) {
 	const session = useAppStore((s) => s.sessions[sessionId]);
-	const active = useAppStore(
-		(s) =>
-			!!s.activeGroupId &&
-			s.activeSessionByGroup[s.activeGroupId] === sessionId,
-	);
+	const active = useAppStore((s) => s.activeSessionId === sessionId);
 	const openSession = useAppStore((s) => s.openSession);
 	const renameSession = useAppStore((s) => s.renameSession);
 	const deleteSession = useAppStore((s) => s.deleteSession);
 	const confirm = useConfirm();
+
+	// Draggable into the viewport to open/compose; the sensor's activation
+	// distance still lets a plain click open the session in the focused pane.
+	const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+		id: `sidebar:${sessionId}`,
+		data: { sessionId },
+	});
 
 	const [editing, setEditing] = useState(false);
 	const [draft, setDraft] = useState("");
@@ -157,10 +163,14 @@ function SessionRow({ sessionId }: { sessionId: string }) {
 							className="w-full cursor-default text-left text-sidebar-foreground/70 hover:bg-transparent hover:text-sidebar-foreground active:bg-transparent data-[active=true]:bg-transparent data-[active=true]:font-medium data-[active=true]:text-sidebar-foreground"
 						>
 							<button
+								ref={setNodeRef}
 								type="button"
+								{...attributes}
+								{...listeners}
 								onClick={() => openSession(sessionId)}
 								onDoubleClick={startRename}
 								title={session.title}
+								className={cn(isDragging && "opacity-50")}
 							>
 								<StatusDot status={session.status} />
 								<span className="min-w-0 flex-1 truncate">{session.title}</span>
@@ -505,6 +515,9 @@ export function Sidebar() {
 		s.providers.some((p) => !p.installed || !p.authed),
 	);
 
+	// Injected at build time (vite define) — no Tauri runtime call to fail.
+	const version = __APP_VERSION__;
+
 	const [expanded, setExpanded] = useState<Set<string>>(
 		() => new Set(activeGroupId ? [activeGroupId] : []),
 	);
@@ -568,6 +581,7 @@ export function Sidebar() {
 				</SidebarGroup>
 			</SidebarContent>
 			<SidebarFooter className="p-2 pt-0">
+				<UpdateBanner />
 				<button
 					type="button"
 					onClick={() => openSettings()}
@@ -575,13 +589,20 @@ export function Sidebar() {
 					className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
 				>
 					<Settings2 className="size-4 shrink-0" />
-					<span className="flex-1 truncate">Settings</span>
-					{needsSetup && (
-						<span
-							className="size-1.5 shrink-0 rounded-full bg-amber-500"
-							title="A provider needs setup"
-						/>
-					)}
+					<span className="truncate">Settings</span>
+					<span className="ml-auto flex shrink-0 items-center gap-2">
+						{needsSetup && (
+							<span
+								className="size-1.5 rounded-full bg-amber-500"
+								title="A provider needs setup"
+							/>
+						)}
+						{version ? (
+							<span className="text-[11px] tabular-nums text-muted-foreground/45">
+								v{version}
+							</span>
+						) : null}
+					</span>
 				</button>
 			</SidebarFooter>
 		</SidebarRoot>

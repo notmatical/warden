@@ -1,6 +1,5 @@
 import { PanelLeft } from "lucide-react";
 
-import { LayoutSwitcher } from "@/components/layout-switcher";
 import { OpenInButtons } from "@/components/open-in-buttons";
 import { QuickSwitcher } from "@/components/quick-switcher";
 import { Button } from "@/components/ui/button";
@@ -34,12 +33,9 @@ export function Topbar() {
 	// The active session's working directory, falling back to the group's first
 	// root.
 	const openPath = useAppStore((s) => {
-		const groupId = s.activeGroupId;
-		const activeSessionId = groupId
-			? (s.activeSessionByGroup[groupId] ?? null)
-			: null;
-		const session = activeSessionId ? s.sessions[activeSessionId] : undefined;
+		const session = s.activeSessionId ? s.sessions[s.activeSessionId] : undefined;
 		if (session) return session.workingDir;
+		const groupId = s.activeGroupId;
 		return groupId ? (s.rootsByGroup[groupId]?.[0]?.path ?? null) : null;
 	});
 
@@ -68,7 +64,6 @@ export function Topbar() {
 			)}
 			<div className="flex-1" />
 			<OpenInButtons path={openPath} />
-			<LayoutSwitcher />
 		</header>
 	);
 }
