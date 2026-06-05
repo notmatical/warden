@@ -1,5 +1,11 @@
 import { CornerDownLeft, GitBranch, GitMerge, Square } from "lucide-react";
-import { type KeyboardEvent, useLayoutEffect, useRef, useState } from "react";
+import {
+	type KeyboardEvent,
+	useCallback,
+	useLayoutEffect,
+	useRef,
+	useState,
+} from "react";
 import { EffortMenu } from "@/components/controls/effort-menu";
 import { ModeMenu } from "@/components/controls/mode-menu";
 import { ModelMenu } from "@/components/controls/model-menu";
@@ -79,12 +85,31 @@ export function Composer({ sessionId }: { sessionId: string }) {
 	});
 
 	// Grow the textarea with its content, from a single line up to a cap.
-	useLayoutEffect(() => {
+	const autosize = useCallback(() => {
 		const el = textareaRef.current;
 		if (!el) return;
 		el.style.height = "auto";
 		el.style.height = `${Math.min(el.scrollHeight, MAX_TEXTAREA_HEIGHT)}px`;
-	}, [value]);
+	}, []);
+
+	useLayoutEffect(() => autosize(), [autosize]);
+
+	// Re-measure when the pane's width changes (e.g. a split): the initial mount
+	// may measure at a transient width and otherwise stay stuck tall. Width-only
+	// so resizing the textarea's own height can't feed back into a loop.
+	useLayoutEffect(() => {
+		const el = textareaRef.current?.parentElement;
+		if (!el) return;
+		let lastWidth = el.clientWidth;
+		const observer = new ResizeObserver(() => {
+			if (el.clientWidth !== lastWidth) {
+				lastWidth = el.clientWidth;
+				autosize();
+			}
+		});
+		observer.observe(el);
+		return () => observer.disconnect();
+	}, [autosize]);
 
 	const running = session?.status === "running";
 	const canSend = value.trim().length > 0 && !running;
