@@ -18,7 +18,7 @@ use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin};
 use tokio::sync::{mpsc, oneshot, Mutex as AsyncMutex};
 
-use crate::domain::{AgentEvent, EffortLevel, Session, SessionStatus};
+use crate::domain::{AgentEvent, EffortLevel, PermissionMode, Session, SessionStatus};
 use crate::error::{AppError, Result};
 use crate::events::{emit_delta, emit_event, emit_session};
 use crate::store::Store;
@@ -438,6 +438,38 @@ fn thread_params(session: &Session) -> Value {
     params
 }
 
+/// A structured `workspaceWrite`/`readOnly` sandbox policy. Full file reads are
+/// allowed; writes are confined to `writable_roots`.
+fn structured_policy(kind: &str, writable_roots: Vec<String>) -> Value {
+    json!({
+        "type": kind,
+        "writableRoots": writable_roots,
+        "readOnlyAccess": { "type": "fullAccess" },
+        "networkAccess": true,
+        "excludeTmpdirEnvVar": false,
+        "excludeSlashTmp": false,
+    })
+}
+
+/// The per-turn sandbox policy for a Codex turn, derived from the session's
+/// *current* permission mode. Sent on `turn/start` (not just `thread/start`) so
+/// it tracks live mode changes and enforces plan mode — a thread's sandbox is
+/// otherwise fixed when the thread starts. Writable roots span the session's
+/// working dir plus any extra roots.
+fn sandbox_policy(session: &Session, add_dirs: &[String]) -> Value {
+    match session.permission_mode {
+        // Plan mode is read-only: the agent researches but can't edit.
+        PermissionMode::Plan => structured_policy("readOnly", vec![]),
+        // Bypass drops the sandbox entirely (e.g. tools needing the full machine).
+        PermissionMode::BypassPermissions => json!({ "type": "dangerFullAccess" }),
+        PermissionMode::AcceptEdits | PermissionMode::Default => {
+            let mut roots = vec![session.working_dir.clone()];
+            roots.extend(add_dirs.iter().filter(|d| !d.is_empty()).cloned());
+            structured_policy("workspaceWrite", roots)
+        }
+    }
+}
+
 /// Start a new Codex thread (or resume the session's existing one), returning
 /// the thread id. The id is persisted so later turns resume the conversation.
 async fn start_or_resume(store: &Store, session: &Session) -> Result<String> {
@@ -484,10 +516,20 @@ pub async fn run_turn(
     // the `turn/started` notification).
     register_turn(&session.id, &thread_id);
 
+    // Extra roots (non-primary projects) are writable in edit modes.
+    let add_dirs: Vec<String> = store
+        .list_session_root_projects(&session.id)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|p| p.id != session.project_id)
+        .map(|p| p.path)
+        .collect();
+
     let turn_params = json!({
         "threadId": thread_id,
         "input": [{ "type": "text", "text": prompt }],
         "effort": codex_effort(session.effort),
+        "sandboxPolicy": sandbox_policy(session, &add_dirs),
     });
     if let Err(e) = send_request("turn/start", turn_params).await {
         unregister_thread(&thread_id);
