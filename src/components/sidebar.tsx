@@ -6,13 +6,13 @@ import {
 	Pencil,
 	Plus,
 	Settings2,
-	Sparkles,
 	SquareTerminal,
 	Trash2,
 } from "lucide-react";
 import { useDraggable } from "@dnd-kit/core";
 import { type KeyboardEvent, type ReactNode, useEffect, useState } from "react";
 
+import { AgentProvidersIcon } from "@/components/agent-providers-icon";
 import {
 	ClaudeIcon,
 	CodexIcon,
@@ -305,7 +305,7 @@ function RootRow({
 				</RowAction>
 				<DropdownMenuContent align="start" className="w-40">
 					<DropdownMenuItem onSelect={() => void newSession("agent")}>
-						<Sparkles />
+						<AgentProvidersIcon />
 						Agent session
 					</DropdownMenuItem>
 					<DropdownMenuItem onSelect={() => void newSession("terminal")}>

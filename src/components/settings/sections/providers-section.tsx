@@ -1,13 +1,8 @@
-import { AnthropicIcon, OpenAIIcon } from "@/components/icons/brand";
 import { ToolRow } from "@/components/settings/tool-row";
 import { runInLoginTerminal, shellBin } from "@/lib/cli-login";
+import { PROVIDER_ICON } from "@/lib/provider-icons";
 import { useAppStore } from "@/store/app-store";
-import type { Provider, ProviderStatus } from "@/types";
-
-const ICONS: Record<Provider, typeof AnthropicIcon> = {
-	claude: AnthropicIcon,
-	codex: OpenAIIcon,
-};
+import type { ProviderStatus } from "@/types";
 
 function signInProvider(status: ProviderStatus) {
 	const bin = shellBin(status.path, status.id);
@@ -40,7 +35,7 @@ export function ProvidersSection() {
 						<ToolRow
 							key={status.id}
 							status={status}
-							icon={ICONS[status.id]}
+							icon={PROVIDER_ICON[status.id]}
 							onInstall={() => installProvider(status.id)}
 							onUpdate={() => updateProvider(status.id)}
 							onSetSource={(source) => setProviderSource(status.id, source)}
