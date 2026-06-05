@@ -1,19 +1,5 @@
-import {
-	AlertTriangle,
-	Bot,
-	Brain,
-	Check,
-	ChevronRight,
-	Circle,
-	FilePen,
-	FileText,
-	Globe,
-	ListChecks,
-	Search,
-	Terminal,
-	Wrench,
-} from "lucide-react";
-import { type ComponentType, type ReactNode, useState } from "react";
+import { AlertTriangle, Check, ChevronRight, Circle } from "lucide-react";
+import { type ReactNode, useState } from "react";
 
 import { DiffView } from "@/components/ui/diff-view";
 import { describeTool, type ToolDetail } from "@/lib/tool-format";
@@ -80,24 +66,6 @@ function buildSteps(items: EventRecord[]): Step[] {
 	return steps;
 }
 
-const TOOL_ICONS: Record<string, ComponentType<{ className?: string }>> = {
-	Read: FileText,
-	Edit: FilePen,
-	MultiEdit: FilePen,
-	Write: FilePen,
-	NotebookEdit: FilePen,
-	Bash: Terminal,
-	Grep: Search,
-	Glob: Search,
-	WebSearch: Search,
-	WebFetch: Globe,
-	TodoWrite: ListChecks,
-};
-
-function toolIcon(name: string): ComponentType<{ className?: string }> {
-	return TOOL_ICONS[name] ?? Wrench;
-}
-
 /** Tools whose detail is the point of the call — shown expanded by default
  *  ("verbose" view). Lookups/searches stay collapsed to keep the log scannable. */
 const VERBOSE_TOOLS = new Set([
@@ -125,7 +93,7 @@ function agentDescription(input: unknown): string | undefined {
 /** Shared bordered, height-capped, scrollable dark panel for code/text bodies. */
 function Panel({ header, children }: { header?: string; children: ReactNode }) {
 	return (
-		<div className="mt-1 overflow-hidden rounded-lg border border-border/60">
+		<div className="overflow-hidden rounded-lg border border-border/60">
 			{header ? (
 				<div
 					className="truncate border-b border-border/60 bg-muted/40 px-3 py-1.5 font-mono text-[11px] text-muted-foreground"
@@ -169,7 +137,7 @@ function TerminalPanel({
 	isError: boolean;
 }) {
 	return (
-		<div className="mt-1 overflow-hidden rounded-lg border border-border/60">
+		<div className="overflow-hidden rounded-lg border border-border/60">
 			<div
 				className={cn(
 					"px-3 py-1.5 font-mono text-[12px] whitespace-pre-wrap",
@@ -206,7 +174,7 @@ function TodoPanel({
 	todos: { content: string; status: string }[];
 }) {
 	return (
-		<div className="mt-1 flex flex-col gap-1.5 rounded-md border border-border/60 bg-background/40 px-3 py-2">
+		<div className="flex flex-col gap-1.5 rounded-lg border border-border/60 bg-muted/20 px-3 py-2">
 			{todos.map((t, i) => (
 				<div
 					// biome-ignore lint/suspicious/noArrayIndexKey: todos are positional
@@ -240,7 +208,7 @@ function TodoPanel({
 function DetailPanel({ detail }: { detail: ToolDetail }) {
 	switch (detail.kind) {
 		case "diff":
-			return <DiffView path={detail.path} patch={detail.patch} className="mt-1" />;
+			return <DiffView path={detail.path} patch={detail.patch} />;
 		case "code":
 			return <CodePanel path={detail.path} text={detail.text} />;
 		case "terminal":
@@ -258,10 +226,9 @@ function DetailPanel({ detail }: { detail: ToolDetail }) {
 	}
 }
 
-/** Shared row chrome: an icon + summary line that toggles a detail body. */
+/** Shared row chrome: a plain, text-forward summary line that toggles a detail
+ *  card (no per-row box — the card below is the only surface). */
 function Row({
-	icon: Icon,
-	iconClass,
 	open,
 	onToggle,
 	expandable,
@@ -269,8 +236,6 @@ function Row({
 	children,
 	body,
 }: {
-	icon: ComponentType<{ className?: string }>;
-	iconClass?: string;
 	open: boolean;
 	onToggle: () => void;
 	expandable: boolean;
@@ -279,23 +244,17 @@ function Row({
 	body?: ReactNode;
 }) {
 	return (
-		<div>
+		<div className="min-w-0">
 			<button
 				type="button"
 				disabled={!expandable}
 				onClick={onToggle}
 				aria-expanded={expandable ? open : undefined}
 				className={cn(
-					"flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px]",
-					expandable ? "hover:bg-muted/50" : "cursor-default",
+					"flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-[13px]",
+					expandable ? "hover:bg-muted/40" : "cursor-default",
 				)}
 			>
-				<Icon
-					className={cn(
-						"size-3.5 shrink-0",
-						error ? "text-destructive" : (iconClass ?? "text-muted-foreground"),
-					)}
-				/>
 				{children}
 				{error ? (
 					<AlertTriangle className="size-3.5 shrink-0 text-destructive" />
@@ -303,15 +262,13 @@ function Row({
 				{expandable ? (
 					<ChevronRight
 						className={cn(
-							"size-3.5 shrink-0 text-muted-foreground/60 transition-transform",
+							"size-3.5 shrink-0 text-muted-foreground/50 transition-transform",
 							open && "rotate-90",
 						)}
 					/>
 				) : null}
 			</button>
-			{open && body ? (
-				<div className="min-w-0 pr-1 pl-6">{body}</div>
-			) : null}
+			{open && body ? <div className="mt-1 min-w-0 pl-1.5">{body}</div> : null}
 		</div>
 	);
 }
@@ -322,10 +279,11 @@ function ToolRow({ step }: { step: ToolStepData }) {
 	const [open, setOpen] = useState(error || VERBOSE_TOOLS.has(step.name));
 	const expandable = !!view.detail;
 	const hasCounts = !!(view.added || view.removed);
+	// A new file reads as a creation — tint the verb green like its all-add diff.
+	const verbClass = step.name === "Write" ? "text-emerald-400" : "text-foreground/90";
 
 	return (
 		<Row
-			icon={toolIcon(step.name)}
 			open={open}
 			onToggle={() => setOpen((v) => !v)}
 			expandable={expandable}
@@ -333,7 +291,7 @@ function ToolRow({ step }: { step: ToolStepData }) {
 			body={view.detail ? <DetailPanel detail={view.detail} /> : null}
 		>
 			<span className="flex min-w-0 flex-1 items-center gap-2">
-				<span className="shrink-0 font-medium text-foreground/80">
+				<span className={cn("shrink-0 font-medium", verbClass)}>
 					{view.verb}
 				</span>
 				{view.target ? (
@@ -346,7 +304,7 @@ function ToolRow({ step }: { step: ToolStepData }) {
 				) : null}
 			</span>
 			{hasCounts ? (
-				<span className="shrink-0 tabular-nums text-[11px]">
+				<span className="shrink-0 text-[12px] tabular-nums">
 					{view.added ? (
 						<span className="text-emerald-500">+{view.added}</span>
 					) : null}
@@ -368,13 +326,12 @@ function AgentRow({ step }: { step: ToolStepData }) {
 
 	return (
 		<Row
-			icon={Bot}
 			open={open}
 			onToggle={() => setOpen((v) => !v)}
 			expandable={children.length > 0}
 			error={error}
 			body={
-				<div className="mt-0.5 flex flex-col gap-0.5 border-l border-border/40 pl-2">
+				<div className="flex flex-col gap-0.5 border-l border-border/40 pl-3">
 					{children.map((c) => (
 						<StepNode key={c.id} step={c} />
 					))}
@@ -382,7 +339,7 @@ function AgentRow({ step }: { step: ToolStepData }) {
 			}
 		>
 			<span className="flex min-w-0 flex-1 items-center gap-2">
-				<span className="shrink-0 font-medium text-foreground/80">
+				<span className="shrink-0 font-medium text-foreground/90">
 					{step.name}
 				</span>
 				{desc ? (
@@ -406,7 +363,6 @@ function ThinkingRow({ text }: { text: string }) {
 
 	return (
 		<Row
-			icon={Brain}
 			open={open}
 			onToggle={() => setOpen((v) => !v)}
 			expandable
@@ -416,8 +372,8 @@ function ThinkingRow({ text }: { text: string }) {
 				</div>
 			}
 		>
-			<span className="shrink-0 font-medium text-foreground/80">Thought</span>
-			<span className="min-w-0 flex-1 truncate text-muted-foreground italic">
+			<span className="shrink-0 font-medium text-muted-foreground">Thought</span>
+			<span className="min-w-0 flex-1 truncate text-muted-foreground/70 italic">
 				{preview}
 			</span>
 		</Row>
@@ -431,23 +387,14 @@ function StepNode({ step }: { step: Step }) {
 }
 
 /** A contiguous block of agent tool use and thinking, rendered as Claude-style
- *  per-tool summary rows that each expand into a detail panel (diff, code,
- *  terminal output, …). Subagent (Task) calls nest their own rows. */
+ *  text-forward summary lines that each expand into a single detail card (diff,
+ *  code, terminal output, …). Subagent (Task) calls nest their own rows. */
 export function ToolActivity({ items }: { items: EventRecord[] }) {
 	const steps = buildSteps(items);
 	if (steps.length === 0) return null;
 
-	const hasError = steps.some(
-		(s) => s.kind === "tool" && s.result?.isError === true,
-	);
-
 	return (
-		<div
-			className={cn(
-				"flex min-w-0 flex-col gap-0.5 rounded-lg border bg-muted/20 p-1",
-				hasError ? "border-destructive/30" : "border-border/50",
-			)}
-		>
+		<div className="flex min-w-0 flex-col gap-1">
 			{steps.map((step) => (
 				<StepNode key={step.id} step={step} />
 			))}

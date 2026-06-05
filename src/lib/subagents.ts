@@ -13,6 +13,9 @@ export interface Subagent {
 	subagentType?: string;
 	prompt?: string;
 	status: SubagentStatus;
+	/** Timestamp of the spawning Task call, and of its result (when finished). */
+	startedAt: string;
+	endedAt?: string;
 	/** The subagent's final report — the Task call's result content. */
 	result?: string;
 	/** Child tool events (for rendering its activity), in stream order. */
@@ -60,6 +63,7 @@ export function collectSubagents(events: EventRecord[]): Subagent[] {
 				subagentType,
 				prompt,
 				status: "running",
+				startedAt: e.ts,
 				activity: [],
 			});
 		}
@@ -88,6 +92,7 @@ export function collectSubagents(events: EventRecord[]): Subagent[] {
 				// The Task's own result is the subagent's final report + outcome.
 				task.result = e.content;
 				task.status = e.is_error ? "error" : "done";
+				task.endedAt = e.ts;
 			} else {
 				const root = rootOf.get(e.tool_use_id);
 				if (root) byId.get(root)?.activity.push(e);

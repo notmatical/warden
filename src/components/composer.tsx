@@ -7,7 +7,7 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { AgentPanel } from "@/components/agent-panel";
+import { AgentToolbar } from "@/components/agent-panel";
 import { EffortMenu } from "@/components/controls/effort-menu";
 import { ModeMenu } from "@/components/controls/mode-menu";
 import { ModelMenu } from "@/components/controls/model-menu";
@@ -169,7 +169,6 @@ export function Composer({ sessionId }: { sessionId: string }) {
 	return (
 		<div className="mx-auto w-full max-w-6xl px-3 pb-3">
 			<div className="flex flex-col">
-				<AgentPanel sessionId={sessionId} />
 				{showApproval && pendingApproval ? (
 					<PermissionApproval
 						sessionId={sessionId}
@@ -289,9 +288,11 @@ export function Composer({ sessionId }: { sessionId: string }) {
 						{...menuProps("effort")}
 					/>
 
-					<Tooltip>
+					<div className="ml-auto flex items-center gap-1">
+						<AgentToolbar sessionId={sessionId} />
+						<Tooltip>
 						<TooltipTrigger asChild>
-							<span className="ml-auto inline-flex">
+							<span className="inline-flex">
 								<Button
 									type="button"
 									variant="ghost"
@@ -308,7 +309,8 @@ export function Composer({ sessionId }: { sessionId: string }) {
 							</span>
 						</TooltipTrigger>
 						<TooltipContent className="max-w-56">{isolationTip}</TooltipContent>
-					</Tooltip>
+						</Tooltip>
+					</div>
 				</div>
 			</div>
 		</div>
