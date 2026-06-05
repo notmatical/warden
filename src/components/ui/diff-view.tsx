@@ -77,10 +77,15 @@ function useHighlighted(code: string[], lang: string): Highlighted | null {
 }
 
 const SIGN = { add: "+", del: "−", ctx: "" } as const;
-const SIGN_COLOR = { add: "#3fb950", del: "#f85149", ctx: "transparent" } as const;
+const SIGN_CLASS = {
+	add: "text-emerald-400",
+	del: "text-rose-400",
+	ctx: "",
+} as const;
 
-/** The highlighted diff surface — colored rows with a sign + line-number gutter.
- *  Owns no scrolling/border; a wrapper provides those. */
+/** The highlighted diff surface — colored rows with a sign + line-number gutter
+ *  on the app's warm `--code` surface. Owns no scrolling/border; a wrapper
+ *  provides those. */
 export function DiffLines({
 	patch,
 	path,
@@ -92,21 +97,16 @@ export function DiffLines({
 }) {
 	const { rows, code } = useMemo(() => parseDiff(patch), [patch]);
 	const hl = useHighlighted(code, lang ?? langFromPath(path));
-	const bg = hl?.bg ?? "#24292e";
-	const fg = hl?.fg ?? "#e1e4e8";
 
 	return (
-		<div
-			className="w-max min-w-full font-mono text-[12px] leading-[1.6]"
-			style={{ backgroundColor: bg, color: fg }}
-		>
+		<div className="w-max min-w-full bg-code font-mono text-[12px] leading-[1.6] text-code-foreground">
 			{rows.map((row, i) => {
 				if (row.kind === "hunk") {
 					return (
 						<div
 							// biome-ignore lint/suspicious/noArrayIndexKey: diff rows are positional
 							key={i}
-							className="px-3 py-0.5 whitespace-pre text-sky-400/80 select-none"
+							className="px-3 py-0.5 whitespace-pre text-muted-foreground/70 select-none"
 						>
 							{row.text}
 						</div>
@@ -119,20 +119,19 @@ export function DiffLines({
 						key={i}
 						className={cn(
 							"flex",
-							row.kind === "add" && "bg-emerald-500/[0.12]",
-							row.kind === "del" && "bg-red-500/[0.12]",
+							row.kind === "add" && "bg-emerald-500/[0.1]",
+							row.kind === "del" && "bg-rose-500/[0.1]",
 						)}
 					>
 						<span
-							className="w-4 shrink-0 text-center select-none"
-							style={{ color: SIGN_COLOR[row.kind] }}
+							className={cn(
+								"w-4 shrink-0 text-center select-none",
+								SIGN_CLASS[row.kind],
+							)}
 						>
 							{SIGN[row.kind]}
 						</span>
-						<span
-							className="w-9 shrink-0 pr-3 text-right text-[11px] tabular-nums select-none"
-							style={{ color: "#6e7681" }}
-						>
+						<span className="w-9 shrink-0 pr-3 text-right text-[11px] text-muted-foreground/40 tabular-nums select-none">
 							{row.num ?? ""}
 						</span>
 						<code className="flex-1 pr-4 whitespace-pre">
