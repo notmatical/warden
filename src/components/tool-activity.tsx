@@ -22,7 +22,10 @@ function buildSteps(items: EventRecord[]): Step[] {
 
 	for (const item of items) {
 		if (item.type === "thinking") {
-			steps.push({ kind: "thinking", id: item.id, text: item.text });
+			// skip empty/redacted thinking responses
+			if (item.text.trim()) {
+				steps.push({ kind: "thinking", id: item.id, text: item.text });
+			}
 		} else if (item.type === "tool_use") {
 			toolIndexById.set(item.id, steps.length);
 			steps.push({
@@ -116,6 +119,9 @@ export function ToolActivity({ items }: { items: EventRecord[] }) {
 	const hasError = steps.some((s) => s.kind === "tool" && s.result?.isError);
 
 	const [open, setOpen] = useState(hasError);
+
+	// skip empty/redacted thinking blocks
+	if (steps.length === 0) return null;
 
 	const uniqueNames = [...new Set(toolNames)];
 	const summary =

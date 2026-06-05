@@ -106,6 +106,10 @@ fn parse_assistant_block(block: &Value) -> Option<AgentEvent> {
         }
         "thinking" => {
             let text = block.get("thinking").and_then(Value::as_str)?;
+            // skip empty/redacted thinking blocks
+            if text.trim().is_empty() {
+                return None;
+            }
             Some(AgentEvent::Thinking {
                 text: text.to_string(),
             })
