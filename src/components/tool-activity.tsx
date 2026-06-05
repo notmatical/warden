@@ -1,6 +1,22 @@
-import { AlertTriangle, Bot, ChevronRight, Sparkles, Wrench } from "lucide-react";
-import { useState } from "react";
+import {
+	AlertTriangle,
+	Bot,
+	Brain,
+	Check,
+	ChevronRight,
+	Circle,
+	FilePen,
+	FileText,
+	Globe,
+	ListChecks,
+	Search,
+	Terminal,
+	Wrench,
+} from "lucide-react";
+import { type ComponentType, type ReactNode, useState } from "react";
 
+import { DiffView } from "@/components/ui/diff-view";
+import { describeTool, type ToolDetail } from "@/lib/tool-format";
 import { cn } from "@/lib/utils";
 import type { EventRecord } from "@/types";
 
@@ -64,28 +80,22 @@ function buildSteps(items: EventRecord[]): Step[] {
 	return steps;
 }
 
-function prettyInput(input: unknown): string {
-	if (input === null || input === undefined) return "";
-	if (typeof input === "string") return input;
-	try {
-		return JSON.stringify(input, null, 2);
-	} catch {
-		return String(input);
-	}
-}
+const TOOL_ICONS: Record<string, ComponentType<{ className?: string }>> = {
+	Read: FileText,
+	Edit: FilePen,
+	MultiEdit: FilePen,
+	Write: FilePen,
+	NotebookEdit: FilePen,
+	Bash: Terminal,
+	Grep: Search,
+	Glob: Search,
+	WebSearch: Search,
+	WebFetch: Globe,
+	TodoWrite: ListChecks,
+};
 
-function CodeBlob({ text, tone }: { text: string; tone?: "error" }) {
-	if (!text) return null;
-	return (
-		<pre
-			className={cn(
-				"mt-1 max-h-60 overflow-auto rounded bg-background/60 px-2.5 py-1.5 font-mono text-[11px] leading-relaxed whitespace-pre-wrap",
-				tone === "error" ? "text-destructive" : "text-muted-foreground",
-			)}
-		>
-			{text}
-		</pre>
-	);
+function toolIcon(name: string): ComponentType<{ className?: string }> {
+	return TOOL_ICONS[name] ?? Wrench;
 }
 
 /** A Task/Agent call's short description, for the header. */
@@ -97,127 +107,323 @@ function agentDescription(input: unknown): string | undefined {
 	return undefined;
 }
 
-function ToolStep({ step }: { step: ToolStepData }) {
-	const children = step.children;
-	const isAgent = !!children && children.length > 0;
-	const desc = isAgent ? agentDescription(step.input) : undefined;
+/** Shared bordered, height-capped, scrollable panel for code/text bodies. */
+function Panel({ header, children }: { header?: string; children: ReactNode }) {
 	return (
-		<div className="border-t border-border/50 px-3 py-2 first:border-t-0">
-			<div className="flex items-center gap-1.5 font-mono text-[12px] text-foreground">
-				{isAgent ? (
-					<Bot className="size-3 shrink-0 text-muted-foreground" />
-				) : (
-					<Wrench className="size-3 shrink-0 text-muted-foreground" />
+		<div className="mt-1 overflow-hidden rounded-md border border-border/60 bg-background/40">
+			{header ? (
+				<div
+					className="truncate border-b border-border/60 px-3 py-1.5 font-mono text-[11px] text-muted-foreground"
+					title={header}
+				>
+					{header}
+				</div>
+			) : null}
+			<div className="max-h-64 overflow-auto">{children}</div>
+		</div>
+	);
+}
+
+function CodePanel({ path, text }: { path?: string; text: string }) {
+	return (
+		<Panel header={path}>
+			<pre className="m-0 px-3 py-1.5 font-mono text-[11px] leading-[1.5] whitespace-pre">
+				{text}
+			</pre>
+		</Panel>
+	);
+}
+
+function TextPanel({ text }: { text: string }) {
+	return (
+		<Panel>
+			<pre className="m-0 px-3 py-1.5 font-mono text-[11px] leading-[1.5] whitespace-pre-wrap text-muted-foreground">
+				{text}
+			</pre>
+		</Panel>
+	);
+}
+
+function TerminalPanel({
+	command,
+	output,
+	isError,
+}: {
+	command: string;
+	output: string;
+	isError: boolean;
+}) {
+	return (
+		<div className="mt-1 overflow-hidden rounded-md border border-border/60 bg-background/40">
+			<div className="border-b border-border/60 px-3 py-1.5 font-mono text-[11px] whitespace-pre-wrap text-foreground/80">
+				<span className="select-none text-muted-foreground/60">$ </span>
+				{command}
+			</div>
+			{output ? (
+				<div className="max-h-64 overflow-auto">
+					<pre
+						className={cn(
+							"m-0 px-3 py-1.5 font-mono text-[11px] leading-[1.5] whitespace-pre-wrap",
+							isError ? "text-destructive" : "text-muted-foreground",
+						)}
+					>
+						{output}
+					</pre>
+				</div>
+			) : null}
+		</div>
+	);
+}
+
+function TodoPanel({
+	todos,
+}: {
+	todos: { content: string; status: string }[];
+}) {
+	return (
+		<div className="mt-1 flex flex-col gap-1.5 rounded-md border border-border/60 bg-background/40 px-3 py-2">
+			{todos.map((t, i) => (
+				<div
+					// biome-ignore lint/suspicious/noArrayIndexKey: todos are positional
+					key={i}
+					className="flex items-center gap-2 text-[12px]"
+				>
+					{t.status === "completed" ? (
+						<Check className="size-3 shrink-0 text-emerald-500" />
+					) : t.status === "in_progress" ? (
+						<Circle className="size-3 shrink-0 fill-primary/20 text-primary" />
+					) : (
+						<Circle className="size-3 shrink-0 text-muted-foreground/40" />
+					)}
+					<span
+						className={cn(
+							t.status === "completed"
+								? "text-muted-foreground line-through"
+								: t.status === "in_progress"
+									? "text-foreground"
+									: "text-muted-foreground",
+						)}
+					>
+						{t.content}
+					</span>
+				</div>
+			))}
+		</div>
+	);
+}
+
+function DetailPanel({ detail }: { detail: ToolDetail }) {
+	switch (detail.kind) {
+		case "diff":
+			return <DiffView path={detail.path} patch={detail.patch} className="mt-1" />;
+		case "code":
+			return <CodePanel path={detail.path} text={detail.text} />;
+		case "terminal":
+			return (
+				<TerminalPanel
+					command={detail.command}
+					output={detail.output}
+					isError={detail.isError}
+				/>
+			);
+		case "todos":
+			return <TodoPanel todos={detail.todos} />;
+		case "text":
+			return <TextPanel text={detail.text} />;
+	}
+}
+
+/** Shared row chrome: an icon + summary line that toggles a detail body. */
+function Row({
+	icon: Icon,
+	iconClass,
+	open,
+	onToggle,
+	expandable,
+	error,
+	children,
+	body,
+}: {
+	icon: ComponentType<{ className?: string }>;
+	iconClass?: string;
+	open: boolean;
+	onToggle: () => void;
+	expandable: boolean;
+	error?: boolean;
+	children: ReactNode;
+	body?: ReactNode;
+}) {
+	return (
+		<div>
+			<button
+				type="button"
+				disabled={!expandable}
+				onClick={onToggle}
+				aria-expanded={expandable ? open : undefined}
+				className={cn(
+					"flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[12px]",
+					expandable ? "hover:bg-muted/50" : "cursor-default",
 				)}
-				<span className="truncate">
-					{step.name}
-					{desc ? (
-						<span className="text-muted-foreground"> · {desc}</span>
-					) : null}
+			>
+				<Icon
+					className={cn(
+						"size-3.5 shrink-0",
+						error ? "text-destructive" : (iconClass ?? "text-muted-foreground"),
+					)}
+				/>
+				{children}
+				{error ? (
+					<AlertTriangle className="size-3.5 shrink-0 text-destructive" />
+				) : null}
+				{expandable ? (
+					<ChevronRight
+						className={cn(
+							"size-3.5 shrink-0 text-muted-foreground/60 transition-transform",
+							open && "rotate-90",
+						)}
+					/>
+				) : null}
+			</button>
+			{open && body ? <div className="pr-1 pl-6">{body}</div> : null}
+		</div>
+	);
+}
+
+function ToolRow({ step }: { step: ToolStepData }) {
+	const view = describeTool(step.name, step.input, step.result);
+	const error = step.result?.isError ?? false;
+	const [open, setOpen] = useState(error);
+	const expandable = !!view.detail;
+	const hasCounts = !!(view.added || view.removed);
+
+	return (
+		<Row
+			icon={toolIcon(step.name)}
+			open={open}
+			onToggle={() => setOpen((v) => !v)}
+			expandable={expandable}
+			error={error}
+			body={view.detail ? <DetailPanel detail={view.detail} /> : null}
+		>
+			<span className="flex min-w-0 flex-1 items-center gap-2">
+				<span className="shrink-0 font-medium text-foreground/80">
+					{view.verb}
 				</span>
-				{isAgent ? (
-					<span className="shrink-0 text-muted-foreground">
-						{children.length} step{children.length > 1 ? "s" : ""}
+				{view.target ? (
+					<span
+						className="truncate font-mono text-[11px] text-muted-foreground"
+						title={view.target}
+					>
+						{view.label ?? view.target}
 					</span>
 				) : null}
-				{step.result?.isError && (
-					<span className="shrink-0 text-destructive">· error</span>
-				)}
-			</div>
-			{/* A subagent shows its nested tools instead of its raw prompt. */}
-			{isAgent ? (
-				<div className="mt-1.5 ml-1 border-l border-border/40 pl-1.5">
+			</span>
+			{hasCounts ? (
+				<span className="shrink-0 tabular-nums text-[11px]">
+					{view.added ? (
+						<span className="text-emerald-500">+{view.added}</span>
+					) : null}
+					{view.added && view.removed ? " " : null}
+					{view.removed ? (
+						<span className="text-red-500">−{view.removed}</span>
+					) : null}
+				</span>
+			) : null}
+		</Row>
+	);
+}
+
+function AgentRow({ step }: { step: ToolStepData }) {
+	const children = step.children ?? [];
+	const desc = agentDescription(step.input);
+	const error = step.result?.isError ?? false;
+	const [open, setOpen] = useState(false);
+
+	return (
+		<Row
+			icon={Bot}
+			open={open}
+			onToggle={() => setOpen((v) => !v)}
+			expandable={children.length > 0}
+			error={error}
+			body={
+				<div className="mt-0.5 flex flex-col gap-0.5 border-l border-border/40 pl-2">
 					{children.map((c) => (
-						<ToolStep key={c.id} step={c} />
+						<StepNode key={c.id} step={c} />
 					))}
 				</div>
-			) : (
-				<CodeBlob text={prettyInput(step.input)} />
-			)}
-			{step.result && (
-				<CodeBlob
-					text={step.result.content}
-					tone={step.result.isError ? "error" : undefined}
-				/>
-			)}
-		</div>
+			}
+		>
+			<span className="flex min-w-0 flex-1 items-center gap-2">
+				<span className="shrink-0 font-medium text-foreground/80">
+					{step.name}
+				</span>
+				{desc ? (
+					<span className="truncate text-muted-foreground" title={desc}>
+						{desc}
+					</span>
+				) : null}
+			</span>
+			{children.length > 0 ? (
+				<span className="shrink-0 text-[11px] text-muted-foreground/70">
+					{children.length} step{children.length > 1 ? "s" : ""}
+				</span>
+			) : null}
+		</Row>
 	);
 }
 
-function ThinkingStep({ text }: { text: string }) {
+function ThinkingRow({ text }: { text: string }) {
+	const [open, setOpen] = useState(false);
+	const preview = text.trim().split("\n", 1)[0];
+
 	return (
-		<div className="border-t border-border/50 px-3 py-2 text-[12px] whitespace-pre-wrap text-muted-foreground italic first:border-t-0">
-			{text}
-		</div>
+		<Row
+			icon={Brain}
+			open={open}
+			onToggle={() => setOpen((v) => !v)}
+			expandable
+			body={
+				<div className="py-1 text-[12px] whitespace-pre-wrap text-muted-foreground italic">
+					{text}
+				</div>
+			}
+		>
+			<span className="shrink-0 font-medium text-foreground/80">Thought</span>
+			<span className="min-w-0 flex-1 truncate text-muted-foreground italic">
+				{preview}
+			</span>
+		</Row>
 	);
 }
 
-/** A non-intrusive, collapsible summary of a contiguous block of agent tool use
- *  and thinking — modeled on Claude Desktop's collapsed activity rows. */
+function StepNode({ step }: { step: Step }) {
+	if (step.kind === "thinking") return <ThinkingRow text={step.text} />;
+	if (step.children && step.children.length > 0) return <AgentRow step={step} />;
+	return <ToolRow step={step} />;
+}
+
+/** A contiguous block of agent tool use and thinking, rendered as Claude-style
+ *  per-tool summary rows that each expand into a detail panel (diff, code,
+ *  terminal output, …). Subagent (Task) calls nest their own rows. */
 export function ToolActivity({ items }: { items: EventRecord[] }) {
 	const steps = buildSteps(items);
-	const toolNames = steps
-		.filter((s): s is Extract<Step, { kind: "tool" }> => s.kind === "tool")
-		.map((s) => s.name);
-	const hasThinking = steps.some((s) => s.kind === "thinking");
-	const hasError = steps.some((s) => s.kind === "tool" && s.result?.isError);
-
-	const [open, setOpen] = useState(hasError);
-
-	// skip empty/redacted thinking blocks
 	if (steps.length === 0) return null;
 
-	const uniqueNames = [...new Set(toolNames)];
-	const summary =
-		toolNames.length > 0
-			? `${toolNames.length} tool call${toolNames.length > 1 ? "s" : ""}`
-			: "Thought for a moment";
+	const hasError = steps.some(
+		(s) => s.kind === "tool" && s.result?.isError === true,
+	);
 
 	return (
 		<div
 			className={cn(
-				"rounded-lg border bg-muted/30 text-xs",
-				hasError ? "border-destructive/40" : "border-border/60",
+				"flex flex-col gap-0.5 rounded-lg border bg-muted/20 p-1",
+				hasError ? "border-destructive/30" : "border-border/50",
 			)}
 		>
-			<button
-				type="button"
-				onClick={() => setOpen((v) => !v)}
-				aria-expanded={open}
-				className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-muted-foreground"
-			>
-				{hasThinking && toolNames.length === 0 ? (
-					<Sparkles className="size-3.5 shrink-0" />
-				) : (
-					<Wrench className="size-3.5 shrink-0" />
-				)}
-				<span className="font-medium text-foreground/80">{summary}</span>
-				{uniqueNames.length > 0 && (
-					<span className="truncate font-mono text-muted-foreground/70">
-						{uniqueNames.join(" · ")}
-					</span>
-				)}
-				{hasError && (
-					<AlertTriangle className="size-3.5 shrink-0 text-destructive" />
-				)}
-				<ChevronRight
-					className={cn(
-						"ml-auto size-3.5 shrink-0 transition-transform",
-						open && "rotate-90",
-					)}
-				/>
-			</button>
-			{open && (
-				<div className="border-t border-border/60">
-					{steps.map((step) =>
-						step.kind === "thinking" ? (
-							<ThinkingStep key={step.id} text={step.text} />
-						) : (
-							<ToolStep key={step.id} step={step} />
-						),
-					)}
-				</div>
-			)}
+			{steps.map((step) => (
+				<StepNode key={step.id} step={step} />
+			))}
 		</div>
 	);
 }

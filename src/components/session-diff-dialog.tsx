@@ -9,38 +9,13 @@ import {
 	DialogTitle,
 	DialogTrigger,
 } from "@/components/ui/dialog";
+import { DiffLines } from "@/components/ui/diff-view";
 import * as ipc from "@/lib/ipc";
 import { relativeTime } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import type { DiffFile, GitCommit } from "@/types/git-diff";
 
 type Tab = "files" | "commits";
-
-/** Render a unified-diff patch with per-line add/remove/hunk coloring. */
-function DiffPatch({ patch }: { patch: string }) {
-	return (
-		<pre className="m-0 overflow-x-auto py-2 font-mono text-[11px] leading-[1.5]">
-			{patch.split("\n").map((line, i) => {
-				const tone =
-					line.startsWith("+++") || line.startsWith("---")
-						? "text-muted-foreground"
-						: line.startsWith("@@")
-							? "text-sky-500"
-							: line.startsWith("+")
-								? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-								: line.startsWith("-")
-									? "bg-red-500/10 text-red-600 dark:text-red-400"
-									: "text-muted-foreground/90";
-				return (
-					// biome-ignore lint/suspicious/noArrayIndexKey: diff lines are positional
-					<div key={i} className={cn("whitespace-pre px-3", tone)}>
-						{line || " "}
-					</div>
-				);
-			})}
-		</pre>
-	);
-}
 
 /** Trigger + dialog showing a session's changes (files + commits) since base. */
 export function SessionDiffButton({ sessionId }: { sessionId: string }) {
@@ -149,7 +124,7 @@ export function SessionDiffButton({ sessionId }: { sessionId: string }) {
 										Binary file — no textual diff.
 									</p>
 								) : current ? (
-									<DiffPatch patch={current.patch} />
+									<DiffLines patch={current.patch} />
 								) : null}
 							</div>
 						</div>
