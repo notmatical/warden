@@ -160,7 +160,7 @@ function SessionRow({ sessionId }: { sessionId: string }) {
 								onKeyDown={onEditKeyDown}
 								onBlur={commitRename}
 								onFocus={(e) => e.target.select()}
-								className="h-5 min-w-0 flex-1 px-1 py-0 text-xs"
+								className="h-5 min-w-0 flex-1 rounded-md px-1 py-0 text-xs"
 							/>
 						</div>
 					) : (
@@ -422,14 +422,14 @@ function GroupRow({
 								onKeyDown={onEditKeyDown}
 								onBlur={commitRename}
 								onFocus={(e) => e.target.select()}
-								className="h-5 min-w-0 flex-1 px-1 py-0 text-sm"
+								className="h-5 min-w-0 flex-1 rounded-md px-1 py-0 text-sm"
 							/>
 						</div>
 					) : (
 						<SidebarMenuButton
 							isActive={active}
 							onClick={onToggle}
-							className="cursor-default hover:bg-transparent hover:text-sidebar-foreground data-[active=true]:bg-transparent data-[active=true]:font-medium data-[active=true]:text-sidebar-foreground"
+							className="cursor-default hover:bg-transparent hover:text-sidebar-foreground active:bg-transparent active:text-sidebar-foreground data-[active=true]:bg-transparent data-[active=true]:font-medium data-[active=true]:text-sidebar-foreground"
 						>
 							<ChevronRight
 								className={cn("transition-transform", expanded && "rotate-90")}
