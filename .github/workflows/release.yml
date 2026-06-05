@@ -36,6 +36,11 @@ jobs:
           publish: bun run release:publish
           commit: "chore(release): version packages"
           title: "chore(release): version packages"
+          # We only use the publish step to signal `published=true`; the real
+          # release tag (warden-v<version>) and GitHub release are cut by the
+          # build job's tauri-action. Disable the action's own tag push, which
+          # would otherwise try to push a non-existent `v<version>` tag.
+          createGithubReleases: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
