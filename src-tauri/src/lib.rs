@@ -45,21 +45,37 @@ pub fn run() {
             std::fs::create_dir_all(&data_dir)?;
             let store = Store::open(&data_dir.join("warden.db"))?;
 
-            // Seed the managed-CLI resolver with the app data dir and each tool's
-            // persisted source preference (defaulting to Auto).
+            // The managed-path lookups below need the app data dir first.
+            cli::set_app_data(data_dir.clone());
+
+            // Seed each tool's source preference, defaulting to Managed. Legacy
+            // "auto"/unset entries are migrated once to a concrete choice: keep a
+            // working system-only install, otherwise managed — and persisted so
+            // it sticks.
             let sources = cli::Tool::ALL
                 .iter()
                 .map(|&tool| {
-                    let source = store
+                    let stored = store
                         .get_setting(&cli::Source::setting_key(tool))
                         .ok()
                         .flatten()
-                        .and_then(|v| cli::Source::parse(&v))
-                        .unwrap_or(cli::Source::Auto);
+                        .and_then(|v| cli::Source::parse(&v));
+                    let source = stored.unwrap_or_else(|| {
+                        let derived = if cli::managed_installed(tool).is_some()
+                            || cli::system_binary(tool).is_none()
+                        {
+                            cli::Source::Managed
+                        } else {
+                            cli::Source::System
+                        };
+                        let _ = store
+                            .set_setting(&cli::Source::setting_key(tool), derived.as_str());
+                        derived
+                    });
                     (tool, source)
                 })
                 .collect();
-            cli::init(data_dir.clone(), sources);
+            cli::set_sources(sources);
 
             app.manage(AppState {
                 store,

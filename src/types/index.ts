@@ -4,7 +4,7 @@ export type Backend = "claude" | "codex"
 export type Provider = Backend
 
 /** Where a provider's CLI is sourced from. */
-export type ProviderSource = "auto" | "managed" | "system"
+export type ProviderSource = "managed" | "system"
 
 /** A provider's installation/auth snapshot, surfaced by the backend. */
 export interface ProviderStatus {

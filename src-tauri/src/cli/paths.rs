@@ -55,11 +55,9 @@ pub fn ensure_cli_dir(tool: Tool) -> Result<PathBuf, String> {
 pub fn resolve(tool: Tool) -> PathBuf {
     let bare = || PathBuf::from(tool.bin());
     match source::source(tool) {
-        Source::Auto => system_binary(tool)
-            .or_else(|| managed_installed(tool))
-            .or_else(|| managed_binary_path(tool))
-            .unwrap_or_else(bare),
-        Source::System => system_binary(tool).unwrap_or_else(bare),
+        // Managed points at warden's copy whether or not it's installed yet; a
+        // missing one surfaces as a clear "not found" so the UI prompts install.
         Source::Managed => managed_binary_path(tool).unwrap_or_else(bare),
+        Source::System => system_binary(tool).unwrap_or_else(bare),
     }
 }

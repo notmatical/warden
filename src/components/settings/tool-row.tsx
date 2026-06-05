@@ -6,10 +6,17 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { ProviderSource, ProviderStatus } from "@/types";
 
-const SOURCES: { value: ProviderSource; label: string }[] = [
-	{ value: "auto", label: "Auto" },
-	{ value: "managed", label: "Managed" },
-	{ value: "system", label: "System" },
+const SOURCES: { value: ProviderSource; label: string; hint: string }[] = [
+	{
+		value: "managed",
+		label: "Managed",
+		hint: "warden installs this and keeps it updated.",
+	},
+	{
+		value: "system",
+		label: "System",
+		hint: "Use your PATH install — you manage updates.",
+	},
 ];
 
 interface InstallProgress {
@@ -128,35 +135,38 @@ export function ToolRow({
 					</span>
 				</div>
 			) : (
-				<div className="grid grid-cols-3 gap-0.5 rounded-md border border-border/70 bg-muted/30 p-0.5">
-					{SOURCES.map((opt) => {
-						const active = status.source === opt.value;
-						const unavailable =
-							(opt.value === "system" && !status.systemDetected) ||
-							(opt.value === "managed" && !status.managedInstalled);
-						return (
-							<button
-								key={opt.value}
-								type="button"
-								onClick={() => onSetSource(opt.value)}
-								title={
-									unavailable
-										? opt.value === "system"
-											? "Not found on PATH"
-											: "Not installed"
-										: undefined
-								}
-								className={cn(
-									"rounded-[5px] px-2 py-1 text-[11px] font-medium transition-colors",
-									active
-										? "bg-background text-foreground shadow-[0_1px_2px_rgb(0_0_0/0.06)]"
-										: "text-muted-foreground hover:text-foreground",
-								)}
-							>
-								{opt.label}
-							</button>
-						);
-					})}
+				<div className="flex flex-col gap-1">
+					<div className="grid grid-cols-2 gap-0.5 rounded-md border border-border/70 bg-muted/30 p-0.5">
+						{SOURCES.map((opt) => {
+							const active = status.source === opt.value;
+							// Managed is always selectable (selecting it offers Install);
+							// System needs an actual PATH binary.
+							const unavailable =
+								opt.value === "system" && !status.systemDetected;
+							return (
+								<button
+									key={opt.value}
+									type="button"
+									disabled={unavailable}
+									onClick={() => onSetSource(opt.value)}
+									title={unavailable ? "Not found on PATH" : undefined}
+									className={cn(
+										"rounded-[5px] px-2 py-1 text-[11px] font-medium transition-colors",
+										unavailable
+											? "cursor-not-allowed text-muted-foreground/40"
+											: active
+												? "bg-background text-foreground shadow-[0_1px_2px_rgb(0_0_0/0.06)]"
+												: "text-muted-foreground hover:text-foreground",
+									)}
+								>
+									{opt.label}
+								</button>
+							);
+						})}
+					</div>
+					<span className="px-0.5 text-[10.5px] text-muted-foreground/80">
+						{SOURCES.find((s) => s.value === status.source)?.hint}
+					</span>
 				</div>
 			)}
 		</div>
