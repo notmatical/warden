@@ -1,12 +1,7 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
-import { Loader2, Pencil, X } from "lucide-react";
+import { Pencil, X } from "lucide-react";
 import { type KeyboardEvent, useState } from "react";
-import {
-	AnthropicIcon,
-	ClaudeIcon,
-	CodexIcon,
-	OpenAIIcon,
-} from "@/components/icons/brand";
+import { SessionFavicon } from "@/components/session-favicon";
 import { Badge } from "@/components/ui/badge";
 import {
 	ContextMenu,
@@ -63,31 +58,9 @@ function Tab({ sessionId }: { sessionId: string }) {
 		return null;
 	}
 
-	// Browser-favicons. Native terminals show the product logo (Claude/Codex);
-	// agent sessions show the model's provider mark (Anthropic/OpenAI). Running
-	// sessions show a spinner; errors tint the icon red.
-	const Brand =
-		kind === "terminal"
-			? backend === "codex"
-				? CodexIcon
-				: ClaudeIcon
-			: backend === "codex"
-				? OpenAIIcon
-				: AnthropicIcon;
-	const colored = kind === "terminal";
-	const tabIcon =
-		status === "running" ? (
-			<Loader2 className="size-3.5 shrink-0 animate-spin text-amber-500" />
-		) : (
-			<Brand
-				className={cn(
-					"size-3.5 shrink-0",
-					// The colored terminal logos render full-strength; the monochrome
-					// provider marks stay subtle (and tint red on error).
-					colored ? null : status === "error" ? "text-red-500" : "opacity-70",
-				)}
-			/>
-		);
+	const tabIcon = (
+		<SessionFavicon kind={kind} backend={backend} status={status} />
+	);
 
 	const startRename = () => {
 		setDraft(title);

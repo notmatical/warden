@@ -18,7 +18,7 @@ import { type KeyboardEvent, type ReactNode, useEffect, useState } from "react";
 import { useConfirm } from "@/components/confirm-dialog";
 import { UpdateBanner } from "@/components/update-banner";
 import { ReviewPrDialog } from "@/components/review-pr-dialog";
-import { StatusDot } from "@/components/status-dot";
+import { SessionFavicon } from "@/components/session-favicon";
 import { Button } from "@/components/ui/button";
 import {
 	ContextMenu,
@@ -145,7 +145,11 @@ function SessionRow({ sessionId }: { sessionId: string }) {
 				<SidebarMenuSubItem>
 					{editing ? (
 						<div className="flex h-7 items-center gap-2 px-1.5">
-							<StatusDot status={session.status} />
+							<SessionFavicon
+								kind={session.kind}
+								backend={session.backend}
+								status={session.status}
+							/>
 							<Input
 								autoFocus
 								value={draft}
@@ -172,7 +176,11 @@ function SessionRow({ sessionId }: { sessionId: string }) {
 								title={session.title}
 								className={cn(isDragging && "opacity-50")}
 							>
-								<StatusDot status={session.status} />
+								<SessionFavicon
+									kind={session.kind}
+									backend={session.backend}
+									status={session.status}
+								/>
 								<span className="min-w-0 flex-1 truncate">{session.title}</span>
 							</button>
 						</SidebarMenuSubButton>
