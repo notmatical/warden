@@ -86,11 +86,10 @@ export function ContextMeter({ sessionId }: { sessionId: string }) {
 			<PopoverTrigger asChild>
 				<button
 					type="button"
-					title="Context window"
-					className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+					title={`Context · ${pctLabel}%`}
+					className="flex items-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
 				>
 					<Ring pct={pct} tone={tone} />
-					<span className="text-[11px] tabular-nums">{pctLabel}%</span>
 				</button>
 			</PopoverTrigger>
 			<PopoverContent side="top" align="end" className="w-72 p-0">
