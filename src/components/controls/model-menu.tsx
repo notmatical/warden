@@ -1,9 +1,7 @@
 import { Check, ChevronsUpDown, Search } from "lucide-react";
-import type { ComponentType, SVGProps } from "react";
 import { useState } from "react";
 
 import { AnimatedZap } from "@/components/animated-zap";
-import { AnthropicIcon, OpenAIIcon } from "@/components/icons/brand";
 import { Shortcut } from "@/components/shortcut";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,6 +28,7 @@ import {
 	supportsFast,
 	withFast,
 } from "@/lib/models";
+import { PROVIDER_ICON } from "@/lib/provider-icons";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app-store";
 import type { Backend } from "@/types";
@@ -50,12 +49,6 @@ interface ProviderEntry {
 	name: string;
 	backend: Backend;
 }
-
-/** A provider's brand mark, shown in the rail when more than one is usable. */
-const PROVIDER_ICON: Record<Backend, ComponentType<SVGProps<SVGSVGElement>>> = {
-	claude: AnthropicIcon,
-	codex: OpenAIIcon,
-};
 
 const PROVIDER_ENTRIES: ProviderEntry[] = MODEL_PROVIDERS.map((name) => ({
 	name,
