@@ -3,8 +3,8 @@
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/inter";
 @import "./animation.css";
-
-@plugin "@tailwindcss/typography";
+@import "./syntax.css";
+@import "./markdown.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -164,19 +164,5 @@
 
   html {
     @apply font-sans;
-  }
-
-  /* Shiki emits per-theme colors as CSS variables (defaultColor: false); resolve
-     them to `color` by theme so highlighted code sits on the app's own surface. */
-  .shiki,
-  .shiki span,
-  [data-tok] {
-    color: var(--shiki-light);
-  }
-
-  .dark .shiki,
-  .dark .shiki span,
-  .dark [data-tok] {
-    color: var(--shiki-dark);
   }
 }
