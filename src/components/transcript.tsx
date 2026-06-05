@@ -247,6 +247,19 @@ export function Transcript({
 		[events, sessionId],
 	);
 
+	// An AskUserQuestion is awaiting a reply: the agent sometimes keeps narrating
+	// afterwards, which would stream in and then vanish when its finalized text is
+	// suppressed. Hide the live stream too so it never flickers.
+	const pendingQuestion = useMemo(() => {
+		if (!events) return false;
+		for (let i = events.length - 1; i >= 0; i--) {
+			const e = events[i];
+			if (e.type === "user_message") return false;
+			if (e.type === "tool_use" && e.name === "AskUserQuestion") return true;
+		}
+		return false;
+	}, [events]);
+
 	const viewportRef = useRef<HTMLDivElement>(null);
 	const pinnedRef = useRef(true);
 
@@ -293,7 +306,9 @@ export function Transcript({
 					</p>
 				)}
 				{timeline}
-				{streaming && <AssistantMessage text={streaming} />}
+				{streaming && !pendingQuestion && (
+					<AssistantMessage text={streaming} />
+				)}
 				<StreamingStatus sessionId={sessionId} />
 			</div>
 		</ScrollArea>
