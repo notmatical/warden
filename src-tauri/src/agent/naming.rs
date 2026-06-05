@@ -5,7 +5,7 @@ use std::process::Stdio;
 
 use tokio::process::Command;
 
-use crate::providers::claude::agent::resolve_claude;
+use crate::providers::claude::agent::{resolve_claude, run_oneshot};
 
 /// A small, fast model is plenty for a few-word title.
 const NAMING_MODEL: &str = "haiku";
@@ -70,27 +70,27 @@ pub async fn generate_session_title(working_dir: &str, message: &str) -> Option<
     let bin = resolve_claude();
     let prompt = build_prompt(message);
 
-    let output = match Command::new(&bin)
-        .args([
-            "-p",
-            &prompt,
-            "--output-format",
-            "json",
-            "--model",
-            NAMING_MODEL,
-            "--permission-mode",
-            "bypassPermissions",
-            "--max-turns",
-            "1",
-        ])
-        .current_dir(working_dir)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true)
-        .output()
-        .await
-    {
+    // The prompt goes over stdin, not as an argument: a multiline prompt can't be
+    // passed to a Windows `claude.cmd` shim ("batch file arguments are invalid").
+    let mut cmd = Command::new(&bin);
+    cmd.args([
+        "-p",
+        "--output-format",
+        "json",
+        "--model",
+        NAMING_MODEL,
+        "--permission-mode",
+        "bypassPermissions",
+        "--max-turns",
+        "1",
+    ])
+    .current_dir(working_dir)
+    .stdin(Stdio::piped())
+    .stdout(Stdio::piped())
+    .stderr(Stdio::piped())
+    .kill_on_drop(true);
+
+    let output = match run_oneshot(cmd, &prompt).await {
         Ok(output) => output,
         Err(e) => {
             log::warn!("session naming: failed to spawn {:?}: {e}", bin);

@@ -9,7 +9,7 @@ use tokio::process::Command;
 
 use crate::error::{AppError, Result};
 use crate::git;
-use crate::providers::claude::agent::resolve_claude;
+use crate::providers::claude::agent::{resolve_claude, run_oneshot};
 
 /// A small, fast model is plenty for a PR title + body.
 const MODEL: &str = "haiku";
@@ -105,25 +105,26 @@ pub async fn generate_pr_content(
     };
 
     let prompt = build_prompt(&subjects, &stat, pr_template(worktree).as_deref());
-    let output = Command::new(resolve_claude())
-        .args([
-            "-p",
-            &prompt,
-            "--output-format",
-            "json",
-            "--model",
-            MODEL,
-            "--permission-mode",
-            "bypassPermissions",
-            "--max-turns",
-            "1",
-        ])
-        .current_dir(worktree)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .kill_on_drop(true)
-        .output()
+    // The prompt is fed over stdin, not as an argument: a multiline prompt can't
+    // be passed to a Windows `claude.cmd` shim ("batch file arguments are invalid").
+    let mut cmd = Command::new(resolve_claude());
+    cmd.args([
+        "-p",
+        "--output-format",
+        "json",
+        "--model",
+        MODEL,
+        "--permission-mode",
+        "bypassPermissions",
+        "--max-turns",
+        "1",
+    ])
+    .current_dir(worktree)
+    .stdin(Stdio::piped())
+    .stdout(Stdio::piped())
+    .stderr(Stdio::null())
+    .kill_on_drop(true);
+    let output = run_oneshot(cmd, &prompt)
         .await
         .map_err(|e| AppError::Agent(format!("failed to run claude: {e}")))?;
 

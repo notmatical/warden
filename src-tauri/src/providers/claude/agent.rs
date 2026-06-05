@@ -1,8 +1,9 @@
 //! Building blocks for invoking the `claude` CLI in streaming-JSON mode.
 
 use std::path::PathBuf;
-use std::process::Stdio;
+use std::process::{Output, Stdio};
 
+use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 
 use crate::cli::{self, Tool};
@@ -36,13 +37,16 @@ fn apply_gh_env(cmd: &mut Command) {
     }
 }
 
-/// Assemble the CLI argument vector for a turn. A session's first turn opens a
-/// new conversation via `--session-id`; later turns resume it via `--resume`.
+/// Assemble the CLI argument vector for a one-shot turn. A session's first turn
+/// opens a new conversation via `--session-id`; later turns resume it via
+/// `--resume`. The prompt is *not* an argument — it's fed over stdin (see
+/// [`run_oneshot`]) so a multiline prompt can't break the Windows `claude.cmd`
+/// shim ("batch file arguments are invalid").
 ///
 /// A `-fast` model suffix selects the priority service tier: it is stripped from
 /// the `--model` value and re-applied as `--settings {"fastMode":true}`, matching
 /// how the CLI expects fast mode to be requested.
-pub fn build_args(session: &Session, prompt: &str, add_dirs: &[String]) -> Vec<String> {
+pub fn build_args(session: &Session, add_dirs: &[String]) -> Vec<String> {
     let (model, fast) = match session.model.strip_suffix("-fast") {
         Some(base) => (base.to_string(), true),
         None => (session.model.clone(), false),
@@ -81,25 +85,38 @@ pub fn build_args(session: &Session, prompt: &str, add_dirs: &[String]) -> Vec<S
         args.push("--resume".to_string());
     }
     args.push(session.agent_session_id.clone());
-
-    args.push(prompt.to_string());
     args
 }
 
-/// Build a ready-to-spawn `tokio` command for a one-shot turn: piped
-/// stdout/stderr, no stdin, killed if the handle is dropped. Used by recipes and
+/// Build a ready-to-spawn `tokio` command for a one-shot turn: piped stdio,
+/// killed if the handle is dropped. The prompt is delivered over stdin, so call
+/// [`run_oneshot`] (or write stdin yourself) after spawning. Used by recipes and
 /// background naming, which don't need a persistent conversation.
-pub fn command(session: &Session, prompt: &str, add_dirs: &[String]) -> Result<Command> {
+pub fn command(session: &Session, add_dirs: &[String]) -> Result<Command> {
     let bin = resolve_claude();
     let mut cmd = Command::new(bin);
-    cmd.args(build_args(session, prompt, add_dirs))
+    cmd.args(build_args(session, add_dirs))
         .current_dir(&session.working_dir)
-        .stdin(Stdio::null())
+        .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
     apply_gh_env(&mut cmd);
     Ok(cmd)
+}
+
+/// Run a one-shot `claude` command to completion, feeding `prompt` over stdin
+/// rather than as an argument. Passing the prompt as an argument breaks on
+/// Windows when the agent is a `claude.cmd` shim — a multiline prompt isn't a
+/// valid batch-file argument — so stdin is used on every platform. The command
+/// must have `stdin` piped (use [`command`] or set it yourself).
+pub async fn run_oneshot(mut cmd: Command, prompt: &str) -> std::io::Result<Output> {
+    let mut child = cmd.spawn()?;
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin.write_all(prompt.as_bytes()).await?;
+        stdin.shutdown().await?;
+    }
+    child.wait_with_output().await
 }
 
 /// Args for a persistent, bidirectional session process: events stream out and
