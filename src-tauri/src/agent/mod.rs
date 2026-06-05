@@ -124,7 +124,7 @@ impl AgentManager {
                     }
                     continue;
                 }
-                if let AgentEvent::AssistantText { text } = &event {
+                if let AgentEvent::AssistantText { text, .. } = &event {
                     assistant_text.push_str(text);
                 }
                 let record = store.append_event(&session.id, &event)?;

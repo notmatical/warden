@@ -23,17 +23,26 @@ pub enum AgentEvent {
     },
     /// A message we sent on the user's behalf.
     UserMessage { text: String },
-    /// A finalized assistant text block.
-    AssistantText { text: String },
+    /// A finalized assistant text block. `parent_tool_use_id` is set for a
+    /// subagent's narration so the UI can fold it under the spawning Task.
+    AssistantText {
+        text: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        parent_tool_use_id: Option<String>,
+    },
     /// A streaming text fragment. Transient — never persisted, UI-only sugar.
     TextDelta { text: String },
     /// Extended-thinking content.
     Thinking { text: String },
-    /// The agent invoked a tool.
+    /// The agent invoked a tool. `parent_tool_use_id` is set when the call ran
+    /// inside a subagent (Task/Agent) — it points at that Task's tool_use id, so
+    /// the UI can nest a subagent's activity under it.
     ToolUse {
         id: String,
         name: String,
         input: serde_json::Value,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        parent_tool_use_id: Option<String>,
     },
     /// The result of a tool invocation.
     ToolResult {

@@ -1,43 +1,53 @@
-import { AlertTriangle, ChevronRight, Sparkles, Wrench } from "lucide-react";
+import { AlertTriangle, Bot, ChevronRight, Sparkles, Wrench } from "lucide-react";
 import { useState } from "react";
 
 import { cn } from "@/lib/utils";
 import type { EventRecord } from "@/types";
 
-type Step =
-	| { kind: "thinking"; id: string; text: string }
-	| {
-			kind: "tool";
-			id: string;
-			name: string;
-			input: unknown;
-			result?: { content: string; isError: boolean };
-	  };
+interface ToolStepData {
+	kind: "tool";
+	id: string;
+	name: string;
+	input: unknown;
+	result?: { content: string; isError: boolean };
+	/** Subagent (Task/Agent) calls nest the tools they spawned here. */
+	children?: ToolStepData[];
+}
+
+type Step = { kind: "thinking"; id: string; text: string } | ToolStepData;
 
 /** Collapse a run of thinking/tool_use/tool_result events into ordered steps,
- *  pairing each tool result back to the call that produced it. */
+ *  pairing each result to its call and nesting a subagent's tools (those with a
+ *  `parent_tool_use_id`) under the Task/Agent step that spawned them. */
 function buildSteps(items: EventRecord[]): Step[] {
 	const steps: Step[] = [];
-	const toolIndexById = new Map<string, number>();
+	const byId = new Map<string, ToolStepData>();
 
 	for (const item of items) {
 		if (item.type === "thinking") {
-			// skip empty/redacted thinking responses
 			if (item.text.trim()) {
 				steps.push({ kind: "thinking", id: item.id, text: item.text });
 			}
 		} else if (item.type === "tool_use") {
-			toolIndexById.set(item.id, steps.length);
-			steps.push({
+			const step: ToolStepData = {
 				kind: "tool",
 				id: item.id,
 				name: item.name,
 				input: item.input,
-			});
+			};
+			byId.set(item.id, step);
+			const parent = item.parent_tool_use_id
+				? byId.get(item.parent_tool_use_id)
+				: undefined;
+			if (parent) {
+				(parent.children ??= []).push(step);
+			} else {
+				steps.push(step);
+			}
 		} else if (item.type === "tool_result") {
-			const idx = toolIndexById.get(item.tool_use_id);
-			const target = idx !== undefined ? steps[idx] : undefined;
-			if (target && target.kind === "tool") {
+			// Pair to its call wherever it sits (top-level or nested under a Task).
+			const target = byId.get(item.tool_use_id);
+			if (target) {
 				target.result = { content: item.content, isError: item.is_error };
 			} else {
 				steps.push({
@@ -78,18 +88,52 @@ function CodeBlob({ text, tone }: { text: string; tone?: "error" }) {
 	);
 }
 
-function ToolStep({ step }: { step: Extract<Step, { kind: "tool" }> }) {
-	const input = prettyInput(step.input);
+/** A Task/Agent call's short description, for the header. */
+function agentDescription(input: unknown): string | undefined {
+	if (input && typeof input === "object" && "description" in input) {
+		const d = (input as { description?: unknown }).description;
+		if (typeof d === "string" && d.trim()) return d.trim();
+	}
+	return undefined;
+}
+
+function ToolStep({ step }: { step: ToolStepData }) {
+	const children = step.children;
+	const isAgent = !!children && children.length > 0;
+	const desc = isAgent ? agentDescription(step.input) : undefined;
 	return (
 		<div className="border-t border-border/50 px-3 py-2 first:border-t-0">
 			<div className="flex items-center gap-1.5 font-mono text-[12px] text-foreground">
-				<Wrench className="size-3 text-muted-foreground" />
-				{step.name}
+				{isAgent ? (
+					<Bot className="size-3 shrink-0 text-muted-foreground" />
+				) : (
+					<Wrench className="size-3 shrink-0 text-muted-foreground" />
+				)}
+				<span className="truncate">
+					{step.name}
+					{desc ? (
+						<span className="text-muted-foreground"> · {desc}</span>
+					) : null}
+				</span>
+				{isAgent ? (
+					<span className="shrink-0 text-muted-foreground">
+						{children.length} step{children.length > 1 ? "s" : ""}
+					</span>
+				) : null}
 				{step.result?.isError && (
-					<span className="text-destructive">· error</span>
+					<span className="shrink-0 text-destructive">· error</span>
 				)}
 			</div>
-			<CodeBlob text={input} />
+			{/* A subagent shows its nested tools instead of its raw prompt. */}
+			{isAgent ? (
+				<div className="mt-1.5 ml-1 border-l border-border/40 pl-1.5">
+					{children.map((c) => (
+						<ToolStep key={c.id} step={c} />
+					))}
+				</div>
+			) : (
+				<CodeBlob text={prettyInput(step.input)} />
+			)}
 			{step.result && (
 				<CodeBlob
 					text={step.result.content}

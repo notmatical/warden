@@ -81,16 +81,51 @@ fn parse_system(value: &Value) -> ParsedLine {
 }
 
 /// Iterate `/message/content[]` and map each block via `f`, dropping `None`s.
+/// A line-level `parent_tool_use_id` (present when this line is a subagent's
+/// output) is stamped onto any tool calls so the UI can nest them.
 fn parse_content_blocks(
     value: &Value,
     f: impl Fn(&Value) -> Option<AgentEvent>,
 ) -> Vec<AgentEvent> {
+    let parent = value
+        .get("parent_tool_use_id")
+        .and_then(Value::as_str)
+        .map(str::to_string);
     value
         .get("message")
         .and_then(|m| m.get("content"))
         .and_then(Value::as_array)
-        .map(|blocks| blocks.iter().filter_map(&f).collect())
+        .map(|blocks| {
+            blocks
+                .iter()
+                .filter_map(&f)
+                .map(|event| with_parent(event, &parent))
+                .collect()
+        })
         .unwrap_or_default()
+}
+
+/// Stamp a subagent's `parent_tool_use_id` onto a tool call; other events pass
+/// through unchanged.
+fn with_parent(event: AgentEvent, parent: &Option<String>) -> AgentEvent {
+    if parent.is_none() {
+        return event;
+    }
+    match event {
+        AgentEvent::ToolUse {
+            id, name, input, ..
+        } => AgentEvent::ToolUse {
+            id,
+            name,
+            input,
+            parent_tool_use_id: parent.clone(),
+        },
+        AgentEvent::AssistantText { text, .. } => AgentEvent::AssistantText {
+            text,
+            parent_tool_use_id: parent.clone(),
+        },
+        other => other,
+    }
 }
 
 fn parse_assistant_block(block: &Value) -> Option<AgentEvent> {
@@ -102,6 +137,7 @@ fn parse_assistant_block(block: &Value) -> Option<AgentEvent> {
             }
             Some(AgentEvent::AssistantText {
                 text: text.to_string(),
+                parent_tool_use_id: None,
             })
         }
         "thinking" => {
@@ -126,6 +162,8 @@ fn parse_assistant_block(block: &Value) -> Option<AgentEvent> {
                 .unwrap_or_default()
                 .to_string(),
             input: block.get("input").cloned().unwrap_or(Value::Null),
+            // Filled by `with_parent` from the line-level field.
+            parent_tool_use_id: None,
         }),
         _ => None,
     }

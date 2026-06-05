@@ -188,6 +188,9 @@ function renderTimeline(events: EventRecord[], sessionId: string): ReactNode[] {
 		// A reply closes the open question, re-enabling assistant text.
 		if (event.type === "user_message") awaitingReply = false;
 		if (event.type === "assistant_text" && awaitingReply) return;
+		// A subagent's narration is folded under its Task (its tools nest in the
+		// accordion); don't render it standalone, and don't break the tool run.
+		if (event.type === "assistant_text" && event.parent_tool_use_id) return;
 		if (event.type === "tool_result" && droppedResults.has(event.tool_use_id)) {
 			return;
 		}

@@ -209,10 +209,18 @@ export interface PlanToCodeResult {
 export type AgentEvent =
   | { type: "session_init"; model: string | null; tools: string[] }
   | { type: "user_message"; text: string }
-  | { type: "assistant_text"; text: string }
+  | { type: "assistant_text"; text: string; parent_tool_use_id?: string }
   | { type: "text_delta"; text: string }
   | { type: "thinking"; text: string }
-  | { type: "tool_use"; id: string; name: string; input: unknown }
+  | {
+      type: "tool_use"
+      id: string
+      name: string
+      input: unknown
+      /** Set when this call ran inside a subagent (Task/Agent) — points at that
+       *  Task's tool_use id, so the UI can nest the subagent's activity. */
+      parent_tool_use_id?: string
+    }
   | {
       type: "tool_result"
       tool_use_id: string

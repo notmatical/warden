@@ -527,6 +527,7 @@ fn item_events(item: Option<&Value>) -> Vec<AgentEvent> {
             .map(|text| {
                 vec![AgentEvent::AssistantText {
                     text: text.to_string(),
+                    parent_tool_use_id: None,
                 }]
             })
             .unwrap_or_default(),
@@ -568,6 +569,7 @@ fn command_events(item: &Value, id: String) -> Vec<AgentEvent> {
         id: id.clone(),
         name: "Bash".to_string(),
         input: json!({ "command": command }),
+        parent_tool_use_id: None,
     }];
 
     // A completed command carries its output and exit status.
@@ -621,6 +623,7 @@ fn file_change_events(item: &Value, id: String) -> Vec<AgentEvent> {
             id: id.clone(),
             name: "Edit".to_string(),
             input: json!({ "changes": files }),
+            parent_tool_use_id: None,
         },
         AgentEvent::ToolResult {
             tool_use_id: id,
@@ -655,6 +658,7 @@ fn mcp_events(item: &Value, id: String) -> Vec<AgentEvent> {
             id: id.clone(),
             name,
             input: item.get("arguments").cloned().unwrap_or(Value::Null),
+            parent_tool_use_id: None,
         },
         AgentEvent::ToolResult {
             tool_use_id: id,
@@ -673,6 +677,7 @@ fn web_search_events(item: &Value, id: String) -> Vec<AgentEvent> {
         id,
         name: "WebSearch".to_string(),
         input: json!({ "query": query }),
+        parent_tool_use_id: None,
     }]
 }
 
