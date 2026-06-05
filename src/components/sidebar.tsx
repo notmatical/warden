@@ -147,7 +147,7 @@ function SessionRow({ sessionId }: { sessionId: string }) {
 			<ContextMenuTrigger asChild>
 				<SidebarMenuSubItem>
 					{editing ? (
-						<div className="flex h-7 items-center gap-2 px-1.5">
+						<div className="flex h-7 items-center gap-2 rounded-xl bg-sidebar-accent pr-2 pl-2.5 ring-1 ring-transparent ring-inset focus-within:ring-ring/50">
 							<SessionFavicon
 								kind={session.kind}
 								backend={session.backend}
@@ -160,7 +160,7 @@ function SessionRow({ sessionId }: { sessionId: string }) {
 								onKeyDown={onEditKeyDown}
 								onBlur={commitRename}
 								onFocus={(e) => e.target.select()}
-								className="h-5 min-w-0 flex-1 rounded-md px-1 py-0 text-xs"
+								className="h-full min-w-0 flex-1 border-0 bg-transparent px-0 text-xs text-sidebar-foreground shadow-none focus-visible:border-0 focus-visible:ring-0"
 							/>
 						</div>
 					) : (
@@ -413,7 +413,7 @@ function GroupRow({
 			<ContextMenu>
 				<ContextMenuTrigger asChild>
 					{editing ? (
-						<div className="flex h-7 items-center gap-2 px-2">
+						<div className="flex h-8 items-center gap-2 rounded-xl bg-sidebar-accent pr-2 pl-2.5 ring-1 ring-transparent ring-inset focus-within:ring-ring/50">
 							<Layers className="size-4 shrink-0 opacity-70" />
 							<Input
 								autoFocus
@@ -422,7 +422,7 @@ function GroupRow({
 								onKeyDown={onEditKeyDown}
 								onBlur={commitRename}
 								onFocus={(e) => e.target.select()}
-								className="h-5 min-w-0 flex-1 rounded-md px-1 py-0 text-sm"
+								className="h-full min-w-0 flex-1 border-0 bg-transparent px-0 text-sm font-medium text-sidebar-foreground shadow-none focus-visible:border-0 focus-visible:ring-0"
 							/>
 						</div>
 					) : (
