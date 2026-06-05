@@ -7,6 +7,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { AgentPanel } from "@/components/agent-panel";
 import { EffortMenu } from "@/components/controls/effort-menu";
 import { ModeMenu } from "@/components/controls/mode-menu";
 import { ModelMenu } from "@/components/controls/model-menu";
@@ -168,6 +169,7 @@ export function Composer({ sessionId }: { sessionId: string }) {
 	return (
 		<div className="mx-auto w-full max-w-6xl px-3 pb-3">
 			<div className="flex flex-col">
+				<AgentPanel sessionId={sessionId} />
 				{showApproval && pendingApproval ? (
 					<PermissionApproval
 						sessionId={sessionId}
