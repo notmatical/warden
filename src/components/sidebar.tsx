@@ -1,9 +1,7 @@
 import {
-	Bot,
 	ChevronRight,
 	FolderGit2,
 	FolderPlus,
-	GitPullRequest,
 	Layers,
 	Pencil,
 	Plus,
@@ -15,6 +13,11 @@ import {
 import { useDraggable } from "@dnd-kit/core";
 import { type KeyboardEvent, type ReactNode, useEffect, useState } from "react";
 
+import {
+	ClaudeIcon,
+	CodexIcon,
+	GitHubIcon,
+} from "@/components/icons/brand";
 import { useConfirm } from "@/components/confirm-dialog";
 import { UpdateBanner } from "@/components/update-banner";
 import { ReviewPrDialog } from "@/components/review-pr-dialog";
@@ -314,7 +317,7 @@ function RootRow({
 						<DropdownMenuItem
 							onSelect={() => void createNativeSession(project.id, "claude")}
 						>
-							<Sparkles />
+							<ClaudeIcon />
 							Native Claude
 						</DropdownMenuItem>
 					) : null}
@@ -322,13 +325,13 @@ function RootRow({
 						<DropdownMenuItem
 							onSelect={() => void createNativeSession(project.id, "codex")}
 						>
-							<Bot />
+							<CodexIcon />
 							Native Codex
 						</DropdownMenuItem>
 					) : null}
 					<DropdownMenuSeparator />
 					<DropdownMenuItem onSelect={() => setReviewOpen(true)}>
-						<GitPullRequest />
+						<GitHubIcon />
 						Review a PR…
 					</DropdownMenuItem>
 				</DropdownMenuContent>
