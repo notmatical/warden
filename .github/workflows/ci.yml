@@ -41,8 +41,6 @@ jobs:
           workspaces: "./src-tauri -> target"
       - name: rustfmt
         run: cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
-      # Clippy is informational for now (pre-existing warnings); tighten to
-      # `-D warnings` once the backlog is cleared.
       - name: clippy
         run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets
 
