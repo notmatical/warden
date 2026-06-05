@@ -6,6 +6,11 @@ import {
 	PopoverTrigger,
 } from "@/components/ui/popover";
 import {
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
 	contextUsed,
 	contextWindow,
 	formatTokens,
@@ -83,15 +88,22 @@ export function ContextMeter({ sessionId }: { sessionId: string }) {
 
 	return (
 		<Popover>
-			<PopoverTrigger asChild>
-				<button
-					type="button"
-					title={`Context · ${pctLabel}%`}
-					className="flex items-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-				>
-					<Ring pct={pct} tone={tone} />
-				</button>
-			</PopoverTrigger>
+			<Tooltip>
+				<TooltipTrigger asChild>
+					<PopoverTrigger asChild>
+						<button
+							type="button"
+							aria-label="Context window"
+							className="flex items-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+						>
+							<Ring pct={pct} tone={tone} />
+						</button>
+					</PopoverTrigger>
+				</TooltipTrigger>
+				<TooltipContent side="top">
+					Context {formatTokens(used)} / {formatTokens(max)} ({pctLabel}%)
+				</TooltipContent>
+			</Tooltip>
 			<PopoverContent side="top" align="end" className="w-72 p-0">
 				<div className="flex items-center justify-between border-b border-border/60 px-3 py-2">
 					<span className="text-xs font-medium text-foreground">Context</span>
