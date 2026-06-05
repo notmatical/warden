@@ -1,5 +1,4 @@
 import { open } from "@tauri-apps/plugin-dialog";
-import { toast } from "sonner";
 import { create } from "zustand";
 import { onAgentDelta, onAgentEvent, onSessionUpdated } from "@/lib/events";
 import * as ipc from "@/lib/ipc";
@@ -21,17 +20,9 @@ import {
 import * as terminals from "@/lib/terminal-instances";
 import { readView, writeView } from "@/lib/view";
 
-import {
-	clampWidth,
-	NATIVE_CLI,
-	NATIVE_TITLE,
-	readSidebarCollapsed,
-	readSidebarWidth,
-	reportError,
-	showSession,
-	SIDEBAR_KEY,
-	SIDEBAR_WIDTH_KEY,
-} from "./shared";
+import { NATIVE_CLI, NATIVE_TITLE, reportError, showSession } from "./shared";
+import { createProvidersSlice } from "./slices/providers";
+import { createUiSlice } from "./slices/ui";
 import type { AppState } from "./types";
 
 export type {
@@ -42,7 +33,10 @@ export type {
 
 let listenersWired = false;
 
-export const useAppStore = create<AppState>((set, get) => ({
+export const useAppStore = create<AppState>((set, get, store) => ({
+	...createUiSlice(set, get, store),
+	...createProvidersSlice(set, get, store),
+
 	groups: [],
 	activeGroupId: null,
 	rootsByGroup: {},
@@ -52,17 +46,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 	layout: emptyTree(),
 	draggingSessionId: null,
 	sessions: {},
-	providers: [],
-	githubStatus: null,
-	settingsOpen: false,
-	settingsSection: "providers",
 	eventsBySession: {},
 	approvalResolvedBySession: {},
 	streamingBySession: {},
 	startedAtBySession: {},
-
-	sidebarCollapsed: readSidebarCollapsed(),
-	sidebarWidth: readSidebarWidth(),
 
 	initialized: false,
 	loadingGroups: false,
@@ -125,120 +112,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 			void get().loadEvents(activeSessionId);
 		}
 	},
-
-	setSidebarCollapsed: (collapsed) => {
-		try {
-			localStorage.setItem(SIDEBAR_KEY, collapsed ? "1" : "0");
-		} catch {
-			// ignore storage failures
-		}
-		set({ sidebarCollapsed: collapsed });
-	},
-
-	setSidebarWidth: (width) => {
-		const clamped = clampWidth(width);
-		try {
-			localStorage.setItem(SIDEBAR_WIDTH_KEY, String(clamped));
-		} catch {
-			// ignore storage failures
-		}
-		set({ sidebarWidth: clamped });
-	},
-
-	loadProviders: async () => {
-		try {
-			const providers = await ipc.listProviderStatus();
-			set({ providers });
-		} catch (error) {
-			reportError("Failed to load providers", error);
-		}
-	},
-
-	installProvider: async (id) => {
-		const name = get().providers.find((p) => p.id === id)?.name ?? id;
-		try {
-			await ipc.installProvider(id);
-			await get().loadProviders();
-			toast.success(`Installed ${name}`);
-		} catch (error) {
-			reportError(`Failed to install ${name}`, error);
-		}
-	},
-
-	updateProvider: async (id) => {
-		const name = get().providers.find((p) => p.id === id)?.name ?? id;
-		try {
-			await ipc.updateProvider(id);
-			await get().loadProviders();
-			toast.success(`Updated ${name}`);
-		} catch (error) {
-			reportError(`Failed to update ${name}`, error);
-		}
-	},
-
-	setProviderSource: async (id, source) => {
-		// Optimistically reflect the choice; loadProviders reconciles the resolved
-		// binary, version, and update availability for the new source.
-		set((state) => ({
-			providers: state.providers.map((p) =>
-				p.id === id ? { ...p, source } : p,
-			),
-		}));
-		try {
-			await ipc.setProviderSource(id, source);
-			await get().loadProviders();
-		} catch (error) {
-			reportError("Failed to change CLI source", error);
-			await get().loadProviders();
-		}
-	},
-
-	loadGithubStatus: async () => {
-		try {
-			set({ githubStatus: await ipc.githubStatus() });
-		} catch (error) {
-			reportError("Failed to load GitHub CLI status", error);
-		}
-	},
-
-	installGithub: async () => {
-		try {
-			await ipc.installGithubCli();
-			await get().loadGithubStatus();
-			toast.success("Installed GitHub CLI");
-		} catch (error) {
-			reportError("Failed to install GitHub CLI", error);
-		}
-	},
-
-	updateGithub: async () => {
-		try {
-			await ipc.updateGithubCli();
-			await get().loadGithubStatus();
-			toast.success("Updated GitHub CLI");
-		} catch (error) {
-			reportError("Failed to update GitHub CLI", error);
-		}
-	},
-
-	setGithubSource: async (source) => {
-		set((state) => ({
-			githubStatus: state.githubStatus
-				? { ...state.githubStatus, source }
-				: state.githubStatus,
-		}));
-		try {
-			await ipc.setGithubSource(source);
-			await get().loadGithubStatus();
-		} catch (error) {
-			reportError("Failed to change CLI source", error);
-			await get().loadGithubStatus();
-		}
-	},
-
-	openSettings: (section = "providers") =>
-		set({ settingsOpen: true, settingsSection: section }),
-	setSettingsOpen: (open) => set({ settingsOpen: open }),
 
 	integrateSession: async (sessionId, message, mode) => {
 		// Success updates the session (mergedAt) via the session-updated event.
