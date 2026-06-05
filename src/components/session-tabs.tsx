@@ -59,7 +59,12 @@ function Tab({ sessionId }: { sessionId: string }) {
 	}
 
 	const tabIcon = (
-		<SessionFavicon kind={kind} backend={backend} status={status} />
+		<SessionFavicon
+			kind={kind}
+			backend={backend}
+			status={status}
+			className="size-[18px]"
+		/>
 	);
 
 	const startRename = () => {
@@ -116,7 +121,7 @@ function Tab({ sessionId }: { sessionId: string }) {
 						<span className="pointer-events-none absolute inset-y-1 left-0 w-0.5 rounded-full bg-primary" />
 					) : null}
 					{tabIcon}
-					<span className="flex min-w-0 flex-1 flex-col justify-center leading-none">
+					<span className="flex min-w-0 flex-1 flex-col justify-center leading-tight">
 						{editing ? (
 							<input
 								autoFocus
