@@ -88,7 +88,19 @@ impl AgentManager {
             .filter(|p| p.id != session.project_id)
             .map(|p| p.path)
             .collect();
-        let mut child = claude::command(session, prompt, &add_dirs)?.spawn()?;
+        let mut child = claude::command(session, &add_dirs)?.spawn()?;
+
+        // Feed the prompt over stdin (not as an argument, which breaks the
+        // Windows `claude.cmd` shim on multiline prompts). A separate task avoids
+        // any deadlock against the stdout reader below.
+        if let Some(mut stdin) = child.stdin.take() {
+            let prompt = prompt.to_string();
+            tauri::async_runtime::spawn(async move {
+                use tokio::io::AsyncWriteExt;
+                let _ = stdin.write_all(prompt.as_bytes()).await;
+                let _ = stdin.shutdown().await;
+            });
+        }
 
         let stdout = child
             .stdout
