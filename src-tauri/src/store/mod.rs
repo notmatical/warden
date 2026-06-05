@@ -382,21 +382,25 @@ impl Store {
     }
 
     /// Update the per-turn agent settings that the composer can change mid-session.
+    /// The backend is derived from the model (a model picks its own provider), so
+    /// switching to a cross-provider model before the first turn re-homes it.
     pub fn update_session_settings(
         &self,
         id: &str,
         model: &str,
+        backend: Backend,
         permission_mode: PermissionMode,
         effort: EffortLevel,
     ) -> Result<()> {
         let conn = self.lock();
         conn.execute(
             "UPDATE sessions
-             SET model = ?2, permission_mode = ?3, effort = ?4, updated_at = ?5
+             SET model = ?2, backend = ?3, permission_mode = ?4, effort = ?5, updated_at = ?6
              WHERE id = ?1",
             (
                 id,
                 model,
+                backend.as_str(),
                 permission_mode.as_str(),
                 effort.as_str(),
                 now_rfc3339(),

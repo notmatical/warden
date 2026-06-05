@@ -70,7 +70,7 @@ pub async fn generate_session_title(working_dir: &str, message: &str) -> Option<
     let bin = resolve_claude();
     let prompt = build_prompt(message);
 
-    let output = Command::new(bin)
+    let output = match Command::new(&bin)
         .args([
             "-p",
             &prompt,
@@ -86,18 +86,42 @@ pub async fn generate_session_title(working_dir: &str, message: &str) -> Option<
         .current_dir(working_dir)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .kill_on_drop(true)
         .output()
         .await
-        .ok()?;
+    {
+        Ok(output) => output,
+        Err(e) => {
+            log::warn!("session naming: failed to spawn {:?}: {e}", bin);
+            return None;
+        }
+    };
 
     if !output.status.success() {
+        log::warn!(
+            "session naming: claude exited with {}: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
         return None;
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let value: serde_json::Value = serde_json::from_str(stdout.trim()).ok()?;
-    let result = value.get("result")?.as_str()?;
-    sanitize_title(result)
+    let value: serde_json::Value = match serde_json::from_str(stdout.trim()) {
+        Ok(value) => value,
+        Err(e) => {
+            log::warn!("session naming: unparseable JSON ({e}): {}", stdout.trim());
+            return None;
+        }
+    };
+    let Some(result) = value.get("result").and_then(|r| r.as_str()) else {
+        log::warn!("session naming: response had no `result` string: {value}");
+        return None;
+    };
+    let title = sanitize_title(result);
+    if title.is_none() {
+        log::warn!("session naming: rejected model output: {result:?}");
+    }
+    title
 }

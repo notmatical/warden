@@ -122,6 +122,7 @@ pub async fn update_session(
     let session = state.store.get_session(&session_id)?;
 
     let model = model.unwrap_or(session.model);
+    let backend = backend_for_model(&model);
     let permission_mode = permission_mode
         .as_deref()
         .and_then(PermissionMode::parse)
@@ -133,7 +134,7 @@ pub async fn update_session(
 
     state
         .store
-        .update_session_settings(&session_id, &model, permission_mode, effort)?;
+        .update_session_settings(&session_id, &model, backend, permission_mode, effort)?;
 
     let updated = state.store.get_session(&session_id)?;
     emit_session(&app, &updated);
@@ -251,10 +252,17 @@ pub async fn send_message(
             else {
                 return;
             };
-            if matches!(store.apply_auto_name(&session_id, &title), Ok(true)) {
-                if let Ok(updated) = store.get_session(&session_id) {
-                    emit_session(&app, &updated);
+            match store.apply_auto_name(&session_id, &title) {
+                Ok(true) => {
+                    log::debug!("session naming: applied {title:?} to {session_id}");
+                    if let Ok(updated) = store.get_session(&session_id) {
+                        emit_session(&app, &updated);
+                    }
                 }
+                Ok(false) => {
+                    log::debug!("session naming: {session_id} already user-named; skipped");
+                }
+                Err(e) => log::warn!("session naming: failed to apply title: {e}"),
             }
         });
     }
