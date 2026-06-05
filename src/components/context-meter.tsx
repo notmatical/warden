@@ -10,12 +10,8 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "@/components/ui/tooltip";
-import {
-	contextUsed,
-	contextWindow,
-	formatTokens,
-	latestUsage,
-} from "@/lib/context-usage";
+import { contextUsed, contextWindow, latestUsage } from "@/lib/context-usage";
+import { formatCompact } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app-store";
 
@@ -101,27 +97,33 @@ export function ContextMeter({ sessionId }: { sessionId: string }) {
 					</PopoverTrigger>
 				</TooltipTrigger>
 				<TooltipContent side="top">
-					Context {formatTokens(used)} / {formatTokens(max)} ({pctLabel}%)
+					Context {formatCompact(used)} / {formatCompact(max)} ({pctLabel}%)
 				</TooltipContent>
 			</Tooltip>
 			<PopoverContent side="top" align="end" className="w-72 p-0">
-				<div className="flex items-center justify-between border-b border-border/60 px-3 py-2">
-					<span className="text-xs font-medium text-foreground">Context</span>
+				<div className="flex items-center justify-between border-b border-border/60 px-3.5 py-2.5">
+					<span className="text-sm font-medium text-foreground">Context</span>
 					<span
-						className="max-w-40 truncate font-mono text-[11px] text-muted-foreground"
+						className="max-w-40 truncate font-mono text-xs text-muted-foreground"
 						title={model}
 					>
 						{model}
 					</span>
 				</div>
-				<div className="px-3 py-2.5">
-					<div className="mb-1 flex items-baseline justify-between">
-						<span className="text-[11px] text-muted-foreground">Window</span>
-						<span className="text-[11px] text-foreground/90 tabular-nums">
-							{formatTokens(used)} / {formatTokens(max)}
+				<div className="px-3.5 py-3">
+					<div className="mb-1.5 flex items-baseline justify-between">
+						<span className="text-foreground tabular-nums">
+							<span className="text-lg font-semibold">{formatCompact(used)}</span>
+							<span className="text-sm text-muted-foreground">
+								{" "}
+								/ {formatCompact(max)}
+							</span>
+						</span>
+						<span className={cn("text-sm font-semibold tabular-nums", tone)}>
+							{pctLabel}%
 						</span>
 					</div>
-					<div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+					<div className="h-2 w-full overflow-hidden rounded-full bg-muted">
 						<div
 							className={cn(
 								"h-full rounded-full transition-[width] duration-500",
@@ -130,24 +132,24 @@ export function ContextMeter({ sessionId }: { sessionId: string }) {
 							style={{ width: `${Math.min(100, pctLabel)}%` }}
 						/>
 					</div>
-					<div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5">
+					<div className="mt-3.5 flex flex-col gap-2">
 						{rows.map(([label, value]) => (
 							<div
 								key={label}
-								className="flex items-center justify-between text-[11px]"
+								className="flex items-center justify-between text-[13px]"
 							>
 								<span className="text-muted-foreground">{label}</span>
-								<span className="text-foreground/90 tabular-nums">
-									{formatTokens(value)}
+								<span className="font-medium text-foreground/90 tabular-nums">
+									{formatCompact(value)}
 								</span>
 							</div>
 						))}
-					</div>
-					<div className="mt-2.5 flex items-center justify-between border-t border-border/60 pt-2 text-[11px]">
-						<span className="text-muted-foreground">Session cost</span>
-						<span className="text-foreground/90 tabular-nums">
-							${costUsd.toFixed(costUsd < 1 ? 4 : 2)}
-						</span>
+						<div className="mt-1 flex items-center justify-between border-t border-border/60 pt-2.5 text-[13px]">
+							<span className="text-muted-foreground">Session cost</span>
+							<span className="font-medium text-foreground/90 tabular-nums">
+								${costUsd.toFixed(costUsd < 1 ? 4 : 2)}
+							</span>
+						</div>
 					</div>
 				</div>
 			</PopoverContent>
