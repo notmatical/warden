@@ -18,7 +18,7 @@ use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin};
 use tokio::sync::{mpsc, oneshot, Mutex as AsyncMutex};
 
-use crate::domain::{AgentEvent, EffortLevel, PermissionMode, Session, SessionStatus};
+use crate::domain::{AgentEvent, EffortLevel, PermissionMode, Session, SessionStatus, TokenUsage};
 use crate::error::{AppError, Result};
 use crate::events::{emit_delta, emit_event, emit_session};
 use crate::store::Store;
@@ -422,6 +422,25 @@ fn codex_effort(effort: EffortLevel) -> &'static str {
     }
 }
 
+/// Token usage from a `turn/completed` turn object, normalized to [`TokenUsage`].
+/// Codex names its cached input `cachedInputTokens`; returns `None` if absent so
+/// the context gauge simply doesn't show rather than reading zero.
+fn codex_usage(turn: Option<&Value>) -> Option<TokenUsage> {
+    let usage = turn?.get("usage")?;
+    let get = |keys: &[&str]| {
+        keys.iter()
+            .find_map(|k| usage.get(k).and_then(Value::as_u64))
+            .unwrap_or(0)
+    };
+    let normalized = TokenUsage {
+        input_tokens: get(&["inputTokens", "input_tokens"]),
+        output_tokens: get(&["outputTokens", "output_tokens"]),
+        cache_read_input_tokens: get(&["cachedInputTokens", "cached_input_tokens"]),
+        cache_creation_input_tokens: 0,
+    };
+    (normalized != TokenUsage::default()).then_some(normalized)
+}
+
 /// Build `thread/start` params for an autonomous (3a) Codex thread. The session's
 /// model selects the engine; the `-fast` suffix maps to the priority service tier.
 fn thread_params(session: &Session) -> Value {
@@ -594,6 +613,7 @@ fn handle_notification(
                         .and_then(|t| t.get("durationMs"))
                         .and_then(Value::as_u64),
                     num_turns: None,
+                    usage: codex_usage(turn),
                 },
             );
             true

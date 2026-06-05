@@ -8,6 +8,7 @@ import {
 	useState,
 } from "react";
 import { AgentToolbar } from "@/components/agent-panel";
+import { ContextMeter } from "@/components/context-meter";
 import { EffortMenu } from "@/components/controls/effort-menu";
 import { ModeMenu } from "@/components/controls/mode-menu";
 import { ModelMenu } from "@/components/controls/model-menu";
@@ -289,6 +290,7 @@ export function Composer({ sessionId }: { sessionId: string }) {
 					/>
 
 					<div className="ml-auto flex items-center gap-1">
+						<ContextMeter sessionId={sessionId} />
 						<AgentToolbar sessionId={sessionId} />
 						<Tooltip>
 						<TooltipTrigger asChild>
