@@ -22,7 +22,7 @@ function PaneHeader({ sessionId }: { sessionId: string }) {
 		return null;
 	}
 	return (
-		<div className="flex h-8 shrink-0 items-center gap-2 border-b border-border/60 px-2.5 text-xs">
+		<div className="flex h-8 shrink-0 items-center gap-2 px-2.5 text-xs">
 			<StatusDot status={status} />
 			<span
 				className="min-w-0 flex-1 truncate text-muted-foreground"

@@ -1,7 +1,7 @@
 import { useDraggable } from "@dnd-kit/core";
-import { Pencil, X } from "lucide-react";
+import { Loader2, Pencil, SquareTerminal, X } from "lucide-react";
 import { type KeyboardEvent, useState } from "react";
-import { StatusDot } from "@/components/status-dot";
+import { AnthropicIcon, OpenAIIcon } from "@/components/icons/brand";
 import { Badge } from "@/components/ui/badge";
 import {
 	ContextMenu,
@@ -23,6 +23,8 @@ function Tab({ sessionId }: { sessionId: string }) {
 	const title = useAppStore((s) => s.sessions[sessionId]?.title);
 	const status = useAppStore((s) => s.sessions[sessionId]?.status);
 	const role = useAppStore((s) => s.sessions[sessionId]?.role);
+	const backend = useAppStore((s) => s.sessions[sessionId]?.backend);
+	const kind = useAppStore((s) => s.sessions[sessionId]?.kind);
 	const active = useAppStore(
 		(s) =>
 			!!s.activeGroupId &&
@@ -48,6 +50,25 @@ function Tab({ sessionId }: { sessionId: string }) {
 	if (title === undefined || status === undefined) {
 		return null;
 	}
+
+	// Browser-favicons. Active sessions show a spinner, errors tint the icon red.
+	const Brand =
+		kind === "terminal"
+			? SquareTerminal
+			: backend === "codex"
+				? OpenAIIcon
+				: AnthropicIcon;
+	const tabIcon =
+		status === "running" ? (
+			<Loader2 className="size-3.5 shrink-0 animate-spin text-amber-500" />
+		) : (
+			<Brand
+				className={cn(
+					"size-3.5 shrink-0",
+					status === "error" ? "text-red-500" : "opacity-70",
+				)}
+			/>
+		);
 
 	const startRename = () => {
 		setDraft(title);
@@ -89,14 +110,17 @@ function Tab({ sessionId }: { sessionId: string }) {
 						}
 					}}
 					className={cn(
-						"group flex h-9 max-w-56 min-w-36 shrink-0 cursor-pointer items-center gap-2 rounded-md border px-3 text-sm transition-colors",
+						"group relative flex h-9 max-w-52 min-w-32 shrink-0 cursor-pointer items-center gap-2 rounded-md px-2.5 text-[13px] transition-colors",
 						active
-							? "border-border bg-card text-foreground"
-							: "border-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+							? "bg-muted/70 text-foreground"
+							: "text-muted-foreground hover:bg-muted/40 hover:text-foreground",
 						isDragging ? "opacity-50" : null,
 					)}
 				>
-					<StatusDot status={status} />
+					{active ? (
+						<span className="pointer-events-none absolute inset-x-2.5 bottom-0 h-0.5 rounded-full bg-primary" />
+					) : null}
+					{tabIcon}
 					{editing ? (
 						<input
 							autoFocus
@@ -125,7 +149,7 @@ function Tab({ sessionId }: { sessionId: string }) {
 							e.stopPropagation();
 							closeTab(sessionId);
 						}}
-						className="-mr-1 ml-auto flex size-5 shrink-0 items-center justify-center rounded-lg text-muted-foreground opacity-0 transition group-hover:opacity-100 hover:bg-muted hover:text-foreground aria-[current=true]:opacity-100"
+						className="-mr-0.5 ml-auto flex size-5 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition group-hover:opacity-100 group-aria-selected:opacity-100 hover:bg-muted hover:text-foreground"
 					>
 						<X className="size-3.5" />
 					</button>
@@ -162,8 +186,8 @@ export function SessionTabs() {
 	}
 
 	return (
-		<ScrollArea className="w-full border-b border-border">
-			<div className="flex gap-1 p-1.5">
+		<ScrollArea className="w-full">
+			<div className="flex gap-1 px-1.5 pt-1.5 pb-1">
 				{order.map((id) => (
 					<Tab key={id} sessionId={id} />
 				))}
