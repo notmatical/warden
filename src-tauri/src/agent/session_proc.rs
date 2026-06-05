@@ -27,6 +27,9 @@ struct Proc {
     /// Queued user-message lines headed for the process stdin.
     tx: mpsc::UnboundedSender<String>,
     child: Arc<Mutex<Child>>,
+    /// OS pid of the spawned process, for tree-killing its descendants (the
+    /// Windows `claude.cmd` shim spawns `node`, which `start_kill` would orphan).
+    pid: Option<u32>,
 }
 
 static PROCS: LazyLock<Mutex<HashMap<String, Proc>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
@@ -50,7 +53,20 @@ pub async fn ensure(
         return Ok(());
     }
 
-    let mut child = claude::session_command(session, add_dirs)?.spawn()?;
+    // Resume if Claude already created this session (its log carries an init), so
+    // a cancelled first turn — which never recorded a turn — doesn't re-run
+    // `--session-id` on an existing id and fail with "already in use".
+    let resume = store
+        .list_events(&session.id)
+        .map(|events| {
+            events
+                .iter()
+                .any(|e| matches!(e.event, AgentEvent::SessionInit { .. }))
+        })
+        .unwrap_or(false);
+
+    let mut child = claude::session_command(session, add_dirs, resume)?.spawn()?;
+    let pid = child.id();
     let stdin = child
         .stdin
         .take()
@@ -70,6 +86,7 @@ pub async fn ensure(
         Proc {
             tx,
             child: Arc::new(Mutex::new(child)),
+            pid,
         },
     );
 
@@ -99,21 +116,29 @@ pub fn send(session_id: &str, line: String) -> Result<()> {
         .map_err(|_| AppError::Agent("session process has closed".to_string()))
 }
 
-/// Kill a session's process (cancel / delete / shutdown). Idempotent.
+/// Kill a session's process *and its descendants* (cancel / delete / shutdown).
+/// Tree-killing matters on Windows, where the `claude.cmd` shim spawns `node`:
+/// `start_kill` alone would leave `node` streaming and holding the session lock.
+/// Idempotent.
 pub fn kill(session_id: &str) {
     if let Some(proc) = registry().remove(session_id) {
-        if let Ok(mut child) = proc.child.lock() {
-            let _ = child.start_kill();
-        }
+        terminate(&proc);
     }
 }
 
 /// Kill every live session process (app shutdown).
 pub fn kill_all() {
     for (_, proc) in registry().drain() {
-        if let Ok(mut child) = proc.child.lock() {
-            let _ = child.start_kill();
-        }
+        terminate(&proc);
+    }
+}
+
+fn terminate(proc: &Proc) {
+    if let Some(pid) = proc.pid {
+        crate::platform::kill_process_tree(pid);
+    }
+    if let Ok(mut child) = proc.child.lock() {
+        let _ = child.start_kill();
     }
 }
 
