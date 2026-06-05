@@ -79,7 +79,7 @@ const VERBOSE_TOOLS = new Set([
 
 /** Warm code surface (theme token) shared by code/terminal/text panels, matching
  *  the diff viewer so the activity log reads as one piece. */
-const CODE_SURFACE = "bg-code text-code-foreground";
+const CODE_SURFACE = "bg-muted/40 text-foreground";
 
 /** A Task/Agent call's short description, for the header. */
 function agentDescription(input: unknown): string | undefined {
