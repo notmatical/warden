@@ -339,6 +339,11 @@ export function Transcript({
 	return (
 		<ScrollArea
 			className="h-full"
+			// Radix wraps content in a `display:table` element that grows to its
+			// widest child, which lets wide code/diffs/plans push the column off
+			// screen. Force it to block so children honor their `min-w-0` and scroll
+			// internally instead.
+			viewportClassName="[&>div]:!block [&>div]:!min-w-0"
 			viewportRef={viewportRef}
 			onScrollCapture={handleScroll}
 		>

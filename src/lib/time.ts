@@ -21,3 +21,14 @@ export function relativeTime(iso: string): string {
   if (days < 7) return `${days}d ago`
   return format(date, "MMM d")
 }
+
+/** Compact elapsed time between two ISO timestamps: "<1s", "8s", "2m 5s". */
+export function formatDuration(startIso: string, endIso: string): string {
+  const ms = new Date(endIso).getTime() - new Date(startIso).getTime()
+  if (!Number.isFinite(ms) || ms < 1000) return "<1s"
+  const total = Math.round(ms / 1000)
+  if (total < 60) return `${total}s`
+  const minutes = Math.floor(total / 60)
+  const seconds = total % 60
+  return seconds ? `${minutes}m ${seconds}s` : `${minutes}m`
+}
