@@ -23,8 +23,8 @@ export function PlanApproval({
 	const readOnly = answered || dismissed;
 
 	return (
-		<div className="flex min-w-0 flex-col gap-3 rounded-lg border border-border/60 bg-muted/20 p-3.5">
-			<div className="flex items-center gap-2">
+		<div className="flex min-w-0 flex-col gap-2">
+			<div className="flex items-center gap-2 px-0.5">
 				<span
 					className={cn(
 						"flex size-5 items-center justify-center rounded-md",
@@ -44,7 +44,7 @@ export function PlanApproval({
 				</span>
 			</div>
 
-			<div className="max-h-80 min-w-0 overflow-auto rounded-md border border-border/50 bg-background/40 px-3.5 py-2">
+			<div className="max-h-80 min-w-0 overflow-auto rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
 				<Markdown className="min-w-0">{plan}</Markdown>
 			</div>
 

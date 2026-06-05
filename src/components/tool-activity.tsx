@@ -77,9 +77,9 @@ const VERBOSE_TOOLS = new Set([
 	"TodoWrite",
 ]);
 
-/** Dark code surface shared by code/terminal/text panels, matching the diff
- *  viewer's syntax-highlight theme so the activity log reads as one piece. */
-const CODE_SURFACE = "bg-[#24292e] text-[#c9d1d9]";
+/** Warm code surface (theme token) shared by code/terminal/text panels, matching
+ *  the diff viewer so the activity log reads as one piece. */
+const CODE_SURFACE = "bg-code text-code-foreground";
 
 /** A Task/Agent call's short description, for the header. */
 function agentDescription(input: unknown): string | undefined {

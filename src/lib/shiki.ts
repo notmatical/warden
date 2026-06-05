@@ -1,6 +1,8 @@
 import { type BundledLanguage, codeToHtml, codeToTokens } from "shiki"
 
-const THEME = "github-dark"
+// Warm, low-saturation theme whose cream foreground matches the app's palette,
+// so highlighted code reads as part of the UI, not a pasted-in github block.
+const THEME = "vitesse-dark"
 
 /**
  * Highlight a code block to themed HTML. Shiki loads only the requested grammar
