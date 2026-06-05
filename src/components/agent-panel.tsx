@@ -105,51 +105,47 @@ export function AgentPanel({ sessionId }: { sessionId: string }) {
 	const active = subagents.find((s) => s.id === activeId) ?? null;
 
 	return (
-		<div className="mb-1.5 overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
+		<div className="mb-1.5 flex flex-col gap-1 px-1">
 			<button
 				type="button"
 				onClick={() => setExpanded((v) => !v)}
 				aria-expanded={expanded}
-				className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left"
+				className={cn(
+					"inline-flex w-fit items-center gap-1.5 rounded-lg px-2 py-0.5 text-xs text-muted-foreground transition-colors",
+					expanded ? "bg-muted/70 text-foreground" : "bg-muted/40 hover:bg-muted/60",
+				)}
 			>
-				<span className="flex size-5 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
-					<Bot className="size-3.5" />
-				</span>
-				<span className="shrink-0 text-xs font-medium text-foreground">
-					Sub-agents
-				</span>
-				<span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground tabular-nums">
+				<Bot className="size-3.5 text-primary/80" />
+				<span className="font-medium text-foreground/80">Sub-agents</span>
+				<span className="tabular-nums text-muted-foreground/70">
 					{done}/{subagents.length}
 				</span>
 				{running > 0 ? (
-					<span className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
-						<Loader2 className="size-3 animate-spin" />
-						{running} running
-					</span>
+					<Loader2 className="size-3 animate-spin text-primary/70" />
 				) : null}
 				<ChevronRight
 					className={cn(
-						"ml-auto size-3.5 shrink-0 text-muted-foreground/50 transition-transform",
+						"size-3 text-muted-foreground/50 transition-transform",
 						expanded && "rotate-90",
 					)}
 				/>
 			</button>
 
 			{expanded ? (
-				<ul className="max-h-56 overflow-auto border-t border-border/60 p-1">
+				<ul className="flex max-h-56 flex-col gap-0.5 overflow-auto rounded-lg border border-border/50 bg-card/60 p-1">
 					{subagents.map((sub) => (
 						<li key={sub.id}>
 							<button
 								type="button"
 								onClick={() => setActiveId(sub.id)}
-								className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted/50"
+								className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted/60"
 							>
 								<StatusIcon status={sub.status} />
 								<span className="shrink-0 font-medium text-foreground/90">
 									{sub.label}
 								</span>
 								{sub.prompt ? (
-									<span className="min-w-0 flex-1 truncate text-muted-foreground/80">
+									<span className="min-w-0 flex-1 truncate text-muted-foreground/70">
 										{sub.prompt}
 									</span>
 								) : (

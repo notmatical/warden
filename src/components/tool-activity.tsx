@@ -98,6 +98,21 @@ function toolIcon(name: string): ComponentType<{ className?: string }> {
 	return TOOL_ICONS[name] ?? Wrench;
 }
 
+/** Tools whose detail is the point of the call — shown expanded by default
+ *  ("verbose" view). Lookups/searches stay collapsed to keep the log scannable. */
+const VERBOSE_TOOLS = new Set([
+	"Edit",
+	"MultiEdit",
+	"Write",
+	"NotebookEdit",
+	"Bash",
+	"TodoWrite",
+]);
+
+/** Dark code surface shared by code/terminal/text panels, matching the diff
+ *  viewer's syntax-highlight theme so the activity log reads as one piece. */
+const CODE_SURFACE = "bg-[#24292e] text-[#c9d1d9]";
+
 /** A Task/Agent call's short description, for the header. */
 function agentDescription(input: unknown): string | undefined {
 	if (input && typeof input === "object" && "description" in input) {
@@ -107,19 +122,19 @@ function agentDescription(input: unknown): string | undefined {
 	return undefined;
 }
 
-/** Shared bordered, height-capped, scrollable panel for code/text bodies. */
+/** Shared bordered, height-capped, scrollable dark panel for code/text bodies. */
 function Panel({ header, children }: { header?: string; children: ReactNode }) {
 	return (
-		<div className="mt-1 overflow-hidden rounded-md border border-border/60 bg-background/40">
+		<div className="mt-1 overflow-hidden rounded-lg border border-border/60">
 			{header ? (
 				<div
-					className="truncate border-b border-border/60 px-3 py-1.5 font-mono text-[11px] text-muted-foreground"
+					className="truncate border-b border-border/60 bg-muted/40 px-3 py-1.5 font-mono text-[11px] text-muted-foreground"
 					title={header}
 				>
 					{header}
 				</div>
 			) : null}
-			<div className="max-h-64 overflow-auto">{children}</div>
+			<div className={cn("max-h-72 overflow-auto", CODE_SURFACE)}>{children}</div>
 		</div>
 	);
 }
@@ -127,7 +142,7 @@ function Panel({ header, children }: { header?: string; children: ReactNode }) {
 function CodePanel({ path, text }: { path?: string; text: string }) {
 	return (
 		<Panel header={path}>
-			<pre className="m-0 px-3 py-1.5 font-mono text-[11px] leading-[1.5] whitespace-pre">
+			<pre className="m-0 px-3 py-1.5 font-mono text-[12px] leading-[1.6] whitespace-pre">
 				{text}
 			</pre>
 		</Panel>
@@ -137,7 +152,7 @@ function CodePanel({ path, text }: { path?: string; text: string }) {
 function TextPanel({ text }: { text: string }) {
 	return (
 		<Panel>
-			<pre className="m-0 px-3 py-1.5 font-mono text-[11px] leading-[1.5] whitespace-pre-wrap text-muted-foreground">
+			<pre className="m-0 px-3 py-1.5 font-mono text-[12px] leading-[1.6] whitespace-pre-wrap">
 				{text}
 			</pre>
 		</Panel>
@@ -154,17 +169,27 @@ function TerminalPanel({
 	isError: boolean;
 }) {
 	return (
-		<div className="mt-1 overflow-hidden rounded-md border border-border/60 bg-background/40">
-			<div className="border-b border-border/60 px-3 py-1.5 font-mono text-[11px] whitespace-pre-wrap text-foreground/80">
-				<span className="select-none text-muted-foreground/60">$ </span>
+		<div className="mt-1 overflow-hidden rounded-lg border border-border/60">
+			<div
+				className={cn(
+					"px-3 py-1.5 font-mono text-[12px] whitespace-pre-wrap",
+					CODE_SURFACE,
+				)}
+			>
+				<span className="select-none text-emerald-400">$ </span>
 				{command}
 			</div>
 			{output ? (
-				<div className="max-h-64 overflow-auto">
+				<div
+					className={cn(
+						"max-h-72 overflow-auto border-t border-white/10",
+						CODE_SURFACE,
+					)}
+				>
 					<pre
 						className={cn(
-							"m-0 px-3 py-1.5 font-mono text-[11px] leading-[1.5] whitespace-pre-wrap",
-							isError ? "text-destructive" : "text-muted-foreground",
+							"m-0 px-3 py-1.5 font-mono text-[12px] leading-[1.6] whitespace-pre-wrap",
+							isError && "text-red-400",
 						)}
 					>
 						{output}
@@ -261,7 +286,7 @@ function Row({
 				onClick={onToggle}
 				aria-expanded={expandable ? open : undefined}
 				className={cn(
-					"flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[12px]",
+					"flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px]",
 					expandable ? "hover:bg-muted/50" : "cursor-default",
 				)}
 			>
@@ -284,7 +309,9 @@ function Row({
 					/>
 				) : null}
 			</button>
-			{open && body ? <div className="pr-1 pl-6">{body}</div> : null}
+			{open && body ? (
+				<div className="min-w-0 pr-1 pl-6">{body}</div>
+			) : null}
 		</div>
 	);
 }
@@ -292,7 +319,7 @@ function Row({
 function ToolRow({ step }: { step: ToolStepData }) {
 	const view = describeTool(step.name, step.input, step.result);
 	const error = step.result?.isError ?? false;
-	const [open, setOpen] = useState(error);
+	const [open, setOpen] = useState(error || VERBOSE_TOOLS.has(step.name));
 	const expandable = !!view.detail;
 	const hasCounts = !!(view.added || view.removed);
 
@@ -311,7 +338,7 @@ function ToolRow({ step }: { step: ToolStepData }) {
 				</span>
 				{view.target ? (
 					<span
-						className="truncate font-mono text-[11px] text-muted-foreground"
+						className="truncate font-mono text-[12px] text-muted-foreground"
 						title={view.target}
 					>
 						{view.label ?? view.target}
@@ -417,7 +444,7 @@ export function ToolActivity({ items }: { items: EventRecord[] }) {
 	return (
 		<div
 			className={cn(
-				"flex flex-col gap-0.5 rounded-lg border bg-muted/20 p-1",
+				"flex min-w-0 flex-col gap-0.5 rounded-lg border bg-muted/20 p-1",
 				hasError ? "border-destructive/30" : "border-border/50",
 			)}
 		>
