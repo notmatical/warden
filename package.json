@@ -12,6 +12,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --write \"**/*.{ts,tsx}\"",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
     "tauri": "tauri"
   },
   "dependencies": {
@@ -49,6 +51,7 @@
     "zustand": "^5.0.13"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.31.0",
     "@eslint/js": "^10",
     "@tauri-apps/cli": "^2",
     "@types/node": "^24",
