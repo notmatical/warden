@@ -6,6 +6,7 @@ import {
 	ShieldOff,
 } from "lucide-react";
 
+import { Shortcut } from "@/components/shortcut";
 import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
@@ -13,6 +14,11 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useControllableOpen } from "@/hooks/use-controllable-open";
 import { cn } from "@/lib/utils";
 import type { PermissionMode } from "@/types";
@@ -89,19 +95,26 @@ export function ModeMenu({
 
 	return (
 		<DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
-			<DropdownMenuTrigger asChild>
-				<Button
-					variant="ghost"
-					size="sm"
-					disabled={disabled}
-					title="Switch mode (Shift+Tab to cycle)"
-					className="h-7 gap-1.5 px-2.5 text-xs font-medium text-foreground/80 hover:text-foreground"
-				>
-					<span className={cn("size-1.5 rounded-full", active.dot)} />
-					{active.trigger}
-					<ChevronDown className="size-3 opacity-50" />
-				</Button>
-			</DropdownMenuTrigger>
+			<Tooltip>
+				<TooltipTrigger asChild>
+					<DropdownMenuTrigger asChild>
+						<Button
+							variant="ghost"
+							size="sm"
+							disabled={disabled}
+							className="h-7 gap-1.5 px-2.5 text-xs font-medium text-foreground/80 hover:text-foreground"
+						>
+							<span className={cn("size-1.5 rounded-full", active.dot)} />
+							{active.trigger}
+							<ChevronDown className="size-3 opacity-50" />
+						</Button>
+					</DropdownMenuTrigger>
+				</TooltipTrigger>
+				<TooltipContent side="top" className="flex items-center gap-1.5">
+					Mode
+					<Shortcut combo={{ key: "Tab", shift: true }} />
+				</TooltipContent>
+			</Tooltip>
 			<DropdownMenuContent align="start" className="w-64">
 				{MODE_ORDER.map((mode) => {
 					const meta = MODE_META[mode];
