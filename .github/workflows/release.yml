@@ -42,46 +42,24 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # Builds + signs installers for every OS and publishes them to a GitHub Release.
+  # Builds + signs the Windows installers and publishes them to a GitHub Release.
   # Runs only when `version` flagged a release (or on a manual dispatch).
+  # (macOS/Linux are intentionally out of scope for now — add matrix entries to
+  # ship them later.)
   build:
-    name: Build (${{ matrix.platform }})
+    name: Build (windows)
     needs: version
     if: needs.version.outputs.published == 'true' || github.event_name == 'workflow_dispatch'
     permissions:
       contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: macos-latest
-            args: "--target universal-apple-darwin --bundles app,dmg"
-          - platform: ubuntu-22.04
-            args: "--bundles deb,rpm,appimage"
-          - platform: windows-latest
-            args: "--bundles msi,nsis"
-
-    runs-on: ${{ matrix.platform }}
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
-
-      - name: Install Linux dependencies
-        if: startsWith(matrix.platform, 'ubuntu')
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils libfuse2
-
       - uses: oven-sh/setup-bun@v2
       - uses: dtolnay/rust-toolchain@stable
-
-      - name: Add macOS universal targets
-        if: matrix.platform == 'macos-latest'
-        run: rustup target add x86_64-apple-darwin aarch64-apple-darwin
-
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: "./src-tauri -> target"
-
       - run: bun install --frozen-lockfile
 
       # tauri-action reads the version from the (already-synced) tauri.conf.json,
@@ -93,16 +71,9 @@ jobs:
           # Updater signing (optional until the updater is configured).
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # macOS code-signing + notarization (optional; unsigned builds work too).
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           tauriScript: bun run tauri
           tagName: warden-v__VERSION__
           releaseName: "Warden v__VERSION__"
           includeUpdaterJson: true
-          args: ${{ matrix.args }}
+          args: "--bundles msi,nsis"
