@@ -45,6 +45,25 @@ pub fn silent_command(cmd: &mut Command) -> &mut Command {
     cmd
 }
 
+/// Best-effort kill of a process *and its descendants*. On Windows the agent CLI
+/// is usually a `claude.cmd` shim that spawns `node`; terminating only the direct
+/// child (e.g. via `Child::start_kill`) orphans `node`, which keeps streaming to
+/// the inherited pipe and holds the Claude session lock. `taskkill /T` tears down
+/// the whole tree. On other platforms this is a no-op (the direct-child kill is
+/// enough for development); revisit if we ship beyond Windows.
+pub fn kill_process_tree(pid: u32) {
+    #[cfg(windows)]
+    {
+        let mut cmd = Command::new("taskkill");
+        cmd.args(["/F", "/T", "/PID", &pid.to_string()]);
+        let _ = silent_command(&mut cmd).output();
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = pid;
+    }
+}
+
 /// Write a downloaded binary to `path` via a temp file + atomic rename, then make
 /// it runnable. On Windows a running binary holds a lock, so the existing file is
 /// moved aside first; elsewhere the rename swaps the directory entry to the new

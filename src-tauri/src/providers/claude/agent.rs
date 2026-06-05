@@ -105,7 +105,12 @@ pub fn command(session: &Session, prompt: &str, add_dirs: &[String]) -> Result<C
 /// Args for a persistent, bidirectional session process: events stream out and
 /// user messages stream in over stdin (`--input-format stream-json`), so the
 /// conversation stays warm across turns. No prompt is baked in.
-pub fn session_args(session: &Session, add_dirs: &[String]) -> Vec<String> {
+///
+/// `resume` forces `--resume` even when `turns == 0`: a first turn that was
+/// cancelled never records a turn, but Claude already created the session id, so
+/// re-running `--session-id` would fail with "already in use". The caller passes
+/// `true` once the session has been initialized.
+pub fn session_args(session: &Session, add_dirs: &[String], resume: bool) -> Vec<String> {
     let (model, fast) = match session.model.strip_suffix("-fast") {
         Some(base) => (base.to_string(), true),
         None => (session.model.clone(), false),
@@ -149,22 +154,22 @@ pub fn session_args(session: &Session, add_dirs: &[String]) -> Vec<String> {
         }
     }
 
-    // A brand-new session opens its conversation; a re-spawned one (process was
-    // killed, or the app restarted) resumes the existing conversation.
-    if session.turns == 0 {
-        args.push("--session-id".to_string());
-    } else {
+    // A brand-new session opens its conversation; one that already exists (a
+    // later turn, a re-spawn after a kill/cancel, or an app restart) resumes it.
+    if resume || session.turns > 0 {
         args.push("--resume".to_string());
+    } else {
+        args.push("--session-id".to_string());
     }
     args.push(session.agent_session_id.clone());
     args
 }
 
 /// Build the persistent session command: stdin/stdout/stderr all piped.
-pub fn session_command(session: &Session, add_dirs: &[String]) -> Result<Command> {
+pub fn session_command(session: &Session, add_dirs: &[String], resume: bool) -> Result<Command> {
     let bin = resolve_claude();
     let mut cmd = Command::new(bin);
-    cmd.args(session_args(session, add_dirs))
+    cmd.args(session_args(session, add_dirs, resume))
         .current_dir(&session.working_dir)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
