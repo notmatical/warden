@@ -7,10 +7,15 @@ import {
 	useRef,
 	useState,
 } from "react";
+import {
+	AskUserQuestion,
+	parseQuestions,
+} from "@/components/ask-user-question";
 import { StreamingStatus } from "@/components/streaming-status";
 import { ToolActivity } from "@/components/tool-activity";
 import { Markdown } from "@/components/ui/markdown";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { isSpecialTool } from "@/lib/agent-tools";
 import { copyText } from "@/lib/clipboard";
 import { relativeTime } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -127,31 +132,96 @@ function renderStandalone(event: EventRecord): ReactNode {
 	}
 }
 
-/** Render the event log, collapsing contiguous tool/thinking events into a
- *  single `ToolActivity` accordion between assistant/user messages. */
-function renderTimeline(events: EventRecord[]): ReactNode[] {
-	const nodes: ReactNode[] = [];
-	let toolRun: EventRecord[] = [];
+/** An agent's AskUserQuestion tool call, rendered interactively. Answering sends
+ *  the selections back as the next user message — the agent paused right after
+ *  asking, so it continues on the reply (no tool_result needed). */
+function QuestionBlock({
+	event,
+	sessionId,
+	answered,
+}: {
+	event: EventRecord;
+	sessionId: string;
+	answered: boolean;
+}) {
+	const sendMessage = useAppStore((s) => s.sendMessage);
+	if (event.type !== "tool_use") return null;
+	return (
+		<AskUserQuestion
+			questions={parseQuestions(event.input)}
+			answered={answered}
+			onSubmit={(reply) => void sendMessage(sessionId, reply)}
+		/>
+	);
+}
 
-	const flush = () => {
-		if (toolRun.length > 0) {
-			nodes.push(
-				<ToolActivity key={`tools-${toolRun[0].id}`} items={toolRun} />,
-			);
-			toolRun = [];
-		}
+/** True if the user sends a message anywhere after index `i` — i.e. an
+ *  AskUserQuestion at `i` has since been answered. */
+function repliedAfter(events: EventRecord[], i: number): boolean {
+	for (let j = i + 1; j < events.length; j++) {
+		if (events[j].type === "user_message") return true;
+	}
+	return false;
+}
+
+/** Walk the event log into renderable nodes:
+ *  - runs of thinking/tool events collapse into one `ToolActivity` accordion;
+ *  - special tools (currently AskUserQuestion) are lifted into dedicated widgets
+ *    and kept out of the accordion;
+ *  - an AskUserQuestion's auto-generated error result is dropped, and the prose
+ *    the agent tends to restate the question with afterwards is hidden until the
+ *    user replies;
+ *  - everything else renders standalone. */
+function renderTimeline(events: EventRecord[], sessionId: string): ReactNode[] {
+	const nodes: ReactNode[] = [];
+	const droppedResults = new Set<string>();
+	let toolRun: EventRecord[] = [];
+	let awaitingReply = false; // inside an unanswered AskUserQuestion
+
+	const flushTools = () => {
+		if (toolRun.length === 0) return;
+		nodes.push(<ToolActivity key={`tools-${toolRun[0].id}`} items={toolRun} />);
+		toolRun = [];
 	};
 
-	for (const event of events) {
+	events.forEach((event, i) => {
+		// A reply closes the open question, re-enabling assistant text.
+		if (event.type === "user_message") awaitingReply = false;
+		if (event.type === "assistant_text" && awaitingReply) return;
+		if (event.type === "tool_result" && droppedResults.has(event.tool_use_id)) {
+			return;
+		}
+
+		// Special tools lift out into their own widget. Only AskUserQuestion has
+		// one today; future ones (plan/todo) add a branch here. Anything in the
+		// registry without a branch falls through to the accordion below, so it
+		// stays visible rather than silently vanishing.
+		if (event.type === "tool_use" && isSpecialTool(event.name)) {
+			if (event.name === "AskUserQuestion") {
+				flushTools();
+				droppedResults.add(event.id);
+				awaitingReply = true;
+				nodes.push(
+					<QuestionBlock
+						key={`q-${event.id}`}
+						event={event}
+						sessionId={sessionId}
+						answered={repliedAfter(events, i)}
+					/>,
+				);
+				return;
+			}
+		}
+
 		if (TOOL_TYPES.has(event.type)) {
 			toolRun.push(event);
-			continue;
+			return;
 		}
-		flush();
+		flushTools();
 		const node = renderStandalone(event);
 		if (node) nodes.push(node);
-	}
-	flush();
+	});
+	flushTools();
 
 	return nodes;
 }
@@ -170,8 +240,8 @@ export function Transcript({
 	// Memoized so streaming deltas (which only touch `streaming`) don't re-walk
 	// the whole event log every tick.
 	const timeline = useMemo(
-		() => (events ? renderTimeline(events) : null),
-		[events],
+		() => (events ? renderTimeline(events, sessionId) : null),
+		[events, sessionId],
 	);
 
 	const viewportRef = useRef<HTMLDivElement>(null);
@@ -211,7 +281,7 @@ export function Transcript({
 			onScrollCapture={handleScroll}
 		>
 			<div
-				className="mx-auto flex w-full max-w-6xl flex-col gap-2.5 px-4 pt-5"
+				className="mx-auto flex w-full max-w-6xl flex-col gap-2.5 px-4 pt-8"
 				style={{ paddingBottom: bottomInset }}
 			>
 				{isEmpty && (
