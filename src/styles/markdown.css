@@ -1,0 +1,30 @@
+/* The markdown renderer (src/components/ui/markdown.tsx) styles every element
+   explicitly against the app's warm-neutral tokens, so no Tailwind Typography.
+   Only the GFM footnotes section (injected as raw markup) is styled here. */
+.markdown .footnotes {
+	margin-top: 1.5rem;
+	padding-top: 1rem;
+	border-top: 1px solid var(--border);
+	font-size: 0.8125rem;
+	color: var(--muted-foreground);
+}
+
+.markdown .footnotes h2 {
+	font-size: 0.75rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--muted-foreground);
+}
+
+.markdown .sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}

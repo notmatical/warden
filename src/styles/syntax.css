@@ -1,0 +1,17 @@
+/* Syntax highlighting (shiki). Used app-wide: markdown code blocks, the diff
+   viewer, and tool-output panels. Shiki emits per-theme colors as CSS variables
+   (defaultColor: false); resolve them to `color` by theme so highlighted code
+   sits on the app's own surface. */
+@layer base {
+	.shiki,
+	.shiki span,
+	[data-tok] {
+		color: var(--shiki-light);
+	}
+
+	.dark .shiki,
+	.dark .shiki span,
+	.dark [data-tok] {
+		color: var(--shiki-dark);
+	}
+}
