@@ -80,19 +80,22 @@ export function ModelMenu({
 	const activeProvider =
 		MODELS.find((m) => m.id === base)?.provider ?? PROVIDER_ENTRIES[0].name;
 
-	// Which providers can be picked right now: once a turn has run the backend is
-	// fixed to one provider; otherwise every authed provider is selectable.
+	// Every provider stays in the rail; the ones you can't pick right now are
+	// shown disabled rather than hidden. After the first turn the backend is
+	// fixed, so only the session's own provider stays live; unauthed providers
+	// are disabled too. The session's own provider is always enabled (so the
+	// menu is never empty).
 	const authed = new Set(providers.filter((p) => p.authed).map((p) => p.id));
-	const usable = started
-		? PROVIDER_ENTRIES.filter((e) => e.backend === backend)
-		: PROVIDER_ENTRIES.filter((e) => authed.has(e.backend));
-	// Fall back to the session's own provider so the menu is never empty (e.g.
-	// before provider status has loaded).
-	const entries =
-		usable.length > 0
-			? usable
-			: PROVIDER_ENTRIES.filter((e) => e.backend === backend);
-	// Only worth a provider rail when there's more than one to switch between.
+	const entries = PROVIDER_ENTRIES.map((e) => {
+		const isSessionProvider = e.backend === backend;
+		const enabled = isSessionProvider || (!started && authed.has(e.backend));
+		const reason = enabled
+			? undefined
+			: started && !isSessionProvider
+				? "Locked to this provider after the first turn"
+				: "Sign in to this provider in Settings";
+		return { ...e, enabled, reason };
+	});
 	const showRail = entries.length > 1;
 
 	const [pane, setPane] = useState(activeProvider);
@@ -172,14 +175,23 @@ export function ModelMenu({
 									<button
 										key={entry.name}
 										type="button"
+										disabled={!entry.enabled}
 										aria-label={entry.name}
-										title={entry.name}
-										onClick={() => selectPane(entry.name)}
+										title={
+											entry.enabled
+												? entry.name
+												: `${entry.name} — ${entry.reason}`
+										}
+										onClick={() => {
+											if (entry.enabled) selectPane(entry.name);
+										}}
 										className={cn(
 											"flex aspect-square items-center justify-center rounded-md transition-colors",
-											selected
-												? "bg-accent text-accent-foreground"
-												: "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+											!entry.enabled
+												? "cursor-not-allowed text-muted-foreground/25"
+												: selected
+													? "bg-accent text-accent-foreground"
+													: "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
 										)}
 									>
 										<Icon className="size-4" />
@@ -189,7 +201,9 @@ export function ModelMenu({
 						</div>
 					) : null}
 
-					<div className="min-w-0 flex-1 overflow-y-auto p-1 max-h-72">
+					{/* Fixed height (not max-height) so the popover doesn't resize when
+					    switching providers or filtering. */}
+					<div className="h-60 min-w-0 flex-1 overflow-y-auto p-1">
 						{paneModels.length === 0 ? (
 							<p className="px-2 py-6 text-center text-sm text-muted-foreground">
 								No models found
