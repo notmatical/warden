@@ -216,8 +216,11 @@ function AddRootControl({
 	statuses: RepoStatus[];
 	refresh: () => void;
 }) {
+	// Roots come from the session's own group — not whatever group is focused in
+	// the sidebar (tabs are browser-global, so they can differ).
+	const groupId = useAppStore((s) => s.sessions[sessionId]?.groupId);
 	const groupRoots = useAppStore((s) =>
-		s.activeGroupId ? (s.rootsByGroup[s.activeGroupId] ?? EMPTY) : EMPTY,
+		groupId ? (s.rootsByGroup[groupId] ?? EMPTY) : EMPTY,
 	);
 
 	const add = useCallback(
