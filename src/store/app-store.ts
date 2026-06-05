@@ -754,13 +754,19 @@ export const useAppStore = create<AppState>((set, get) => ({
 	},
 
 	createSession: async (opts) => {
-		const groupId = get().activeGroupId;
-		if (!groupId) {
-			reportError("No group selected", "Create a group first.");
-			return null;
-		}
 		if (!opts.projectId) {
 			reportError("No folder selected", "Add a folder to this group first.");
+			return null;
+		}
+		// The session belongs to the group that owns its root — not whatever group
+		// was last focused. Fall back to the active group only if the root isn't
+		// found (shouldn't happen).
+		const groupId =
+			Object.entries(get().rootsByGroup).find(([, roots]) =>
+				roots.some((root) => root.id === opts.projectId),
+			)?.[0] ?? get().activeGroupId;
+		if (!groupId) {
+			reportError("No group selected", "Create a group first.");
 			return null;
 		}
 		try {
