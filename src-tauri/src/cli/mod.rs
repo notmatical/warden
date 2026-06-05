@@ -66,9 +66,13 @@ impl Tool {
     }
 }
 
-/// Seed the app data dir and persisted source preferences at startup.
-pub fn init(app_data_dir: PathBuf, sources: HashMap<Tool, Source>) {
+/// Record warden's app data dir (must run before any managed-path lookup).
+pub fn set_app_data(app_data_dir: PathBuf) {
     paths::set_app_data(app_data_dir);
+}
+
+/// Seed the per-tool source preferences at startup.
+pub fn set_sources(sources: HashMap<Tool, Source>) {
     source::set_all(sources);
 }
 
