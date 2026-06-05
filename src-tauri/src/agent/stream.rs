@@ -4,7 +4,7 @@
 
 use serde_json::Value;
 
-use crate::domain::{AgentEvent, ToolDenial};
+use crate::domain::{AgentEvent, TokenUsage, ToolDenial};
 
 /// Tool-result content larger than this is clipped to keep the event log and
 /// the IPC payload bounded.
@@ -12,10 +12,12 @@ const MAX_TOOL_RESULT_CHARS: usize = 16_000;
 const TRUNCATION_NOTE: &str = "… (truncated)";
 
 /// The outcome of parsing one stream-json line: the normalized events it
-/// produced (possibly none) plus any cost reported by a `result` line.
+/// produced (possibly none), any cost reported by a `result` line, and any
+/// token usage reported by an `assistant` line.
 pub struct ParsedLine {
     pub events: Vec<AgentEvent>,
     pub cost_usd: Option<f64>,
+    pub usage: Option<TokenUsage>,
 }
 
 impl ParsedLine {
@@ -23,6 +25,7 @@ impl ParsedLine {
         Self {
             events,
             cost_usd: None,
+            usage: None,
         }
     }
 
@@ -30,8 +33,21 @@ impl ParsedLine {
         Self {
             events: Vec::new(),
             cost_usd: None,
+            usage: None,
         }
     }
+}
+
+/// Read a model `usage` object into [`TokenUsage`], or `None` if it's empty.
+fn parse_usage(value: &Value) -> Option<TokenUsage> {
+    let get = |key: &str| value.get(key).and_then(Value::as_u64).unwrap_or(0);
+    let usage = TokenUsage {
+        input_tokens: get("input_tokens"),
+        output_tokens: get("output_tokens"),
+        cache_read_input_tokens: get("cache_read_input_tokens"),
+        cache_creation_input_tokens: get("cache_creation_input_tokens"),
+    };
+    (usage != TokenUsage::default()).then_some(usage)
 }
 
 /// Parse one line of stream-json. Returns `None` for blank lines or lines that
@@ -46,10 +62,14 @@ pub fn parse_line(line: &str) -> Option<ParsedLine> {
 
     match value.get("type").and_then(Value::as_str) {
         Some("system") => Some(parse_system(&value)),
-        Some("assistant") => Some(ParsedLine::events(parse_content_blocks(
-            &value,
-            parse_assistant_block,
-        ))),
+        Some("assistant") => Some(ParsedLine {
+            events: parse_content_blocks(&value, parse_assistant_block),
+            cost_usd: None,
+            usage: value
+                .get("message")
+                .and_then(|m| m.get("usage"))
+                .and_then(parse_usage),
+        }),
         Some("user") => Some(ParsedLine::events(parse_content_blocks(
             &value,
             parse_user_block,
@@ -244,6 +264,9 @@ fn parse_result(value: &Value) -> ParsedLine {
         cost_usd,
         duration_ms: value.get("duration_ms").and_then(Value::as_u64),
         num_turns: value.get("num_turns").and_then(Value::as_u64),
+        // The result line's own usage (cumulative across the turn's API calls) is
+        // a fallback; the reader prefers the last assistant message's usage.
+        usage: value.get("usage").and_then(parse_usage),
     }];
 
     // Tools the CLI denied this turn become an approval request.
@@ -256,7 +279,11 @@ fn parse_result(value: &Value) -> ParsedLine {
         events.push(AgentEvent::PermissionRequest { denials });
     }
 
-    ParsedLine { events, cost_usd }
+    ParsedLine {
+        events,
+        cost_usd,
+        usage: None,
+    }
 }
 
 fn parse_denial(value: &Value) -> Option<ToolDenial> {

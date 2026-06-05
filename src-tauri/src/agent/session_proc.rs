@@ -15,7 +15,7 @@ use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, ChildStdout};
 use tokio::sync::mpsc;
 
-use crate::domain::{AgentEvent, Session, SessionStatus};
+use crate::domain::{AgentEvent, Session, SessionStatus, TokenUsage};
 use crate::error::{AppError, Result};
 use crate::events::{emit_delta, emit_event, emit_session};
 use crate::store::Store;
@@ -170,10 +170,16 @@ async fn reader_loop(
     stderr_buf: Arc<tokio::sync::Mutex<String>>,
 ) {
     let mut lines = BufReader::new(stdout).lines();
+    // The latest assistant message's usage — the context-window fill — which we
+    // stamp onto the turn's `result` event when it arrives.
+    let mut latest_usage: Option<TokenUsage> = None;
     while let Ok(Some(line)) = lines.next_line().await {
         let Some(parsed) = parse_line(&line) else {
             continue;
         };
+        if parsed.usage.is_some() {
+            latest_usage = parsed.usage.clone();
+        }
         for event in parsed.events {
             if event.is_transient() {
                 if let AgentEvent::TextDelta { text } = &event {
@@ -181,6 +187,24 @@ async fn reader_loop(
                 }
                 continue;
             }
+            let event = match event {
+                AgentEvent::Result {
+                    is_error,
+                    cost_usd,
+                    duration_ms,
+                    num_turns,
+                    usage,
+                } => AgentEvent::Result {
+                    is_error,
+                    cost_usd,
+                    duration_ms,
+                    num_turns,
+                    // Prefer the last assistant message's usage; fall back to the
+                    // result line's own usage if that's all the CLI reported.
+                    usage: latest_usage.clone().or(usage),
+                },
+                other => other,
+            };
             if let Ok(record) = store.append_event(&session_id, &event) {
                 emit_event(&app, &record);
             }

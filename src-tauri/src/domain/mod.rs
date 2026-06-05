@@ -3,7 +3,7 @@ mod group;
 mod project;
 mod session;
 
-pub use event::{AgentEvent, EventRecord, ToolDenial};
+pub use event::{AgentEvent, EventRecord, TokenUsage, ToolDenial};
 pub use group::Group;
 pub use project::Project;
 pub use session::{

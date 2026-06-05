@@ -10,6 +10,18 @@ pub struct ToolDenial {
     pub input: serde_json::Value,
 }
 
+/// Token accounting for a turn, mirrored from the model's `usage` report. The
+/// input side plus cache reads/writes approximates the context-window fill.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct TokenUsage {
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+    #[serde(default)]
+    pub cache_read_input_tokens: u64,
+    #[serde(default)]
+    pub cache_creation_input_tokens: u64,
+}
+
 /// A normalized agent event — the single contract the whole UI renders against,
 /// regardless of which backend produced it. Backend-specific stream formats are
 /// translated into this enum by each adapter.
@@ -56,6 +68,10 @@ pub enum AgentEvent {
         cost_usd: Option<f64>,
         duration_ms: Option<u64>,
         num_turns: Option<u64>,
+        /// Latest token usage (the final assistant message's), so the UI can
+        /// show context-window fill. Stamped by the reader, not the parser.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        usage: Option<TokenUsage>,
     },
     /// One or more tool calls were denied for lack of permission. Approving
     /// resumes the turn with those tools added to the session's allowlist.

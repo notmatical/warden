@@ -206,6 +206,14 @@ export interface PlanToCodeResult {
   coder: Session
 }
 
+/** Token accounting for a turn; the input side + cache approximates context fill. */
+export interface TokenUsage {
+  input_tokens: number
+  output_tokens: number
+  cache_read_input_tokens: number
+  cache_creation_input_tokens: number
+}
+
 export type AgentEvent =
   | { type: "session_init"; model: string | null; tools: string[] }
   | { type: "user_message"; text: string }
@@ -233,6 +241,7 @@ export type AgentEvent =
       cost_usd: number | null
       duration_ms: number | null
       num_turns: number | null
+      usage?: TokenUsage
     }
   | { type: "permission_request"; denials: ToolDenial[] }
   | { type: "notice"; text: string }
