@@ -13,7 +13,7 @@ import {
 	useEdgesState,
 	useNodesState,
 } from "@xyflow/react";
-import { ArrowLeft, Play, Plus } from "lucide-react";
+import { ArrowLeft, ExternalLink, Play, Plus } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { EffortMenu } from "@/components/controls/effort-menu";
@@ -103,6 +103,13 @@ function Canvas({ workflow }: { workflow: Workflow }) {
 	const runStatus = useAppStore((s) => s.workflowRun?.run.status);
 	const nodeRuns = useAppStore((s) => s.workflowRun?.nodes);
 	const loadEvents = useAppStore((s) => s.loadEvents);
+	const openSession = useAppStore((s) => s.openSession);
+
+	const openNodeSession = (sessionId: string | null | undefined) => {
+		if (!sessionId) return;
+		openSession(sessionId);
+		closeWorkflow();
+	};
 
 	const [initial] = useState(() => toRF(workflow.graph));
 	const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes);
@@ -209,6 +216,11 @@ function Canvas({ workflow }: { workflow: Workflow }) {
 						onEdgesChange={onEdgesChange}
 						onConnect={onConnect}
 						onNodeClick={(_, n) => setSelectedId(n.id)}
+						onNodeDoubleClick={(_, n) =>
+							openNodeSession(
+								nodeRuns?.find((r) => r.nodeId === n.id)?.sessionId,
+							)
+						}
 						onPaneClick={() => setSelectedId(null)}
 						nodeTypes={nodeTypes}
 						fitView
@@ -313,8 +325,21 @@ function Canvas({ workflow }: { workflow: Workflow }) {
 						) : null}
 							</div>
 						) : nodeSessionId ? (
-							<div className="relative min-h-0 flex-1">
-								<Transcript sessionId={nodeSessionId} bottomInset={0} />
+							<div className="flex min-h-0 flex-1 flex-col">
+								<div className="flex shrink-0 justify-end border-b border-border/60 px-2 py-1.5">
+									<Button
+										variant="ghost"
+										size="xs"
+										onClick={() => openNodeSession(nodeSessionId)}
+										className="gap-1.5 text-muted-foreground hover:text-foreground"
+									>
+										<ExternalLink className="size-3.5" />
+										Open full session
+									</Button>
+								</div>
+								<div className="relative min-h-0 flex-1">
+									<Transcript sessionId={nodeSessionId} bottomInset={0} />
+								</div>
 							</div>
 						) : (
 							<p className="p-6 text-center text-xs text-muted-foreground">
