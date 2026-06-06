@@ -20,6 +20,7 @@ import { useConfirm } from "@/components/confirm-dialog"
 import { ClaudeIcon, CodexIcon, GitHubIcon } from "@/components/icons/brand"
 import { ReviewPrDialog } from "@/components/review-pr-dialog"
 import { SessionFavicon } from "@/components/session-favicon"
+import { SessionHoverCard } from "@/components/session-hover-card"
 import { Button } from "@/components/ui/button"
 import {
   ContextMenu,
@@ -164,29 +165,33 @@ function SessionRow({ sessionId }: { sessionId: string }) {
               />
             </div>
           ) : (
-            <SidebarMenuSubButton
-              asChild
-              isActive={active}
-              className="w-full cursor-default text-left text-sidebar-foreground/70 hover:bg-transparent hover:text-sidebar-foreground active:bg-transparent data-[active=true]:bg-transparent data-[active=true]:font-medium data-[active=true]:text-sidebar-foreground"
-            >
-              <button
-                ref={setNodeRef}
-                type="button"
-                {...attributes}
-                {...listeners}
-                onClick={() => openSession(sessionId)}
-                onDoubleClick={startRename}
-                title={session.title}
-                className={cn(isDragging && "opacity-50")}
+            <SessionHoverCard session={session}>
+              <SidebarMenuSubButton
+                asChild
+                isActive={active}
+                className="w-full cursor-default text-left text-sidebar-foreground/70 hover:bg-transparent hover:text-sidebar-foreground active:bg-transparent data-[active=true]:bg-transparent data-[active=true]:font-medium data-[active=true]:text-sidebar-foreground"
               >
-                <SessionFavicon
-                  kind={session.kind}
-                  backend={session.backend}
-                  status={session.status}
-                />
-                <span className="min-w-0 flex-1 truncate">{session.title}</span>
-              </button>
-            </SidebarMenuSubButton>
+                <button
+                  ref={setNodeRef}
+                  type="button"
+                  {...attributes}
+                  {...listeners}
+                  onClick={() => openSession(sessionId)}
+                  onDoubleClick={startRename}
+                  title={session.title}
+                  className={cn(isDragging && "opacity-50")}
+                >
+                  <SessionFavicon
+                    kind={session.kind}
+                    backend={session.backend}
+                    status={session.status}
+                  />
+                  <span className="min-w-0 flex-1 truncate">
+                    {session.title}
+                  </span>
+                </button>
+              </SidebarMenuSubButton>
+            </SessionHoverCard>
           )}
         </SidebarMenuSubItem>
       </ContextMenuTrigger>
