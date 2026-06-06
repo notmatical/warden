@@ -1,6 +1,7 @@
 //! Orchestrates agent turns: spawning the CLI, translating its stream into
 //! persisted events, and tracking which sessions have a turn in flight.
 
+pub mod attachments;
 mod naming;
 pub mod recipes;
 mod session_proc;
@@ -236,6 +237,10 @@ impl AgentManager {
             if !add_dirs.contains(&dir) {
                 add_dirs.push(dir);
             }
+        }
+        // Always grant the session's attachments dir so staged drops are readable.
+        if let Ok(att_dir) = attachments::dir(&app, &session.id) {
+            add_dirs.push(att_dir.to_string_lossy().into_owned());
         }
 
         let context_file = match write_context_file(&app, &session.id, &context.system_text) {

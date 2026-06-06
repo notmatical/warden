@@ -232,18 +232,33 @@ pub async fn send_message(
     state: State<'_, AppState>,
     session_id: String,
     text: String,
+    attachments: Option<Vec<String>>,
 ) -> Result<()> {
     let session = state.store.get_session(&session_id)?;
 
     // A brand-new chat session gets a clean title generated from its first
-    // message, in the background, unless the user has already named it.
+    // message, in the background, unless the user has already named it. Title
+    // off the user's own words, before attachment references are appended.
     let naming_ctx =
         (session.turns == 0 && session.auto_named && session.role == SessionRole::Chat)
             .then(|| (session.working_dir.clone(), text.clone()));
 
+    // Append a reference line per attachment so the agent reads it via its tools.
+    let message = match attachments {
+        Some(paths) if !paths.is_empty() => {
+            let refs = paths
+                .iter()
+                .map(|p| crate::agent::attachments::reference_line(p))
+                .collect::<Vec<_>>()
+                .join("\n");
+            format!("{text}\n\n{refs}")
+        }
+        _ => text,
+    };
+
     state
         .manager
-        .run_turn(app.clone(), state.store.clone(), session, text)
+        .run_turn(app.clone(), state.store.clone(), session, message)
         .await?;
 
     if let Some((working_dir, message)) = naming_ctx {
@@ -325,6 +340,19 @@ pub async fn approve_plan(
             "The plan is approved. Please implement it now.".to_string(),
         )
         .await
+}
+
+/// Stage files dropped on the composer: copy any outside the working dir into
+/// the session's attachments dir, returning records to reference on send.
+#[tauri::command]
+pub async fn attach_to_session(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: String,
+    paths: Vec<String>,
+) -> Result<Vec<crate::agent::attachments::Attachment>> {
+    let session = state.store.get_session(&session_id)?;
+    crate::agent::attachments::stage(&app, &session_id, &session.working_dir, &paths)
 }
 
 // ----- context sources -------------------------------------------------------
