@@ -48,7 +48,9 @@ pub fn assemble(sources: &[SessionContextSource]) -> AssembledContext {
             ContextSource::NodeOutput { label, .. } => {
                 // Resolved to `Text` before assembly (see run_turn); rendered
                 // defensively in case an unresolved source slips through.
-                let label = label.clone().unwrap_or_else(|| "Linked agent output".to_string());
+                let label = label
+                    .clone()
+                    .unwrap_or_else(|| "Linked agent output".to_string());
                 blocks.push(format!("## {label}\n\n_(linked output unavailable)_"));
             }
         }
