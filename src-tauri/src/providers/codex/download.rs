@@ -22,23 +22,46 @@ fn target() -> Result<&'static str, String> {
     })
 }
 
-pub async fn latest_version() -> Result<String, String> {
-    archive::github_releases(RELEASES_API, 20)
+/// The release asset carrying the CLI for the host target.
+fn asset_name() -> Result<String, String> {
+    let target = target()?;
+    Ok(if cfg!(windows) {
+        format!("codex-{target}.exe.zip")
+    } else {
+        format!("codex-{target}.tar.gz")
+    })
+}
+
+/// Releases that actually ship the host's Codex CLI asset, newest first. The
+/// `openai/codex` repo also publishes unrelated streams (`rusty-v8-*`,
+/// `codex-app-server-*`, …) that must be skipped — otherwise "latest" lands on a
+/// release with no CLI binary.
+async fn cli_releases() -> Result<Vec<archive::GitHubRelease>, String> {
+    let asset = asset_name()?;
+    Ok(archive::github_releases(RELEASES_API, 40)
         .await?
         .into_iter()
-        .find(|r| !r.assets.is_empty())
+        .filter(|r| r.assets.iter().any(|a| a.name == asset))
+        .collect())
+}
+
+pub async fn latest_version() -> Result<String, String> {
+    let releases = cli_releases().await?;
+    // Prefer the newest stable; fall back to the newest prerelease (Codex ships
+    // long alpha streams, so a stable isn't always available).
+    releases
+        .iter()
+        .find(|r| !r.prerelease)
+        .or_else(|| releases.first())
         .map(|r| archive::version_from_tag(&r.tag_name))
-        .ok_or_else(|| "no Codex releases with assets found".to_string())
+        .ok_or_else(|| "no Codex CLI release with a matching asset found".to_string())
 }
 
 pub async fn fetch(app: &AppHandle, version: &str) -> Result<Vec<u8>, String> {
     let target = target()?;
-    let (asset_name, is_zip) = if cfg!(windows) {
-        (format!("codex-{target}.exe.zip"), true)
-    } else {
-        (format!("codex-{target}.tar.gz"), false)
-    };
-    let url = archive::github_releases(RELEASES_API, 20)
+    let asset_name = asset_name()?;
+    let is_zip = cfg!(windows);
+    let url = cli_releases()
         .await?
         .into_iter()
         .find(|r| archive::version_from_tag(&r.tag_name) == version)

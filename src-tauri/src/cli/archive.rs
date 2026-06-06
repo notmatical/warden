@@ -22,6 +22,8 @@ pub fn http_client() -> Result<reqwest::Client, String> {
 pub struct GitHubRelease {
     pub tag_name: String,
     #[serde(default)]
+    pub prerelease: bool,
+    #[serde(default)]
     pub assets: Vec<GitHubAsset>,
 }
 
