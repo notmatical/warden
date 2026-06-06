@@ -14,6 +14,8 @@ type WorkflowsSlice = Pick<
 	| "loadWorkflows"
 	| "createWorkflow"
 	| "saveWorkflowGraph"
+	| "renameWorkflow"
+	| "duplicateWorkflow"
 	| "deleteWorkflow"
 	| "openWorkflow"
 	| "closeWorkflow"
@@ -65,6 +67,35 @@ export const createWorkflowsSlice: StateCreator<
 			await ipc.updateWorkflow(id, undefined, graph);
 		} catch (error) {
 			reportError("Failed to save workflow", error);
+		}
+	},
+
+	renameWorkflow: async (id, name) => {
+		set((s) => {
+			const wf = s.workflows[id];
+			return wf ? { workflows: { ...s.workflows, [id]: { ...wf, name } } } : {};
+		});
+		try {
+			await ipc.updateWorkflow(id, name);
+		} catch (error) {
+			reportError("Failed to rename workflow", error);
+		}
+	},
+
+	duplicateWorkflow: async (id) => {
+		const wf = get().workflows[id];
+		if (!wf) return null;
+		try {
+			const copy = await ipc.createWorkflow(
+				wf.projectId,
+				`${wf.name} copy`,
+				wf.graph,
+			);
+			set((s) => ({ workflows: { ...s.workflows, [copy.id]: copy } }));
+			return copy;
+		} catch (error) {
+			reportError("Failed to duplicate workflow", error);
+			return null;
 		}
 	},
 

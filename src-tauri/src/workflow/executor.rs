@@ -68,7 +68,7 @@ async fn run_linear(ctx: &RunContext) -> Result<()> {
 
         // Coding nodes share one worktree on the named branch; read-only nodes
         // reuse it, or run in the project checkout if none exists yet.
-        let dir = if cfg.writes_code {
+        let dir = if cfg.writes_code() {
             if coding_dir.is_none() {
                 coding_dir = Some(provision_working_dir(
                     &ctx.app,

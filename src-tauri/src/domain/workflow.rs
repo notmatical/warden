@@ -67,9 +67,14 @@ pub struct AgentTaskConfig {
     /// Open the worktree on a named branch (e.g. `feat/x`); else `warden/<id>`.
     #[serde(default)]
     pub branch_hint: Option<String>,
-    /// Whether this node edits code (needs the shared coding worktree).
-    #[serde(default)]
-    pub writes_code: bool,
+}
+
+impl AgentTaskConfig {
+    /// Whether this node edits code — derived from its permission mode (a `plan`
+    /// node is read-only; edit modes write and need the shared coding worktree).
+    pub fn writes_code(&self) -> bool {
+        !matches!(self.permission_mode, crate::domain::PermissionMode::Plan)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -99,6 +99,8 @@ export interface AppState {
 	loadWorkflows: (projectId: string) => Promise<void>;
 	createWorkflow: (projectId: string, name: string) => Promise<Workflow | null>;
 	saveWorkflowGraph: (id: string, graph: WorkflowGraph) => Promise<void>;
+	renameWorkflow: (id: string, name: string) => Promise<void>;
+	duplicateWorkflow: (id: string) => Promise<Workflow | null>;
 	deleteWorkflow: (id: string) => Promise<void>;
 	openWorkflow: (id: string) => void;
 	closeWorkflow: () => void;

@@ -8,7 +8,6 @@ export interface AgentTaskConfig {
   role: SessionRole
   prompt: string
   branchHint?: string | null
-  writesCode: boolean
 }
 
 /** A node's behavior. Internally tagged by `type` to match serde. */

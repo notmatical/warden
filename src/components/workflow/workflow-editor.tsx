@@ -13,7 +13,16 @@ import {
 	useEdgesState,
 	useNodesState,
 } from "@xyflow/react";
-import { ArrowLeft, ExternalLink, Play, Plus } from "lucide-react";
+import {
+	ArrowLeft,
+	Copy,
+	ExternalLink,
+	MoreHorizontal,
+	Pencil,
+	Play,
+	Plus,
+	Trash2,
+} from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { EffortMenu } from "@/components/controls/effort-menu";
@@ -21,8 +30,14 @@ import { ModeMenu } from "@/components/controls/mode-menu";
 import { ModelMenu } from "@/components/controls/model-menu";
 import { Transcript } from "@/components/transcript";
 import { Button } from "@/components/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app-store";
 import type { Backend } from "@/types";
@@ -44,7 +59,6 @@ const DEFAULT_CONFIG: AgentTaskConfig = {
 	role: "chat",
 	prompt: "",
 	branchHint: null,
-	writesCode: false,
 };
 
 function backendOf(model: string): Backend {
@@ -63,7 +77,6 @@ function configOf(kind: NodeKind): AgentTaskConfig {
 		role: kind.role,
 		prompt: kind.prompt,
 		branchHint: kind.branchHint ?? null,
-		writesCode: kind.writesCode,
 	};
 }
 
@@ -104,11 +117,23 @@ function Canvas({ workflow }: { workflow: Workflow }) {
 	const nodeRuns = useAppStore((s) => s.workflowRun?.nodes);
 	const loadEvents = useAppStore((s) => s.loadEvents);
 	const openSession = useAppStore((s) => s.openSession);
+	const renameWorkflow = useAppStore((s) => s.renameWorkflow);
+	const duplicateWorkflow = useAppStore((s) => s.duplicateWorkflow);
+	const deleteWorkflow = useAppStore((s) => s.deleteWorkflow);
+	const openWorkflow = useAppStore((s) => s.openWorkflow);
 
 	const openNodeSession = (sessionId: string | null | undefined) => {
 		if (!sessionId) return;
 		openSession(sessionId);
 		closeWorkflow();
+	};
+
+	const [renaming, setRenaming] = useState(false);
+	const [nameDraft, setNameDraft] = useState(workflow.name);
+	const commitRename = () => {
+		const name = nameDraft.trim();
+		if (name && name !== workflow.name) void renameWorkflow(workflow.id, name);
+		setRenaming(false);
 	};
 
 	const [initial] = useState(() => toRF(workflow.graph));
@@ -184,12 +209,76 @@ function Canvas({ workflow }: { workflow: Workflow }) {
 				>
 					<ArrowLeft />
 				</Button>
-				<span className="text-sm font-medium">{workflow.name}</span>
+				{renaming ? (
+					<input
+						value={nameDraft}
+						onChange={(e) => setNameDraft(e.target.value)}
+						onBlur={commitRename}
+						onKeyDown={(e) => {
+							if (e.key === "Enter") commitRename();
+							if (e.key === "Escape") setRenaming(false);
+						}}
+						className="h-7 w-56 rounded-md border border-border bg-transparent px-2 text-sm font-medium outline-none"
+					/>
+				) : (
+					<button
+						type="button"
+						onDoubleClick={() => {
+							setNameDraft(workflow.name);
+							setRenaming(true);
+						}}
+						className="rounded px-1 text-sm font-medium hover:bg-muted"
+						title="Double-click to rename"
+					>
+						{workflow.name}
+					</button>
+				)}
 				{runStatus ? (
 					<span className="rounded bg-muted px-2 py-0.5 text-[11px] text-muted-foreground tabular-nums">
 						{runStatus}
 					</span>
 				) : null}
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<Button
+							variant="ghost"
+							size="icon-sm"
+							aria-label="Workflow actions"
+							className="text-muted-foreground hover:text-foreground"
+						>
+							<MoreHorizontal className="size-4" />
+						</Button>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="start" className="w-44">
+						<DropdownMenuItem
+							onSelect={() => {
+								setNameDraft(workflow.name);
+								setRenaming(true);
+							}}
+						>
+							<Pencil className="size-3.5" />
+							Rename
+						</DropdownMenuItem>
+						<DropdownMenuItem
+							onSelect={() =>
+								void duplicateWorkflow(workflow.id).then(
+									(c) => c && openWorkflow(c.id),
+								)
+							}
+						>
+							<Copy className="size-3.5" />
+							Duplicate
+						</DropdownMenuItem>
+						<DropdownMenuSeparator />
+						<DropdownMenuItem
+							variant="destructive"
+							onSelect={() => void deleteWorkflow(workflow.id)}
+						>
+							<Trash2 className="size-3.5" />
+							Delete
+						</DropdownMenuItem>
+					</DropdownMenuContent>
+				</DropdownMenu>
 				<div className="ml-auto flex items-center gap-1.5">
 					<Button variant="ghost" size="sm" onClick={addNode} className="gap-1.5">
 						<Plus className="size-3.5" />
@@ -301,14 +390,12 @@ function Canvas({ workflow }: { workflow: Workflow }) {
 								className="w-full resize-none rounded-md border border-border/60 bg-transparent px-2.5 py-1.5 text-[13px] outline-none placeholder:text-muted-foreground/60 focus-visible:border-border"
 							/>
 						</div>
-						<label className="flex items-center justify-between gap-2 text-[13px]">
-							<span>Writes code</span>
-							<Switch
-								checked={selected.data.config.writesCode}
-								onCheckedChange={(writesCode) => patchConfig({ writesCode })}
-							/>
-						</label>
-						{selected.data.config.writesCode ? (
+						{selected.data.config.permissionMode === "plan" ? (
+							<p className="rounded-md bg-muted/50 px-2.5 py-2 text-[11px] text-muted-foreground">
+								Plan mode is read-only — this node researches and hands its
+								plan to the next node.
+							</p>
+						) : (
 							<div className="space-y-1">
 								<span className="text-[11px] font-medium text-muted-foreground">
 									Branch
@@ -321,8 +408,11 @@ function Canvas({ workflow }: { workflow: Workflow }) {
 									placeholder="feat/my-feature"
 									className="h-8 font-mono text-[12px]"
 								/>
+								<p className="text-[10px] text-muted-foreground/70">
+									Edits run on this branch in an isolated worktree.
+								</p>
 							</div>
-						) : null}
+						)}
 							</div>
 						) : nodeSessionId ? (
 							<div className="flex min-h-0 flex-1 flex-col">
