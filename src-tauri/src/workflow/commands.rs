@@ -107,3 +107,18 @@ pub async fn get_workflow_run(
     let nodes = state.store.list_node_runs(&run_id)?;
     Ok(WorkflowRunView { run, nodes })
 }
+
+/// The workflow's most recent run (node statuses + sessions), or `None`.
+#[tauri::command]
+pub async fn get_latest_workflow_run(
+    state: State<'_, AppState>,
+    workflow_id: String,
+) -> Result<Option<WorkflowRunView>> {
+    match state.store.latest_workflow_run(&workflow_id)? {
+        Some(run) => {
+            let nodes = state.store.list_node_runs(&run.id)?;
+            Ok(Some(WorkflowRunView { run, nodes }))
+        }
+        None => Ok(None),
+    }
+}

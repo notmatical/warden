@@ -156,9 +156,23 @@ async fn run_linear(ctx: &RunContext) -> Result<()> {
             None,
         )?;
 
+        // Never send an empty turn: a node with incoming context is directed at
+        // it; a root node with no prompt gets a minimal nudge.
+        let prompt = if cfg.prompt.trim().is_empty() {
+            if ctx.graph.edges.iter().any(|e| e.target == node_id) {
+                "Use the plan and context provided above to carry out this step \
+                 of the workflow."
+                    .to_string()
+            } else {
+                "Begin.".to_string()
+            }
+        } else {
+            cfg.prompt.clone()
+        };
+
         match ctx
             .manager
-            .run_node_to_completion(&ctx.app, &ctx.store, &session, &cfg.prompt)
+            .run_node_to_completion(&ctx.app, &ctx.store, &session, &prompt)
             .await
         {
             Ok(output) => {

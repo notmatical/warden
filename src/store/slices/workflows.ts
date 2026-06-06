@@ -116,7 +116,17 @@ export const createWorkflowsSlice: StateCreator<
 		}
 	},
 
-	openWorkflow: (id) => set({ activeWorkflowId: id, workflowRun: null }),
+	openWorkflow: (id) => {
+		set({ activeWorkflowId: id, workflowRun: null });
+		// Restore the workflow's latest run (node statuses + sessions) so
+		// reopening the editor doesn't lose a finished/in-flight run.
+		void ipc
+			.getLatestWorkflowRun(id)
+			.then((view) => {
+				if (get().activeWorkflowId === id) set({ workflowRun: view });
+			})
+			.catch(() => {});
+	},
 	closeWorkflow: () => set({ activeWorkflowId: null, workflowRun: null }),
 
 	runActiveWorkflow: async () => {

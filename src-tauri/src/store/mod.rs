@@ -557,6 +557,28 @@ impl Store {
         })
     }
 
+    /// The most recent run of a workflow, if any (for restoring run state when
+    /// the editor reopens).
+    pub fn latest_workflow_run(&self, workflow_id: &str) -> Result<Option<WorkflowRun>> {
+        let id: Option<String> = {
+            let conn = self.lock();
+            match conn.query_row(
+                "SELECT id FROM workflow_runs WHERE workflow_id = ?1
+                 ORDER BY created_at DESC LIMIT 1",
+                [workflow_id],
+                |r| r.get::<_, String>(0),
+            ) {
+                Ok(id) => Some(id),
+                Err(rusqlite::Error::QueryReturnedNoRows) => None,
+                Err(e) => return Err(e.into()),
+            }
+        };
+        match id {
+            Some(id) => Ok(Some(self.get_workflow_run(&id)?)),
+            None => Ok(None),
+        }
+    }
+
     pub fn upsert_node_run(&self, run: &WorkflowNodeRun) -> Result<()> {
         self.lock().execute(
             "INSERT INTO workflow_node_runs (run_id, node_id, status, session_id, output, error)
