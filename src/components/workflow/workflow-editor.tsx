@@ -19,9 +19,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { EffortMenu } from "@/components/controls/effort-menu";
 import { ModeMenu } from "@/components/controls/mode-menu";
 import { ModelMenu } from "@/components/controls/model-menu";
+import { Transcript } from "@/components/transcript";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app-store";
 import type { Backend } from "@/types";
 import type {
@@ -99,6 +101,8 @@ function Canvas({ workflow }: { workflow: Workflow }) {
 	const runActiveWorkflow = useAppStore((s) => s.runActiveWorkflow);
 	const closeWorkflow = useAppStore((s) => s.closeWorkflow);
 	const runStatus = useAppStore((s) => s.workflowRun?.run.status);
+	const nodeRuns = useAppStore((s) => s.workflowRun?.nodes);
+	const loadEvents = useAppStore((s) => s.loadEvents);
 
 	const [initial] = useState(() => toRF(workflow.graph));
 	const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes);
@@ -140,6 +144,13 @@ function Canvas({ workflow }: { workflow: Workflow }) {
 	};
 
 	const selected = nodes.find((n) => n.id === selectedId) ?? null;
+	const [panelTab, setPanelTab] = useState<"config" | "output">("config");
+	const nodeSessionId = selected
+		? (nodeRuns?.find((n) => n.nodeId === selected.id)?.sessionId ?? null)
+		: null;
+	useEffect(() => {
+		if (panelTab === "output" && nodeSessionId) void loadEvents(nodeSessionId);
+	}, [panelTab, nodeSessionId, loadEvents]);
 
 	const patchSelected = (patch: Partial<AgentNodeData>) =>
 		setNodes((ns) =>
@@ -210,7 +221,36 @@ function Canvas({ workflow }: { workflow: Workflow }) {
 				</div>
 
 				{selected ? (
-					<aside className="w-72 shrink-0 space-y-3 overflow-auto border-l border-border/60 p-3">
+					<aside className="flex w-96 shrink-0 flex-col border-l border-border/60">
+						<div className="flex shrink-0 items-center gap-1 border-b border-border/60 p-1.5">
+							<button
+								type="button"
+								onClick={() => setPanelTab("config")}
+								className={cn(
+									"flex-1 rounded-md px-2 py-1 text-xs font-medium transition",
+									panelTab === "config"
+										? "bg-muted text-foreground"
+										: "text-muted-foreground hover:text-foreground",
+								)}
+							>
+								Config
+							</button>
+							<button
+								type="button"
+								onClick={() => setPanelTab("output")}
+								disabled={!nodeSessionId}
+								className={cn(
+									"flex-1 rounded-md px-2 py-1 text-xs font-medium transition disabled:opacity-40",
+									panelTab === "output"
+										? "bg-muted text-foreground"
+										: "text-muted-foreground hover:text-foreground",
+								)}
+							>
+								Output
+							</button>
+						</div>
+						{panelTab === "config" ? (
+							<div className="space-y-3 overflow-auto p-3">
 						<div className="space-y-1">
 							<span className="text-[11px] font-medium text-muted-foreground">
 								Label
@@ -271,6 +311,16 @@ function Canvas({ workflow }: { workflow: Workflow }) {
 								/>
 							</div>
 						) : null}
+							</div>
+						) : nodeSessionId ? (
+							<div className="relative min-h-0 flex-1">
+								<Transcript sessionId={nodeSessionId} bottomInset={0} />
+							</div>
+						) : (
+							<p className="p-6 text-center text-xs text-muted-foreground">
+								Run the workflow to see this node's output.
+							</p>
+						)}
 					</aside>
 				) : null}
 			</div>
