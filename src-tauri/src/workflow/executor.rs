@@ -11,7 +11,8 @@ use tauri::AppHandle;
 
 use crate::agent::AgentManager;
 use crate::domain::{
-    ContextSource, NodeKind, NodeRunStatus, RunStatus, SessionKind, WorkflowGraph, WorkflowNodeRun,
+    ContextSource, NodeKind, NodeRunStatus, RunStatus, SessionKind, SessionStatus, WorkflowGraph,
+    WorkflowNodeRun,
 };
 use crate::error::{AppError, Result};
 use crate::events::emit_session;
@@ -211,21 +212,37 @@ async fn run_steps(ctx: &RunContext) -> Result<Outcome> {
             None,
         )?;
 
-        match ctx
+        // Drive the turn, then wait for it to genuinely finish — pausing on an
+        // AskUserQuestion (the agent settled to Idle but is waiting for a reply).
+        if let Err(e) = ctx
             .manager
-            .run_node_to_completion(&ctx.app, &ctx.store, &session, &cfg.effective_prompt())
+            .run_turn(
+                ctx.app.clone(),
+                ctx.store.clone(),
+                session.clone(),
+                cfg.effective_prompt(),
+            )
             .await
         {
-            Ok(output) => {
-                set_node(
-                    ctx,
-                    &node_id,
-                    NodeRunStatus::Done,
-                    Some(&session.id),
-                    Some(&output),
-                    None,
-                )?;
-            }
+            set_node(
+                ctx,
+                &node_id,
+                NodeRunStatus::Failed,
+                Some(&session.id),
+                None,
+                Some(&e.to_string()),
+            )?;
+            return Err(e);
+        }
+        match wait_for_node(ctx, &node_id, &session.id).await {
+            Ok(output) => set_node(
+                ctx,
+                &node_id,
+                NodeRunStatus::Done,
+                Some(&session.id),
+                Some(&output),
+                None,
+            )?,
             Err(e) => {
                 set_node(
                     ctx,
@@ -240,6 +257,54 @@ async fn run_steps(ctx: &RunContext) -> Result<Outcome> {
         }
     }
     Ok(Outcome::Completed)
+}
+
+/// Wait for a node's turn to truly complete. A turn that ended on an
+/// `AskUserQuestion` is *not* done — it's blocked on the user; mark the node
+/// `AwaitingInput` and keep waiting until they answer (in the node's session).
+async fn wait_for_node(ctx: &RunContext, node_id: &str, session_id: &str) -> Result<String> {
+    let mut current = NodeRunStatus::Running;
+    loop {
+        match ctx.store.get_session(session_id)?.status {
+            SessionStatus::Error => {
+                return Err(AppError::Agent(format!(
+                    "node session {session_id} ended in error"
+                )));
+            }
+            SessionStatus::Running => {
+                if current != NodeRunStatus::Running {
+                    set_node(
+                        ctx,
+                        node_id,
+                        NodeRunStatus::Running,
+                        Some(session_id),
+                        None,
+                        None,
+                    )?;
+                    current = NodeRunStatus::Running;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+            }
+            SessionStatus::Idle => {
+                if ctx.store.session_has_pending_question(session_id)? {
+                    if current != NodeRunStatus::AwaitingInput {
+                        set_node(
+                            ctx,
+                            node_id,
+                            NodeRunStatus::AwaitingInput,
+                            Some(session_id),
+                            None,
+                            None,
+                        )?;
+                        current = NodeRunStatus::AwaitingInput;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                } else {
+                    return ctx.store.get_session_assistant_text(session_id);
+                }
+            }
+        }
+    }
 }
 
 fn set_node(

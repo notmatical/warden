@@ -267,6 +267,8 @@ pub enum NodeRunStatus {
     Skipped,
     /// A gate awaiting human approval.
     Paused,
+    /// The agent asked a question and is waiting for the user's reply.
+    AwaitingInput,
 }
 
 impl NodeRunStatus {
@@ -278,6 +280,7 @@ impl NodeRunStatus {
             NodeRunStatus::Failed => "failed",
             NodeRunStatus::Skipped => "skipped",
             NodeRunStatus::Paused => "paused",
+            NodeRunStatus::AwaitingInput => "awaitingInput",
         }
     }
     pub fn parse(s: &str) -> Option<Self> {
@@ -288,6 +291,7 @@ impl NodeRunStatus {
             "failed" => NodeRunStatus::Failed,
             "skipped" => NodeRunStatus::Skipped,
             "paused" => NodeRunStatus::Paused,
+            "awaitingInput" => NodeRunStatus::AwaitingInput,
             _ => return None,
         })
     }

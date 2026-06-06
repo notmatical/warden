@@ -213,7 +213,9 @@ impl AgentManager {
         let mut sources = store.list_context_sources(&session.id).unwrap_or_default();
         for entry in &mut sources {
             if let ContextSource::NodeOutput { session_id, label } = &entry.source {
-                let body = store.get_session_assistant_text(session_id).unwrap_or_default();
+                let body = store
+                    .get_session_assistant_text(session_id)
+                    .unwrap_or_default();
                 let label = label
                     .clone()
                     .unwrap_or_else(|| "Linked agent output".to_string());
@@ -317,43 +319,6 @@ impl AgentManager {
         let out = Self::run_process(app, store, session, prompt).await;
         self.finalize(app, store, &session.id, &out);
         out.map(|o| o.assistant_text)
-    }
-
-    /// Run one turn for a workflow node to completion and return its assistant
-    /// text. Goes through the standard `run_turn` path (so context sources —
-    /// including upstream node-output handoffs — are injected) and waits for the
-    /// session to settle, working for both Claude and Codex. Claude's `run_turn`
-    /// returns once the turn is queued; Codex's returns after it completes — the
-    /// poll below covers both.
-    pub async fn run_node_to_completion(
-        &self,
-        app: &AppHandle,
-        store: &Store,
-        session: &Session,
-        prompt: &str,
-    ) -> Result<String> {
-        self.run_turn(
-            app.clone(),
-            store.clone(),
-            session.clone(),
-            prompt.to_string(),
-        )
-        .await?;
-        loop {
-            match store.get_session(&session.id)?.status {
-                SessionStatus::Running => {
-                    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-                }
-                SessionStatus::Error => {
-                    return Err(AppError::Agent(format!(
-                        "workflow node session {} ended in error",
-                        session.id
-                    )));
-                }
-                SessionStatus::Idle => break,
-            }
-        }
-        store.get_session_assistant_text(&session.id)
     }
 
     /// Cancel an in-flight turn by killing the session's process. Returns

@@ -4,7 +4,7 @@ import {
 	Position,
 	useReactFlow,
 } from "@xyflow/react";
-import { Loader2, Trash2 } from "lucide-react";
+import { AlertTriangle, Loader2, Trash2 } from "lucide-react";
 
 import {
 	ContextMenu,
@@ -38,6 +38,7 @@ const STATUS_BAR: Record<NodeRunStatus, string> = {
 	failed: "bg-red-500",
 	skipped: "bg-muted-foreground/30",
 	paused: "bg-amber-500",
+	awaitingInput: "bg-amber-500",
 };
 
 const STATUS_DOT: Record<NodeRunStatus, string> = {
@@ -47,6 +48,7 @@ const STATUS_DOT: Record<NodeRunStatus, string> = {
 	failed: "bg-red-500",
 	skipped: "bg-muted-foreground/30",
 	paused: "bg-amber-500",
+	awaitingInput: "bg-amber-500",
 };
 
 export function AgentNode({ id, data, selected }: NodeProps) {
@@ -102,6 +104,11 @@ export function AgentNode({ id, data, selected }: NodeProps) {
 						</div>
 						{status === "running" ? (
 							<Loader2 className="size-3.5 shrink-0 animate-spin text-blue-500" />
+						) : status === "awaitingInput" ? (
+							<AlertTriangle
+								className="size-3.5 shrink-0 text-amber-500"
+								aria-label="Waiting for your answer"
+							/>
 						) : status && status !== "pending" ? (
 							<span
 								className={cn(

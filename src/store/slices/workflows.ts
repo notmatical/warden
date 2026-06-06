@@ -1,3 +1,4 @@
+import { toast } from "sonner";
 import type { StateCreator } from "zustand";
 
 import * as ipc from "@/lib/ipc";
@@ -161,6 +162,25 @@ export const createWorkflowsSlice: StateCreator<
 	},
 
 	applyWorkflowRun: (view: WorkflowRunView) => {
+		const prev = get().workflowRun;
+		if (!prev || prev.run.id === view.run.id) {
+			// Warn when a node newly starts waiting on a user question.
+			const wasWaiting = new Set(
+				(prev?.nodes ?? [])
+					.filter((n) => n.status === "awaitingInput")
+					.map((n) => n.nodeId),
+			);
+			if (
+				view.nodes.some(
+					(n) => n.status === "awaitingInput" && !wasWaiting.has(n.nodeId),
+				)
+			) {
+				toast.warning("A workflow agent is asking a question", {
+					description:
+						"Open the waiting node to answer so the run can continue.",
+				});
+			}
+		}
 		set((s) =>
 			s.workflowRun && s.workflowRun.run.id !== view.run.id
 				? {}

@@ -67,6 +67,7 @@ export type NodeRunStatus =
   | "failed"
   | "skipped"
   | "paused"
+  | "awaitingInput"
 
 export interface WorkflowRun {
   id: string

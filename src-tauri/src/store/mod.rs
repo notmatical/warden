@@ -353,6 +353,27 @@ impl Store {
         Ok(out)
     }
 
+    /// Whether a session's most recent turn ended on an unanswered
+    /// `AskUserQuestion` — i.e. the agent is waiting for the user, even though
+    /// its status settled to Idle.
+    pub fn session_has_pending_question(&self, session_id: &str) -> Result<bool> {
+        let conn = self.lock();
+        let mut stmt =
+            conn.prepare("SELECT payload FROM events WHERE session_id = ?1 ORDER BY seq DESC")?;
+        let rows = stmt.query_map([session_id], |r| r.get::<_, String>("payload"))?;
+        for payload in rows {
+            match serde_json::from_str::<AgentEvent>(&payload?) {
+                // A later user message means the question was answered.
+                Ok(AgentEvent::UserMessage { .. }) => return Ok(false),
+                Ok(AgentEvent::ToolUse { name, .. }) if name == "AskUserQuestion" => {
+                    return Ok(true)
+                }
+                _ => {}
+            }
+        }
+        Ok(false)
+    }
+
     // ----- workflows --------------------------------------------------------
 
     pub fn create_workflow(
