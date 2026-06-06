@@ -354,16 +354,18 @@ export function Transcript({
 			onScrollCapture={handleScroll}
 		>
 			<div
-				className="mx-auto flex w-full max-w-6xl flex-col gap-2.5 px-4 pt-8"
+				className="mx-auto flex min-h-full w-full max-w-6xl flex-col gap-2.5 px-4 pt-8"
 				style={{ paddingBottom: bottomInset }}
 			>
 				{isEmpty &&
 					(loading ? (
-						<p className="py-16 text-center text-sm text-muted-foreground">
-							Loading transcript…
-						</p>
+						<div className="flex flex-1 items-center justify-center">
+							<p className="text-sm text-muted-foreground">
+								Loading transcript…
+							</p>
+						</div>
 					) : (
-						<div className="flex flex-col items-center gap-4 py-16 text-center">
+						<div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
 							<div className="flex size-14 items-center justify-center rounded-lg bg-muted text-muted-foreground">
 								<MessageSquarePlus className="size-6" />
 							</div>
