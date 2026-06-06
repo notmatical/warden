@@ -1,6 +1,11 @@
 import { create } from "zustand";
 
-import { onAgentDelta, onAgentEvent, onSessionUpdated } from "@/lib/events";
+import {
+	onAgentDelta,
+	onAgentEvent,
+	onSessionUpdated,
+	onWorkflowRun,
+} from "@/lib/events";
 import * as ipc from "@/lib/ipc";
 import { reportError } from "./shared";
 import { createGitSlice } from "./slices/git";
@@ -10,6 +15,7 @@ import { createSessionsSlice } from "./slices/sessions";
 import { createTranscriptSlice } from "./slices/transcript";
 import { createUiSlice } from "./slices/ui";
 import { createViewportSlice } from "./slices/viewport";
+import { createWorkflowsSlice } from "./slices/workflows";
 import type { AppState } from "./types";
 
 export type {
@@ -32,6 +38,7 @@ export const useAppStore = create<AppState>((set, get, store) => ({
 	...createViewportSlice(set, get, store),
 	...createSessionsSlice(set, get, store),
 	...createTranscriptSlice(set, get, store),
+	...createWorkflowsSlice(set, get, store),
 
 	initialized: false,
 
@@ -46,6 +53,7 @@ export const useAppStore = create<AppState>((set, get, store) => ({
 			onAgentEvent((record) => get().onAgentEvent(record));
 			onAgentDelta((payload) => get().onDelta(payload));
 			onSessionUpdated((session) => get().onSessionUpdated(session));
+			onWorkflowRun((view) => get().applyWorkflowRun(view));
 			// Re-probe providers when the window regains focus, so installs or
 			// logins done outside the app are reflected without a restart.
 			window.addEventListener("focus", () => void get().loadProviders());

@@ -18,6 +18,11 @@ import type {
 	SessionRole,
 	SyncOutcome,
 } from "@/types";
+import type {
+	Workflow,
+	WorkflowGraph,
+	WorkflowRunView,
+} from "@/types/workflow";
 
 export interface CreateSessionOptions {
 	projectId: string;
@@ -86,6 +91,19 @@ export interface AppState {
 	initialized: boolean;
 	loadingGroups: boolean;
 	loadingEventsBySession: Record<string, boolean>;
+
+	// ----- workflows -----
+	workflows: Record<string, Workflow>;
+	activeWorkflowId: string | null;
+	workflowRun: WorkflowRunView | null;
+	loadWorkflows: (projectId: string) => Promise<void>;
+	createWorkflow: (projectId: string, name: string) => Promise<Workflow | null>;
+	saveWorkflowGraph: (id: string, graph: WorkflowGraph) => Promise<void>;
+	deleteWorkflow: (id: string) => Promise<void>;
+	openWorkflow: (id: string) => void;
+	closeWorkflow: () => void;
+	runActiveWorkflow: () => Promise<void>;
+	applyWorkflowRun: (view: WorkflowRunView) => void;
 
 	init: () => Promise<void>;
 	/** Restore the persisted global view once all groups are loaded. */

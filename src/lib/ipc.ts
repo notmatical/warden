@@ -2,6 +2,11 @@ import { Channel, invoke } from "@tauri-apps/api/core"
 
 import type { DiffFile, GitCommit } from "@/types/git-diff"
 import type {
+  Workflow,
+  WorkflowGraph,
+  WorkflowRunView,
+} from "@/types/workflow"
+import type {
   Attachment,
   Backend,
   ContextSource,
@@ -386,6 +391,51 @@ export function attachToSession(
   paths: string[]
 ): Promise<Attachment[]> {
   return invoke("attach_to_session", { sessionId, paths })
+}
+
+// ----- workflows -----
+
+export function listWorkflows(projectId: string): Promise<Workflow[]> {
+  return invoke("list_workflows", { projectId })
+}
+
+export function getWorkflow(id: string): Promise<Workflow> {
+  return invoke("get_workflow", { id })
+}
+
+export function createWorkflow(
+  projectId: string,
+  name: string,
+  graph: WorkflowGraph
+): Promise<Workflow> {
+  return invoke("create_workflow", { projectId, name, graph })
+}
+
+export function updateWorkflow(
+  id: string,
+  name?: string,
+  graph?: WorkflowGraph
+): Promise<Workflow> {
+  return invoke("update_workflow", {
+    id,
+    name: name ?? null,
+    graph: graph ?? null,
+  })
+}
+
+export function deleteWorkflow(id: string): Promise<void> {
+  return invoke("delete_workflow", { id })
+}
+
+export function runWorkflow(
+  workflowId: string,
+  groupId?: string
+): Promise<WorkflowRunView> {
+  return invoke("run_workflow", { workflowId, groupId: groupId ?? null })
+}
+
+export function getWorkflowRun(runId: string): Promise<WorkflowRunView> {
+  return invoke("get_workflow_run", { runId })
 }
 
 export function cancelSession(sessionId: string): Promise<void> {

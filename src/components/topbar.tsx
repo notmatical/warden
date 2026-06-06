@@ -4,6 +4,7 @@ import { CliUpdates } from "@/components/cli-updates";
 import { GithubButton } from "@/components/github-button";
 import { OpenInButtons } from "@/components/open-in-buttons";
 import { QuickSwitcher } from "@/components/quick-switcher";
+import { WorkflowsMenu } from "@/components/workflows-menu";
 import { Button } from "@/components/ui/button";
 import {
 	HoverCard,
@@ -66,6 +67,7 @@ export function Topbar() {
 			)}
 			<div className="flex-1" />
 			<div className="flex items-center gap-1">
+				<WorkflowsMenu />
 				<CliUpdates />
 				<GithubButton path={openPath} />
 				<div className="mx-0.5 h-4 w-px bg-border/60" />
