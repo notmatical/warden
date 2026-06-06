@@ -889,7 +889,7 @@ export function Sidebar() {
   }
 
   return (
-    <SidebarRoot variant="floating" collapsible="offcanvas">
+    <SidebarRoot variant="sidebar" collapsible="offcanvas">
       <SidebarHeader className="p-2">
         <div className="flex items-center justify-between gap-2 pl-2">
           <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
