@@ -8,7 +8,6 @@ import {
 	useState,
 } from "react";
 import { AgentToolbar } from "@/components/agent-panel";
-import { ContextButton } from "@/components/context-button";
 import { ContextMeter } from "@/components/context-meter";
 import { EffortMenu } from "@/components/controls/effort-menu";
 import { ModeMenu } from "@/components/controls/mode-menu";
@@ -289,8 +288,6 @@ export function Composer({ sessionId }: { sessionId: string }) {
 						onChange={(effort) => void updateSession(sessionId, { effort })}
 						{...menuProps("effort")}
 					/>
-					<div className="mx-0.5 h-4 w-px bg-border/60" />
-					<ContextButton sessionId={sessionId} />
 
 					<div className="ml-auto flex items-center gap-1">
 						<ContextMeter sessionId={sessionId} />
