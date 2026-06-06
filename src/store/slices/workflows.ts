@@ -1,6 +1,7 @@
 import type { StateCreator } from "zustand";
 
 import * as ipc from "@/lib/ipc";
+import { workflowTabId } from "@/lib/tab-ref";
 import type { WorkflowRunView } from "@/types/workflow";
 
 import { reportError } from "../shared";
@@ -9,17 +10,17 @@ import type { AppState } from "../types";
 type WorkflowsSlice = Pick<
 	AppState,
 	| "workflows"
-	| "activeWorkflowId"
 	| "workflowRun"
 	| "loadWorkflows"
+	| "ensureWorkflow"
 	| "createWorkflow"
 	| "saveWorkflowGraph"
 	| "renameWorkflow"
 	| "duplicateWorkflow"
 	| "deleteWorkflow"
 	| "openWorkflow"
-	| "closeWorkflow"
-	| "runActiveWorkflow"
+	| "runWorkflowById"
+	| "loadWorkflowRun"
 	| "applyWorkflowRun"
 >;
 
@@ -30,7 +31,6 @@ export const createWorkflowsSlice: StateCreator<
 	WorkflowsSlice
 > = (set, get) => ({
 	workflows: {},
-	activeWorkflowId: null,
 	workflowRun: null,
 
 	loadWorkflows: async (projectId) => {
@@ -39,6 +39,16 @@ export const createWorkflowsSlice: StateCreator<
 			set({ workflows: Object.fromEntries(list.map((w) => [w.id, w])) });
 		} catch (error) {
 			reportError("Failed to load workflows", error);
+		}
+	},
+
+	ensureWorkflow: async (id) => {
+		if (get().workflows[id]) return;
+		try {
+			const wf = await ipc.getWorkflow(id);
+			set((s) => ({ workflows: { ...s.workflows, [wf.id]: wf } }));
+		} catch (error) {
+			reportError("Failed to load workflow", error);
 		}
 	},
 
@@ -102,41 +112,39 @@ export const createWorkflowsSlice: StateCreator<
 	deleteWorkflow: async (id) => {
 		try {
 			await ipc.deleteWorkflow(id);
+			get().closeTab(workflowTabId(id));
 			set((s) => {
 				const next = { ...s.workflows };
 				delete next[id];
-				return {
-					workflows: next,
-					activeWorkflowId:
-						s.activeWorkflowId === id ? null : s.activeWorkflowId,
-				};
+				return { workflows: next };
 			});
 		} catch (error) {
 			reportError("Failed to delete workflow", error);
 		}
 	},
 
+	// Open a workflow as a real tab (closeable / splittable like a session).
 	openWorkflow: (id) => {
-		set({ activeWorkflowId: id, workflowRun: null });
-		// Restore the workflow's latest run (node statuses + sessions) so
-		// reopening the editor doesn't lose a finished/in-flight run.
-		void ipc
-			.getLatestWorkflowRun(id)
-			.then((view) => {
-				if (get().activeWorkflowId === id) set({ workflowRun: view });
-			})
-			.catch(() => {});
+		get().openTabRef(workflowTabId(id));
+		set({ workflowRun: null });
+		void get().ensureWorkflow(id);
 	},
-	closeWorkflow: () => set({ activeWorkflowId: null, workflowRun: null }),
 
-	runActiveWorkflow: async () => {
-		const id = get().activeWorkflowId;
-		if (!id) return;
+	runWorkflowById: async (id) => {
 		try {
 			const view = await ipc.runWorkflow(id, get().activeGroupId ?? undefined);
 			set({ workflowRun: view });
 		} catch (error) {
 			reportError("Failed to run workflow", error);
+		}
+	},
+
+	loadWorkflowRun: async (id) => {
+		try {
+			const view = await ipc.getLatestWorkflowRun(id);
+			set({ workflowRun: view });
+		} catch (error) {
+			reportError("Failed to load workflow run", error);
 		}
 	},
 

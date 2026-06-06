@@ -1,5 +1,5 @@
 import { useDroppable } from "@dnd-kit/core";
-import { LayoutGrid, X } from "lucide-react";
+import { LayoutGrid, Workflow as WorkflowIcon, X } from "lucide-react";
 import { Fragment, memo, type ReactNode, useEffect, useState } from "react";
 
 import { SessionView } from "@/components/session-view";
@@ -10,6 +10,7 @@ import {
 	ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { leafCount } from "@/lib/pane-tree";
+import { isWorkflowTab, workflowIdOf } from "@/lib/tab-ref";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app-store";
 import type { Leaf, PaneTree, SplitSide } from "@/types";
@@ -21,10 +22,18 @@ function PaneHeader({
 	sessionId: string;
 	active: boolean;
 }) {
-	const title = useAppStore((s) => s.sessions[sessionId]?.title);
-	const status = useAppStore((s) => s.sessions[sessionId]?.status);
+	const workflow = isWorkflowTab(sessionId);
+	const title = useAppStore((s) =>
+		workflow ? undefined : s.sessions[sessionId]?.title,
+	);
+	const status = useAppStore((s) =>
+		workflow ? undefined : s.sessions[sessionId]?.status,
+	);
+	const wfName = useAppStore((s) =>
+		workflow ? s.workflows[workflowIdOf(sessionId)]?.name : undefined,
+	);
 	const closeTab = useAppStore((s) => s.closeTab);
-	if (title === undefined || status === undefined) {
+	if (!workflow && (title === undefined || status === undefined)) {
 		return null;
 	}
 	return (
@@ -34,15 +43,19 @@ function PaneHeader({
 				active ? "bg-muted/30" : null,
 			)}
 		>
-			<StatusDot status={status} />
+			{workflow ? (
+				<WorkflowIcon className="size-3.5 shrink-0 text-muted-foreground" />
+			) : (
+				<StatusDot status={status as NonNullable<typeof status>} />
+			)}
 			<span
 				className={cn(
 					"min-w-0 flex-1 truncate transition-colors",
 					active ? "text-foreground" : "text-muted-foreground/55",
 				)}
-				title={title}
+				title={workflow ? wfName : title}
 			>
-				{title}
+				{workflow ? (wfName ?? "Workflow") : title}
 			</span>
 			<button
 				type="button"

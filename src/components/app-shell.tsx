@@ -17,7 +17,6 @@ import { SessionTabs } from "@/components/session-tabs";
 import { Sidebar } from "@/components/sidebar";
 import { SidebarResizer } from "@/components/sidebar-resizer";
 import { Topbar } from "@/components/topbar";
-import { WorkflowEditor } from "@/components/workflow/workflow-editor";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAppStore } from "@/store/app-store";
@@ -32,7 +31,6 @@ export function AppShell() {
 			: false,
 	);
 	const hasTabs = useAppStore((s) => s.openTabs.length > 0);
-	const activeWorkflowId = useAppStore((s) => s.activeWorkflowId);
 	const layout = useAppStore((s) => s.layout);
 	const draggingSessionId = useAppStore((s) => s.draggingSessionId);
 	const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed);
@@ -108,9 +106,7 @@ export function AppShell() {
 						<Topbar />
 						<SessionTabs />
 						<main className="min-h-0 flex-1">
-							{activeWorkflowId ? (
-								<WorkflowEditor workflowId={activeWorkflowId} />
-							) : !hasGroup ? (
+							{!hasGroup ? (
 								<EmptyState variant="no-project" />
 							) : !hasRoots ? (
 								<EmptyState variant="no-root" />

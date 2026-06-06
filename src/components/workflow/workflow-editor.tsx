@@ -14,7 +14,6 @@ import {
 	useNodesState,
 } from "@xyflow/react";
 import {
-	ArrowLeft,
 	Copy,
 	ExternalLink,
 	MoreHorizontal,
@@ -111,8 +110,7 @@ function toGraph(nodes: RFNode[], edges: Edge[]): WorkflowGraph {
 
 function Canvas({ workflow }: { workflow: Workflow }) {
 	const saveWorkflowGraph = useAppStore((s) => s.saveWorkflowGraph);
-	const runActiveWorkflow = useAppStore((s) => s.runActiveWorkflow);
-	const closeWorkflow = useAppStore((s) => s.closeWorkflow);
+	const runWorkflowById = useAppStore((s) => s.runWorkflowById);
 	const runStatus = useAppStore((s) => s.workflowRun?.run.status);
 	const nodeRuns = useAppStore((s) => s.workflowRun?.nodes);
 	const loadEvents = useAppStore((s) => s.loadEvents);
@@ -125,7 +123,6 @@ function Canvas({ workflow }: { workflow: Workflow }) {
 	const openNodeSession = (sessionId: string | null | undefined) => {
 		if (!sessionId) return;
 		openSession(sessionId);
-		closeWorkflow();
 	};
 
 	const [renaming, setRenaming] = useState(false);
@@ -195,20 +192,12 @@ function Canvas({ workflow }: { workflow: Workflow }) {
 
 	const run = async () => {
 		await saveWorkflowGraph(workflow.id, toGraph(nodes, edges));
-		void runActiveWorkflow();
+		void runWorkflowById(workflow.id);
 	};
 
 	return (
 		<div className="flex h-full flex-col">
 			<header className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-3">
-				<Button
-					variant="ghost"
-					size="icon-sm"
-					onClick={closeWorkflow}
-					aria-label="Back"
-				>
-					<ArrowLeft />
-				</Button>
 				{renaming ? (
 					<input
 						value={nameDraft}
@@ -445,10 +434,26 @@ function Canvas({ workflow }: { workflow: Workflow }) {
 
 export function WorkflowEditor({ workflowId }: { workflowId: string }) {
 	const workflow = useAppStore((s) => s.workflows[workflowId]);
-	if (!workflow) return null;
+	const ensureWorkflow = useAppStore((s) => s.ensureWorkflow);
+	const loadWorkflowRun = useAppStore((s) => s.loadWorkflowRun);
+
+	// Hydrate the definition + its latest run (covers a restored tab where the
+	// workflow isn't in the store yet).
+	useEffect(() => {
+		void ensureWorkflow(workflowId);
+		void loadWorkflowRun(workflowId);
+	}, [workflowId, ensureWorkflow, loadWorkflowRun]);
+
+	if (!workflow) {
+		return (
+			<div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+				Loading workflow…
+			</div>
+		);
+	}
 	return (
 		<ReactFlowProvider>
-			<Canvas workflow={workflow} />
+			<Canvas key={workflow.id} workflow={workflow} />
 		</ReactFlowProvider>
 	);
 }

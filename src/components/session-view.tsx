@@ -4,6 +4,8 @@ import { Composer } from "@/components/composer";
 import { TerminalView } from "@/components/terminal-view";
 import { Transcript } from "@/components/transcript";
 import { EdgeFade } from "@/components/ui/edge-fade";
+import { WorkflowEditor } from "@/components/workflow/workflow-editor";
+import { isWorkflowTab, workflowIdOf } from "@/lib/tab-ref";
 import { useAppStore } from "@/store/app-store";
 
 /** Agent transcript + floating composer. The transcript scrolls *under* the
@@ -40,7 +42,14 @@ function AgentView({ sessionId }: { sessionId: string }) {
 }
 
 export function SessionView({ sessionId }: { sessionId: string }) {
-	const session = useAppStore((s) => s.sessions[sessionId]);
+	const workflow = isWorkflowTab(sessionId);
+	const session = useAppStore((s) =>
+		workflow ? undefined : s.sessions[sessionId],
+	);
+
+	if (workflow) {
+		return <WorkflowEditor workflowId={workflowIdOf(sessionId)} />;
+	}
 
 	if (!session) {
 		return null;

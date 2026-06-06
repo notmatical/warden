@@ -94,17 +94,17 @@ export interface AppState {
 
 	// ----- workflows -----
 	workflows: Record<string, Workflow>;
-	activeWorkflowId: string | null;
 	workflowRun: WorkflowRunView | null;
 	loadWorkflows: (projectId: string) => Promise<void>;
+	ensureWorkflow: (id: string) => Promise<void>;
 	createWorkflow: (projectId: string, name: string) => Promise<Workflow | null>;
 	saveWorkflowGraph: (id: string, graph: WorkflowGraph) => Promise<void>;
 	renameWorkflow: (id: string, name: string) => Promise<void>;
 	duplicateWorkflow: (id: string) => Promise<Workflow | null>;
 	deleteWorkflow: (id: string) => Promise<void>;
 	openWorkflow: (id: string) => void;
-	closeWorkflow: () => void;
-	runActiveWorkflow: () => Promise<void>;
+	runWorkflowById: (id: string) => Promise<void>;
+	loadWorkflowRun: (id: string) => Promise<void>;
 	applyWorkflowRun: (view: WorkflowRunView) => void;
 
 	init: () => Promise<void>;
@@ -168,6 +168,7 @@ export interface AppState {
 	/** Create a terminal session that launches a provider's CLI natively. */
 	createNativeSession: (projectId: string, provider: Provider) => Promise<void>;
 	openSession: (id: string) => void;
+	openTabRef: (ref: string) => void;
 	updateSession: (
 		sessionId: string,
 		patch: SessionSettingsPatch,
