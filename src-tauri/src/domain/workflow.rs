@@ -61,7 +61,7 @@ pub enum NodeKind {
 /// What an agent node does. The intent carries a built-in instruction and the
 /// right read/write posture, so downstream nodes need no hand-written task —
 /// the edge supplies the content (the upstream plan/review/diff as context).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Intent {
     /// Research + produce an implementation plan (read-only).
@@ -72,7 +72,8 @@ pub enum Intent {
     Review,
     /// Apply the upstream review's feedback (edits code).
     Revise,
-    /// Free-form agent — the prompt is the whole task.
+    /// Free-form agent — the prompt is the whole task (default for legacy data).
+    #[default]
     Custom,
 }
 
@@ -133,6 +134,7 @@ impl Intent {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentTaskConfig {
+    #[serde(default)]
     pub intent: Intent,
     pub model: String,
     pub effort: EffortLevel,
