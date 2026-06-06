@@ -2,47 +2,55 @@
    unreadable control bar in the dark theme). Scoped to `.warden-flow`. */
 
 .warden-flow {
-	background: var(--background);
-	--xy-edge-stroke-default: var(--border);
-	--xy-edge-stroke-selected-default: var(--primary);
-	--xy-connectionline-stroke-default: var(--primary);
-	--xy-background-pattern-dot-color-default: var(--border);
+  background: var(--background);
+  --xy-edge-stroke-default: var(--border);
+  --xy-edge-stroke-selected-default: var(--primary);
+  --xy-connectionline-stroke-default: var(--primary);
+  --xy-background-pattern-dot-color-default: var(--border);
 }
 
 /* Zoom / fit / lock controls */
 .warden-flow .react-flow__controls {
-	overflow: hidden;
-	border: 1px solid var(--border);
-	border-radius: 0.6rem;
-	box-shadow: 0 1px 3px rgb(0 0 0 / 0.18);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.18);
 }
 .warden-flow .react-flow__controls-button {
-	width: 26px;
-	height: 26px;
-	background: var(--card);
-	border-bottom: 1px solid var(--border);
-	color: var(--muted-foreground);
+  width: 26px;
+  height: 26px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  color: var(--muted-foreground);
 }
 .warden-flow .react-flow__controls-button:hover {
-	background: var(--muted);
-	color: var(--foreground);
+  background: var(--muted);
+  color: var(--foreground);
 }
 .warden-flow .react-flow__controls-button svg {
-	max-width: 12px;
-	max-height: 12px;
-	fill: currentColor;
+  max-width: 12px;
+  max-height: 12px;
+  fill: currentColor;
 }
 
 /* Edges + connection line */
 .warden-flow .react-flow__edge-path {
-	stroke: var(--border);
-	stroke-width: 1.5;
+  stroke: var(--border);
+  stroke-width: 1.5;
+  transition: stroke 0.12s ease;
+}
+.warden-flow .react-flow__edge {
+  cursor: pointer;
+}
+.warden-flow .react-flow__edge:hover .react-flow__edge-path {
+  stroke: var(--muted-foreground);
 }
 .warden-flow .react-flow__edge.selected .react-flow__edge-path,
 .warden-flow .react-flow__edge:focus .react-flow__edge-path {
-	stroke: var(--primary);
+  stroke: var(--primary);
+  stroke-width: 2;
 }
 
 .warden-flow .react-flow__attribution {
-	display: none;
+  display: none;
 }
