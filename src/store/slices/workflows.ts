@@ -20,6 +20,7 @@ type WorkflowsSlice = Pick<
 	| "deleteWorkflow"
 	| "openWorkflow"
 	| "runWorkflowById"
+	| "resumeRun"
 	| "loadWorkflowRun"
 	| "applyWorkflowRun"
 >;
@@ -136,6 +137,17 @@ export const createWorkflowsSlice: StateCreator<
 			set({ workflowRun: view });
 		} catch (error) {
 			reportError("Failed to run workflow", error);
+		}
+	},
+
+	resumeRun: async (approve) => {
+		const runId = get().workflowRun?.run.id;
+		if (!runId) return;
+		try {
+			const view = await ipc.resumeWorkflow(runId, approve);
+			set({ workflowRun: view });
+		} catch (error) {
+			reportError("Failed to resume workflow", error);
 		}
 	},
 

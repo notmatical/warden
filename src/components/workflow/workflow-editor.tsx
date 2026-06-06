@@ -20,6 +20,7 @@ import {
 	Pencil,
 	Play,
 	Plus,
+	ShieldQuestion,
 	Trash2,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -38,56 +39,73 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { INTENT_META, INTENT_ORDER } from "@/lib/workflow-intents";
 import { useAppStore } from "@/store/app-store";
 import type { Backend } from "@/types";
 import type {
 	AgentTaskConfig,
+	Intent,
 	NodeKind,
 	Workflow,
 	WorkflowGraph,
 } from "@/types/workflow";
 
 import { AgentNode, type AgentNodeData } from "./agent-node";
+import { GateNode, type GateNodeData } from "./gate-node";
 
-const nodeTypes = { agent: AgentNode };
-
-const DEFAULT_CONFIG: AgentTaskConfig = {
-	model: "claude-opus-4-8",
-	permissionMode: "bypassPermissions",
-	effort: "high",
-	role: "chat",
-	prompt: "",
-	branchHint: null,
-};
+const nodeTypes = { agent: AgentNode, gate: GateNode };
 
 function backendOf(model: string): Backend {
 	const id = model.toLowerCase();
 	return id.startsWith("gpt") || id.startsWith("codex") ? "codex" : "claude";
 }
 
-type RFNode = Node<AgentNodeData>;
+const DEFAULT_MODEL = "claude-opus-4-8";
 
-function configOf(kind: NodeKind): AgentTaskConfig {
-	if (kind.type !== "agentTask") return { ...DEFAULT_CONFIG };
+function defaultConfig(intent: Intent): AgentTaskConfig {
 	return {
-		model: kind.model,
-		permissionMode: kind.permissionMode,
-		effort: kind.effort,
-		role: kind.role,
-		prompt: kind.prompt,
-		branchHint: kind.branchHint ?? null,
+		intent,
+		model: DEFAULT_MODEL,
+		effort: "high",
+		prompt: "",
+		branchHint: null,
+		permissionMode: null,
 	};
 }
 
-function toRF(graph: WorkflowGraph): { nodes: RFNode[]; edges: Edge[] } {
-	const nodes: RFNode[] = graph.nodes
-		.filter((n) => n.kind.type === "agentTask")
-		.map((n, i) => ({
-			id: n.id,
-			type: "agent",
-			position: n.position ?? { x: 120, y: 80 + i * 140 },
-			data: { label: n.label, config: configOf(n.kind) },
-		}));
+type AgentKind = Extract<NodeKind, { type: "agentTask" }>;
+
+function configFromKind(kind: AgentKind): AgentTaskConfig {
+	return {
+		intent: kind.intent,
+		model: kind.model,
+		effort: kind.effort,
+		prompt: kind.prompt,
+		branchHint: kind.branchHint ?? null,
+		permissionMode: kind.permissionMode ?? null,
+	};
+}
+
+function toRF(graph: WorkflowGraph): { nodes: Node[]; edges: Edge[] } {
+	const nodes: Node[] = [];
+	graph.nodes.forEach((n, i) => {
+		const position = n.position ?? { x: 140, y: 80 + i * 150 };
+		if (n.kind.type === "gate") {
+			nodes.push({
+				id: n.id,
+				type: "gate",
+				position,
+				data: { label: n.label, prompt: n.kind.prompt ?? null },
+			});
+		} else if (n.kind.type === "agentTask") {
+			nodes.push({
+				id: n.id,
+				type: "agent",
+				position,
+				data: { label: n.label, config: configFromKind(n.kind) },
+			});
+		}
+	});
 	const edges: Edge[] = graph.edges.map((e) => ({
 		id: e.id,
 		source: e.source,
@@ -96,14 +114,26 @@ function toRF(graph: WorkflowGraph): { nodes: RFNode[]; edges: Edge[] } {
 	return { nodes, edges };
 }
 
-function toGraph(nodes: RFNode[], edges: Edge[]): WorkflowGraph {
+function toGraph(nodes: Node[], edges: Edge[]): WorkflowGraph {
 	return {
-		nodes: nodes.map((n) => ({
-			id: n.id,
-			label: n.data.label,
-			position: n.position,
-			kind: { type: "agentTask", ...n.data.config },
-		})),
+		nodes: nodes.map((n) => {
+			if (n.type === "gate") {
+				const d = n.data as GateNodeData;
+				return {
+					id: n.id,
+					label: d.label,
+					position: n.position,
+					kind: { type: "gate", prompt: d.prompt ?? null },
+				};
+			}
+			const d = n.data as AgentNodeData;
+			return {
+				id: n.id,
+				label: d.label,
+				position: n.position,
+				kind: { type: "agentTask", ...d.config },
+			};
+		}),
 		edges: edges.map((e) => ({ id: e.id, source: e.source, target: e.target })),
 	};
 }
@@ -138,7 +168,6 @@ function Canvas({ workflow }: { workflow: Workflow }) {
 	const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges);
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 
-	// Debounced persistence on any graph change.
 	const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	useEffect(() => {
 		if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -155,7 +184,7 @@ function Canvas({ workflow }: { workflow: Workflow }) {
 		[setEdges],
 	);
 
-	const addNode = () => {
+	const addAgent = (intent: Intent) => {
 		const id = crypto.randomUUID();
 		setNodes((ns) => [
 			...ns,
@@ -163,10 +192,21 @@ function Canvas({ workflow }: { workflow: Workflow }) {
 				id,
 				type: "agent",
 				position: { x: 160 + ns.length * 24, y: 120 + ns.length * 24 },
-				data: {
-					label: `Step ${ns.length + 1}`,
-					config: { ...DEFAULT_CONFIG },
-				},
+				data: { label: INTENT_META[intent].label, config: defaultConfig(intent) },
+			},
+		]);
+		setSelectedId(id);
+	};
+
+	const addGate = () => {
+		const id = crypto.randomUUID();
+		setNodes((ns) => [
+			...ns,
+			{
+				id,
+				type: "gate",
+				position: { x: 160 + ns.length * 24, y: 120 + ns.length * 24 },
+				data: { label: "Approval", prompt: null },
 			},
 		]);
 		setSelectedId(id);
@@ -181,19 +221,23 @@ function Canvas({ workflow }: { workflow: Workflow }) {
 		if (panelTab === "output" && nodeSessionId) void loadEvents(nodeSessionId);
 	}, [panelTab, nodeSessionId, loadEvents]);
 
-	const patchSelected = (patch: Partial<AgentNodeData>) =>
+	const patchData = (patch: Record<string, unknown>) =>
 		setNodes((ns) =>
 			ns.map((n) =>
 				n.id === selectedId ? { ...n, data: { ...n.data, ...patch } } : n,
 			),
 		);
-	const patchConfig = (patch: Partial<AgentTaskConfig>) =>
-		patchSelected({ config: { ...selected!.data.config, ...patch } });
+	const patchConfig = (patch: Partial<AgentTaskConfig>) => {
+		const cfg = (selected?.data as AgentNodeData | undefined)?.config;
+		if (cfg) patchData({ config: { ...cfg, ...patch } });
+	};
 
 	const run = async () => {
 		await saveWorkflowGraph(workflow.id, toGraph(nodes, edges));
 		void runWorkflowById(workflow.id);
 	};
+
+	const running = runStatus === "running";
 
 	return (
 		<div className="flex h-full flex-col">
@@ -268,15 +312,51 @@ function Canvas({ workflow }: { workflow: Workflow }) {
 						</DropdownMenuItem>
 					</DropdownMenuContent>
 				</DropdownMenu>
+
 				<div className="ml-auto flex items-center gap-1.5">
-					<Button variant="ghost" size="sm" onClick={addNode} className="gap-1.5">
-						<Plus className="size-3.5" />
-						Add node
-					</Button>
+					<DropdownMenu>
+						<DropdownMenuTrigger asChild>
+							<Button variant="ghost" size="sm" className="gap-1.5">
+								<Plus className="size-3.5" />
+								Add node
+							</Button>
+						</DropdownMenuTrigger>
+						<DropdownMenuContent align="end" className="w-52">
+							{INTENT_ORDER.map((intent) => {
+								const meta = INTENT_META[intent];
+								const Icon = meta.icon;
+								return (
+									<DropdownMenuItem
+										key={intent}
+										onSelect={() => addAgent(intent)}
+										className="gap-2"
+									>
+										<Icon className={cn("size-4", meta.accent)} />
+										<span className="flex flex-col">
+											<span className="text-[13px]">{meta.label}</span>
+											<span className="text-[10px] text-muted-foreground">
+												{meta.description}
+											</span>
+										</span>
+									</DropdownMenuItem>
+								);
+							})}
+							<DropdownMenuSeparator />
+							<DropdownMenuItem onSelect={addGate} className="gap-2">
+								<ShieldQuestion className="size-4 text-amber-500" />
+								<span className="flex flex-col">
+									<span className="text-[13px]">Approval gate</span>
+									<span className="text-[10px] text-muted-foreground">
+										Pause for your sign-off
+									</span>
+								</span>
+							</DropdownMenuItem>
+						</DropdownMenuContent>
+					</DropdownMenu>
 					<Button
 						size="sm"
 						onClick={() => void run()}
-						disabled={nodes.length === 0 || runStatus === "running"}
+						disabled={nodes.length === 0 || running}
 						className="gap-1.5 bg-foreground text-background hover:bg-foreground/90"
 					>
 						<Play className="size-3.5" />
@@ -341,67 +421,40 @@ function Canvas({ workflow }: { workflow: Workflow }) {
 						</div>
 						{panelTab === "config" ? (
 							<div className="space-y-3 overflow-auto p-3">
-						<div className="space-y-1">
-							<span className="text-[11px] font-medium text-muted-foreground">
-								Label
-							</span>
-							<Input
-								value={selected.data.label}
-								onChange={(e) => patchSelected({ label: e.target.value })}
-								className="h-8 text-[13px]"
-							/>
-						</div>
-						<div className="flex items-center gap-1.5">
-							<ModelMenu
-								value={selected.data.config.model}
-								onChange={(model) => patchConfig({ model })}
-								backend={backendOf(selected.data.config.model)}
-								started={false}
-							/>
-							<ModeMenu
-								value={selected.data.config.permissionMode}
-								onChange={(permissionMode) => patchConfig({ permissionMode })}
-							/>
-							<EffortMenu
-								value={selected.data.config.effort}
-								onChange={(effort) => patchConfig({ effort })}
-							/>
-						</div>
-						<div className="space-y-1">
-							<span className="text-[11px] font-medium text-muted-foreground">
-								Task
-							</span>
-							<textarea
-								value={selected.data.config.prompt}
-								onChange={(e) => patchConfig({ prompt: e.target.value })}
-								rows={5}
-								placeholder="What should this agent do?"
-								className="w-full resize-none rounded-md border border-border/60 bg-transparent px-2.5 py-1.5 text-[13px] outline-none placeholder:text-muted-foreground/60 focus-visible:border-border"
-							/>
-						</div>
-						{selected.data.config.permissionMode === "plan" ? (
-							<p className="rounded-md bg-muted/50 px-2.5 py-2 text-[11px] text-muted-foreground">
-								Plan mode is read-only — this node researches and hands its
-								plan to the next node.
-							</p>
-						) : (
-							<div className="space-y-1">
-								<span className="text-[11px] font-medium text-muted-foreground">
-									Branch
-								</span>
-								<Input
-									value={selected.data.config.branchHint ?? ""}
-									onChange={(e) =>
-										patchConfig({ branchHint: e.target.value || null })
-									}
-									placeholder="feat/my-feature"
-									className="h-8 font-mono text-[12px]"
-								/>
-								<p className="text-[10px] text-muted-foreground/70">
-									Edits run on this branch in an isolated worktree.
-								</p>
-							</div>
-						)}
+								<div className="space-y-1">
+									<span className="text-[11px] font-medium text-muted-foreground">
+										Label
+									</span>
+									<Input
+										value={selected.data.label as string}
+										onChange={(e) => patchData({ label: e.target.value })}
+										className="h-8 text-[13px]"
+									/>
+								</div>
+								{selected.type === "gate" ? (
+									<div className="space-y-1">
+										<span className="text-[11px] font-medium text-muted-foreground">
+											Approval prompt (optional)
+										</span>
+										<textarea
+											value={(selected.data as GateNodeData).prompt ?? ""}
+											onChange={(e) =>
+												patchData({ prompt: e.target.value || null })
+											}
+											rows={3}
+											placeholder="What should the reviewer check before approving?"
+											className="w-full resize-none rounded-md border border-border/60 bg-transparent px-2.5 py-1.5 text-[13px] outline-none placeholder:text-muted-foreground/60 focus-visible:border-border"
+										/>
+										<p className="text-[10px] text-muted-foreground/70">
+											The run pauses here until you approve or reject.
+										</p>
+									</div>
+								) : (
+									<AgentConfig
+										config={(selected.data as AgentNodeData).config}
+										patchConfig={patchConfig}
+									/>
+								)}
 							</div>
 						) : nodeSessionId ? (
 							<div className="flex min-h-0 flex-1 flex-col">
@@ -432,13 +485,114 @@ function Canvas({ workflow }: { workflow: Workflow }) {
 	);
 }
 
+/** The intent-driven config for an agent node. */
+function AgentConfig({
+	config,
+	patchConfig,
+}: {
+	config: AgentTaskConfig;
+	patchConfig: (patch: Partial<AgentTaskConfig>) => void;
+}) {
+	const meta = INTENT_META[config.intent];
+	const IntentIcon = meta.icon;
+	return (
+		<>
+			<div className="space-y-1">
+				<span className="text-[11px] font-medium text-muted-foreground">
+					Does
+				</span>
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<button
+							type="button"
+							className="flex w-full items-center gap-2 rounded-md border border-border/60 px-2.5 py-1.5 text-left text-[13px] hover:bg-muted/40"
+						>
+							<IntentIcon className={cn("size-4", meta.accent)} />
+							<span className="flex-1">{meta.label}</span>
+							<span className="text-[10px] text-muted-foreground">
+								{meta.description}
+							</span>
+						</button>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent className="w-56">
+						{INTENT_ORDER.map((intent) => {
+							const m = INTENT_META[intent];
+							const Icon = m.icon;
+							return (
+								<DropdownMenuItem
+									key={intent}
+									onSelect={() => patchConfig({ intent })}
+									className="gap-2"
+								>
+									<Icon className={cn("size-4", m.accent)} />
+									{m.label}
+								</DropdownMenuItem>
+							);
+						})}
+					</DropdownMenuContent>
+				</DropdownMenu>
+			</div>
+
+			<div className="flex items-center gap-1.5">
+				<ModelMenu
+					value={config.model}
+					onChange={(model) => patchConfig({ model })}
+					backend={backendOf(config.model)}
+					started={false}
+				/>
+				<EffortMenu
+					value={config.effort}
+					onChange={(effort) => patchConfig({ effort })}
+				/>
+				{config.intent === "custom" ? (
+					<ModeMenu
+						value={config.permissionMode ?? "bypassPermissions"}
+						onChange={(permissionMode) => patchConfig({ permissionMode })}
+					/>
+				) : null}
+			</div>
+
+			<div className="space-y-1">
+				<span className="text-[11px] font-medium text-muted-foreground">
+					{meta.promptLabel}
+				</span>
+				<textarea
+					value={config.prompt}
+					onChange={(e) => patchConfig({ prompt: e.target.value })}
+					rows={meta.promptRequired ? 5 : 3}
+					placeholder={meta.promptPlaceholder}
+					className="w-full resize-none rounded-md border border-border/60 bg-transparent px-2.5 py-1.5 text-[13px] outline-none placeholder:text-muted-foreground/60 focus-visible:border-border"
+				/>
+			</div>
+
+			{meta.writesCode ? (
+				<div className="space-y-1">
+					<span className="text-[11px] font-medium text-muted-foreground">
+						Branch (optional)
+					</span>
+					<Input
+						value={config.branchHint ?? ""}
+						onChange={(e) =>
+							patchConfig({ branchHint: e.target.value || null })
+						}
+						placeholder="defaults to the run's branch"
+						className="h-8 font-mono text-[12px]"
+					/>
+				</div>
+			) : (
+				<p className="rounded-md bg-muted/50 px-2.5 py-2 text-[11px] text-muted-foreground">
+					Read-only — researches and hands its result to the next node.
+				</p>
+			)}
+		</>
+	);
+}
+
 export function WorkflowEditor({ workflowId }: { workflowId: string }) {
 	const workflow = useAppStore((s) => s.workflows[workflowId]);
 	const ensureWorkflow = useAppStore((s) => s.ensureWorkflow);
 	const loadWorkflowRun = useAppStore((s) => s.loadWorkflowRun);
 
-	// Hydrate the definition + its latest run (covers a restored tab where the
-	// workflow isn't in the store yet).
 	useEffect(() => {
 		void ensureWorkflow(workflowId);
 		void loadWorkflowRun(workflowId);

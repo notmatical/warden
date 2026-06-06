@@ -444,6 +444,14 @@ export function getLatestWorkflowRun(
   return invoke("get_latest_workflow_run", { workflowId })
 }
 
+/** Resume a run paused at a gate: approve to continue, reject to cancel. */
+export function resumeWorkflow(
+  runId: string,
+  approve: boolean
+): Promise<WorkflowRunView> {
+  return invoke("resume_workflow", { runId, approve })
+}
+
 export function cancelSession(sessionId: string): Promise<void> {
   return invoke("cancel_session", { sessionId })
 }

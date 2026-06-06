@@ -104,6 +104,7 @@ export interface AppState {
 	deleteWorkflow: (id: string) => Promise<void>;
 	openWorkflow: (id: string) => void;
 	runWorkflowById: (id: string) => Promise<void>;
+	resumeRun: (approve: boolean) => Promise<void>;
 	loadWorkflowRun: (id: string) => Promise<void>;
 	applyWorkflowRun: (view: WorkflowRunView) => void;
 

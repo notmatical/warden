@@ -1,19 +1,29 @@
-import type { EffortLevel, PermissionMode, SessionRole } from "@/types"
+import type { EffortLevel, PermissionMode } from "@/types"
 
-/** Per-node agent config (mirrors the Rust `AgentTaskConfig`). */
+/** What an agent node does — carries a built-in behavior; the edge supplies the
+ *  content, so downstream nodes need no hand-written task. */
+export type Intent = "plan" | "code" | "review" | "revise" | "custom"
+
 export interface AgentTaskConfig {
+  intent: Intent
   model: string
-  permissionMode: PermissionMode
   effort: EffortLevel
-  role: SessionRole
+  /** Feature description (plan/custom) or optional extra instructions. */
   prompt: string
   branchHint?: string | null
+  /** Mode override, mainly for custom; otherwise derived from intent. */
+  permissionMode?: PermissionMode | null
 }
 
-/** A node's behavior. Internally tagged by `type` to match serde. */
+export interface GateConfig {
+  prompt?: string | null
+}
+
+/** A node's behavior, internally tagged by `type` to match serde. */
 export type NodeKind =
   | { type: "start" }
   | ({ type: "agentTask" } & AgentTaskConfig)
+  | ({ type: "gate" } & GateConfig)
 
 export interface WorkflowNode {
   id: string
@@ -56,6 +66,7 @@ export type NodeRunStatus =
   | "done"
   | "failed"
   | "skipped"
+  | "paused"
 
 export interface WorkflowRun {
   id: string
