@@ -9,7 +9,7 @@ import {
 	setLeafSession,
 	splitLeaf,
 } from "@/lib/pane-tree";
-import { isWorkflowTab } from "@/lib/tab-ref";
+import { isSettingsTab, isWorkflowTab } from "@/lib/tab-ref";
 import * as terminals from "@/lib/terminal-instances";
 import { readView, writeView } from "@/lib/view";
 import { showSession } from "../shared";
@@ -57,7 +57,7 @@ export const createViewportSlice: StateCreator<
 		// Keep session tabs that still exist, plus any non-session tab (workflows
 		// self-hydrate). Sessions are loaded by now; workflows may not be.
 		const exists = (id: string) =>
-			sessions[id] !== undefined || isWorkflowTab(id);
+			sessions[id] !== undefined || isWorkflowTab(id) || isSettingsTab(id);
 		const openTabs = saved.openTabs.filter(exists);
 		// Drop panes pointing at sessions that are gone or no longer open.
 		let layout = saved.layout;
@@ -172,7 +172,7 @@ export const createViewportSlice: StateCreator<
 	// Focus an open tab. If it's visible in a pane we just focus it; otherwise it
 	// swaps into the focused pane.
 	selectSession: (id) => {
-		if (!get().sessions[id] && !isWorkflowTab(id)) {
+		if (!get().sessions[id] && !isWorkflowTab(id) && !isSettingsTab(id)) {
 			return;
 		}
 		set((state) => ({
@@ -180,7 +180,12 @@ export const createViewportSlice: StateCreator<
 			layout: showSession(state.layout, state.activeSessionId, id),
 		}));
 		get().saveView();
-		if (!isWorkflowTab(id) && !get().eventsBySession[id]) {
+		// Only sessions need events loaded — workflows + settings hydrate themselves.
+		if (
+			!isWorkflowTab(id) &&
+			!isSettingsTab(id) &&
+			!get().eventsBySession[id]
+		) {
 			void get().loadEvents(id);
 		}
 	},

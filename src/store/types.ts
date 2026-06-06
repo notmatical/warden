@@ -85,8 +85,8 @@ export interface AppState {
   sidebarCollapsed: boolean
   sidebarWidth: number
 
-  /** Settings dialog visibility and the section it opens to. */
-  settingsOpen: boolean
+  /** Remembered section for the Settings tab — restored when it reopens, and
+   *  set by `openSettings(section)` deep links. */
   settingsSection: string
 
   initialized: boolean
@@ -128,7 +128,7 @@ export interface AppState {
   updateGithub: () => Promise<void>
   setGithubSource: (source: ProviderSource) => Promise<void>
   openSettings: (section?: string) => void
-  setSettingsOpen: (open: boolean) => void
+  setSettingsSection: (section: string) => void
   integrateSession: (
     sessionId: string,
     message: string,

@@ -1,5 +1,10 @@
 import { useDroppable } from "@dnd-kit/core";
-import { LayoutGrid, Workflow as WorkflowIcon, X } from "lucide-react";
+import {
+	LayoutGrid,
+	Settings2,
+	Workflow as WorkflowIcon,
+	X,
+} from "lucide-react";
 import { Fragment, memo, type ReactNode, useEffect, useState } from "react";
 
 import { SessionView } from "@/components/session-view";
@@ -10,7 +15,7 @@ import {
 	ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { leafCount } from "@/lib/pane-tree";
-import { isWorkflowTab, workflowIdOf } from "@/lib/tab-ref";
+import { isSettingsTab, isWorkflowTab, workflowIdOf } from "@/lib/tab-ref";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app-store";
 import type { Leaf, PaneTree, SplitSide } from "@/types";
@@ -23,19 +28,24 @@ function PaneHeader({
 	active: boolean;
 }) {
 	const workflow = isWorkflowTab(sessionId);
+	const settings = isSettingsTab(sessionId);
+	const isStatic = workflow || settings;
 	const title = useAppStore((s) =>
-		workflow ? undefined : s.sessions[sessionId]?.title,
+		isStatic ? undefined : s.sessions[sessionId]?.title,
 	);
 	const status = useAppStore((s) =>
-		workflow ? undefined : s.sessions[sessionId]?.status,
+		isStatic ? undefined : s.sessions[sessionId]?.status,
 	);
 	const wfName = useAppStore((s) =>
 		workflow ? s.workflows[workflowIdOf(sessionId)]?.name : undefined,
 	);
 	const closeTab = useAppStore((s) => s.closeTab);
-	if (!workflow && (title === undefined || status === undefined)) {
+	if (!isStatic && (title === undefined || status === undefined)) {
 		return null;
 	}
+	const staticIcon = settings ? Settings2 : WorkflowIcon;
+	const StaticIcon = staticIcon;
+	const staticLabel = settings ? "Settings" : (wfName ?? "Workflow");
 	return (
 		<div
 			className={cn(
@@ -43,8 +53,8 @@ function PaneHeader({
 				active ? "bg-muted/30" : null,
 			)}
 		>
-			{workflow ? (
-				<WorkflowIcon className="size-3.5 shrink-0 text-muted-foreground" />
+			{isStatic ? (
+				<StaticIcon className="size-3.5 shrink-0 text-muted-foreground" />
 			) : (
 				<StatusDot status={status as NonNullable<typeof status>} />
 			)}
@@ -53,9 +63,9 @@ function PaneHeader({
 					"min-w-0 flex-1 truncate transition-colors",
 					active ? "text-foreground" : "text-muted-foreground/55",
 				)}
-				title={workflow ? wfName : title}
+				title={isStatic ? staticLabel : title}
 			>
-				{workflow ? (wfName ?? "Workflow") : title}
+				{isStatic ? staticLabel : title}
 			</span>
 			<button
 				type="button"

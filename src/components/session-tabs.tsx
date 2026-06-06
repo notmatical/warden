@@ -1,5 +1,11 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
-import { Pencil, Workflow as WorkflowIcon, X } from "lucide-react";
+import {
+	type LucideIcon,
+	Pencil,
+	Settings2,
+	Workflow as WorkflowIcon,
+	X,
+} from "lucide-react";
 import { type KeyboardEvent, useState } from "react";
 import { SessionFavicon } from "@/components/session-favicon";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +17,7 @@ import {
 	ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import { isWorkflowTab, workflowIdOf } from "@/lib/tab-ref";
+import { isSettingsTab, isWorkflowTab, workflowIdOf } from "@/lib/tab-ref";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app-store";
 
@@ -187,9 +193,17 @@ function Tab({ sessionId }: { sessionId: string }) {
 	);
 }
 
-/** A workflow tab — no status/role, name from the workflows store. */
-function WorkflowTab({ tabId }: { tabId: string }) {
-	const name = useAppStore((s) => s.workflows[workflowIdOf(tabId)]?.name);
+/** A non-session tab (workflow, settings) — fixed label + icon, no status/role,
+ *  same drag/drop + close + context menu as a regular tab. */
+function StaticTab({
+	tabId,
+	label,
+	Icon,
+}: {
+	tabId: string;
+	label: string;
+	Icon: LucideIcon;
+}) {
 	const active = useAppStore((s) => s.activeSessionId === tabId);
 	const hasOthers = useAppStore((s) => s.openTabs.length > 1);
 	const selectSession = useAppStore((s) => s.selectSession);
@@ -239,9 +253,9 @@ function WorkflowTab({ tabId }: { tabId: string }) {
 					{showInsert ? (
 						<span className="pointer-events-none absolute inset-y-1 left-0 w-0.5 rounded-full bg-primary" />
 					) : null}
-					<WorkflowIcon className="size-[18px] shrink-0 text-muted-foreground" />
-					<span className="min-w-0 flex-1 truncate text-[13px]" title={name}>
-						{name ?? "Workflow"}
+					<Icon className="size-[18px] shrink-0 text-muted-foreground" />
+					<span className="min-w-0 flex-1 truncate text-[13px]" title={label}>
+						{label}
 					</span>
 					<button
 						type="button"
@@ -272,6 +286,15 @@ function WorkflowTab({ tabId }: { tabId: string }) {
 	);
 }
 
+function WorkflowTab({ tabId }: { tabId: string }) {
+	const name = useAppStore((s) => s.workflows[workflowIdOf(tabId)]?.name);
+	return <StaticTab tabId={tabId} label={name ?? "Workflow"} Icon={WorkflowIcon} />;
+}
+
+function SettingsTab({ tabId }: { tabId: string }) {
+	return <StaticTab tabId={tabId} label="Settings" Icon={Settings2} />;
+}
+
 export function SessionTabs() {
 	const order = useAppStore((s) => s.openTabs);
 
@@ -283,7 +306,9 @@ export function SessionTabs() {
 		<ScrollArea className="w-full">
 			<div className="flex gap-1 px-1.5 pt-1.5 pb-1">
 				{order.map((id) =>
-					isWorkflowTab(id) ? (
+					isSettingsTab(id) ? (
+						<SettingsTab key={id} tabId={id} />
+					) : isWorkflowTab(id) ? (
 						<WorkflowTab key={id} tabId={id} />
 					) : (
 						<Tab key={id} sessionId={id} />

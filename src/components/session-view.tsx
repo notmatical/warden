@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 
 import { Composer } from "@/components/composer";
+import { SettingsPanel } from "@/components/settings/settings-panel";
 import { TerminalView } from "@/components/terminal-view";
 import { Transcript } from "@/components/transcript";
 import { EdgeFade } from "@/components/ui/edge-fade";
 import { WorkflowEditor } from "@/components/workflow/workflow-editor";
-import { isWorkflowTab, workflowIdOf } from "@/lib/tab-ref";
+import { isSettingsTab, isWorkflowTab, workflowIdOf } from "@/lib/tab-ref";
 import { useAppStore } from "@/store/app-store";
 
 /** Agent transcript + floating composer. The transcript scrolls *under* the
@@ -43,9 +44,14 @@ function AgentView({ sessionId }: { sessionId: string }) {
 
 export function SessionView({ sessionId }: { sessionId: string }) {
 	const workflow = isWorkflowTab(sessionId);
+	const settings = isSettingsTab(sessionId);
 	const session = useAppStore((s) =>
-		workflow ? undefined : s.sessions[sessionId],
+		workflow || settings ? undefined : s.sessions[sessionId],
 	);
+
+	if (settings) {
+		return <SettingsPanel />;
+	}
 
 	if (workflow) {
 		return <WorkflowEditor workflowId={workflowIdOf(sessionId)} />;

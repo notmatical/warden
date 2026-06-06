@@ -1,5 +1,7 @@
 import type { StateCreator } from "zustand";
 
+import { SETTINGS_TAB_ID } from "@/lib/tab-ref";
+
 import {
 	clampWidth,
 	readSidebarCollapsed,
@@ -13,19 +15,21 @@ type UiSlice = Pick<
 	AppState,
 	| "sidebarCollapsed"
 	| "sidebarWidth"
-	| "settingsOpen"
 	| "settingsSection"
 	| "setSidebarCollapsed"
 	| "setSidebarWidth"
 	| "openSettings"
-	| "setSettingsOpen"
+	| "setSettingsSection"
 >;
 
-/** Sidebar collapse/width (persisted to localStorage) and the settings dialog. */
-export const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (set) => ({
+/** Sidebar collapse/width (persisted to localStorage) and the settings tab's
+ *  remembered section. Settings opens as a real tab via `openTabRef`. */
+export const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (
+	set,
+	get,
+) => ({
 	sidebarCollapsed: readSidebarCollapsed(),
 	sidebarWidth: readSidebarWidth(),
-	settingsOpen: false,
 	settingsSection: "providers",
 
 	setSidebarCollapsed: (collapsed) => {
@@ -47,7 +51,10 @@ export const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (set) => (
 		set({ sidebarWidth: clamped });
 	},
 
-	openSettings: (section = "providers") =>
-		set({ settingsOpen: true, settingsSection: section }),
-	setSettingsOpen: (open) => set({ settingsOpen: open }),
+	openSettings: (section) => {
+		if (section) set({ settingsSection: section });
+		get().openTabRef(SETTINGS_TAB_ID);
+	},
+
+	setSettingsSection: (section) => set({ settingsSection: section }),
 });
