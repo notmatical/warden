@@ -1,11 +1,4 @@
-import { Channel, invoke } from "@tauri-apps/api/core"
-
-import type { DiffFile, GitCommit } from "@/types/git-diff"
-import type {
-  Workflow,
-  WorkflowGraph,
-  WorkflowRunView,
-} from "@/types/workflow"
+import { type Channel, invoke } from "@tauri-apps/api/core"
 import type {
   Attachment,
   Backend,
@@ -16,25 +9,27 @@ import type {
   Group,
   IntegrateOutcome,
   MergeMode,
-  PrContent,
-  PrInfo,
-  PrSummary,
   PermissionMode,
   PlanToCodeResult,
+  PrContent,
+  PrInfo,
+  Project,
   Provider,
   ProviderSource,
   ProviderStatus,
+  PrSummary,
   RepoRef,
-  RepoStatus,
   RepoRefBody,
+  RepoStatus,
   Session,
   SessionContextSource,
-  SyncOutcome,
   SessionKind,
   SessionRole,
   SlashCommand,
-  Project,
+  SyncOutcome,
 } from "@/types"
+import type { DiffFile, GitCommit } from "@/types/git-diff"
+import type { Workflow, WorkflowGraph, WorkflowRunView } from "@/types/workflow"
 
 export function listProjects(): Promise<Project[]> {
   return invoke("list_projects")
@@ -278,16 +273,18 @@ export interface CreateSessionInput {
 export function createSession(input: CreateSessionInput): Promise<Session> {
   return invoke("create_session", {
     projectId: input.projectId,
-    groupId: input.groupId ?? null,
     title: input.title,
     model: input.model,
-    permissionMode: input.permissionMode,
-    effort: input.effort ?? null,
-    role: input.role ?? null,
-    kind: input.kind ?? null,
-    backend: input.backend ?? null,
-    isolate: input.isolate ?? false,
-    nativeCommand: input.nativeCommand ?? null,
+    options: {
+      groupId: input.groupId ?? null,
+      permissionMode: input.permissionMode,
+      effort: input.effort ?? null,
+      role: input.role ?? null,
+      kind: input.kind ?? null,
+      backend: input.backend ?? null,
+      isolate: input.isolate ?? false,
+      nativeCommand: input.nativeCommand ?? null,
+    },
   })
 }
 

@@ -81,6 +81,7 @@ function CodeBlock({ code, lang }: { code: string; lang?: string }) {
       {html ? (
         <div
           className="overflow-x-auto [&>pre]:!bg-transparent [&>pre]:px-4 [&>pre]:py-3 [&>pre]:leading-[1.55]"
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: Shiki output is sanitized HTML
           dangerouslySetInnerHTML={{ __html: html }}
         />
       ) : (
