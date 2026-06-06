@@ -235,10 +235,7 @@ pub async fn sync_worktree(
 /// Push the session's worktree branch to its origin remote (publishing or
 /// updating the upstream tracking branch).
 #[tauri::command]
-pub async fn push_session(
-    state: State<'_, AppState>,
-    session_id: String,
-) -> Result<()> {
+pub async fn push_session(state: State<'_, AppState>, session_id: String) -> Result<()> {
     let session = state.store.get_session(&session_id)?;
     git::push_branch(Path::new(&session.working_dir))
 }
@@ -246,10 +243,7 @@ pub async fn push_session(
 /// Pull the latest upstream commits onto the session's branch (fetch + merge).
 /// Reports clashing files on conflict, like `sync_worktree`.
 #[tauri::command]
-pub async fn pull_session(
-    state: State<'_, AppState>,
-    session_id: String,
-) -> Result<SyncOutcome> {
+pub async fn pull_session(state: State<'_, AppState>, session_id: String) -> Result<SyncOutcome> {
     let session = state.store.get_session(&session_id)?;
     let worktree = Path::new(&session.working_dir);
     match git::pull_upstream(worktree, git::MergeMode::MergeCommit)? {

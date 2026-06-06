@@ -16,7 +16,7 @@ pub async fn run_plan_to_code(
     coder_model: String,
 ) -> Result<PlanToCodeResult> {
     let store = state.store.clone();
-    let manager = state.manager.clone();
+    let manager = state.manager;
     recipes::run_plan_to_code(
         app,
         store,

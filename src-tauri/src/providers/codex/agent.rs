@@ -334,7 +334,10 @@ fn register_turn(session_id: &str, thread_id: &str) {
             .turns
             .lock()
             .unwrap_or_else(|p| p.into_inner())
-            .insert(session_id.to_string(), (thread_id.to_string(), String::new()));
+            .insert(
+                session_id.to_string(),
+                (thread_id.to_string(), String::new()),
+            );
     }
 }
 
@@ -512,8 +515,7 @@ async fn start_or_resume(
         }
     }
 
-    let response =
-        send_request("thread/start", thread_params(session, base_instructions)).await?;
+    let response = send_request("thread/start", thread_params(session, base_instructions)).await?;
     let thread_id = response
         .get("thread")
         .and_then(|t| t.get("id"))

@@ -102,7 +102,7 @@ pub fn is_newer(current: &str, latest: &str) -> bool {
 
 fn parse_version(version: &str) -> Vec<u32> {
     version
-        .split(|c: char| c == '.' || c == '-')
+        .split(['.', '-'])
         .filter_map(|s| s.parse().ok())
         .collect()
 }

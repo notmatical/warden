@@ -336,7 +336,11 @@ fn normalize_remote_url(raw: &str) -> Option<String> {
         let rest = rest.strip_prefix("git@").unwrap_or(rest);
         if let Some((host, path)) = rest.split_once('/') {
             let host = host.split(':').next().unwrap_or(host); // drop any :port
-            return Some(format!("https://{}/{}", resolve_ssh_host(host), strip_git(path)));
+            return Some(format!(
+                "https://{}/{}",
+                resolve_ssh_host(host),
+                strip_git(path)
+            ));
         }
         return Some(format!("https://{}", strip_git(rest)));
     }
@@ -349,7 +353,11 @@ fn normalize_remote_url(raw: &str) -> Option<String> {
     if let Some((before, path)) = url.split_once(':') {
         if !before.contains('/') && !path.is_empty() {
             let host = before.strip_prefix("git@").unwrap_or(before);
-            return Some(format!("https://{}/{}", resolve_ssh_host(host), strip_git(path)));
+            return Some(format!(
+                "https://{}/{}",
+                resolve_ssh_host(host),
+                strip_git(path)
+            ));
         }
     }
     None

@@ -7,7 +7,8 @@ use rusqlite::{Connection, OptionalExtension, Row};
 
 use crate::domain::{
     AgentEvent, Backend, CheckStatus, ContextSource, EffortLevel, EventRecord, Group,
-    PermissionMode, Project, Session, SessionContextSource, SessionKind, SessionRole, SessionStatus,
+    PermissionMode, Project, Session, SessionContextSource, SessionKind, SessionRole,
+    SessionStatus,
 };
 use crate::error::{AppError, Result};
 use crate::util::{now_rfc3339, uuid};
@@ -758,9 +759,7 @@ fn map_project(row: &Row<'_>) -> rusqlite::Result<Project> {
     })
 }
 
-fn map_context_source(
-    row: &Row<'_>,
-) -> rusqlite::Result<Result<SessionContextSource>> {
+fn map_context_source(row: &Row<'_>) -> rusqlite::Result<Result<SessionContextSource>> {
     let id: String = row.get("id")?;
     let session_id: String = row.get("session_id")?;
     let position: i64 = row.get("position")?;

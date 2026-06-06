@@ -68,8 +68,8 @@ pub fn run() {
                         } else {
                             cli::Source::System
                         };
-                        let _ = store
-                            .set_setting(&cli::Source::setting_key(tool), derived.as_str());
+                        let _ =
+                            store.set_setting(&cli::Source::setting_key(tool), derived.as_str());
                         derived
                     });
                     (tool, source)

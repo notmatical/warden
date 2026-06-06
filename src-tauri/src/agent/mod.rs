@@ -270,8 +270,13 @@ impl AgentManager {
     /// process so it re-spawns with the updated `--allowedTools`, then nudge the
     /// agent to continue (it retries the denied step).
     pub async fn resume(&self, app: AppHandle, store: Store, session: Session) -> Result<()> {
-        self.resume_with(app, store, session, "Approved — please continue.".to_string())
-            .await
+        self.resume_with(
+            app,
+            store,
+            session,
+            "Approved — please continue.".to_string(),
+        )
+        .await
     }
 
     /// Kill the session's process so it re-spawns with the session's current
