@@ -206,6 +206,20 @@ export interface PlanToCodeResult {
   coder: Session
 }
 
+/** A piece of context injected into an agent's system prompt for a session. */
+export type ContextSource =
+  | { kind: "file"; path: string }
+  | { kind: "dir"; path: string }
+  | { kind: "text"; label: string; body: string }
+
+export interface SessionContextSource {
+  id: string
+  sessionId: string
+  position: number
+  enabled: boolean
+  source: ContextSource
+}
+
 /** Token accounting for a turn; the input side + cache approximates context fill. */
 export interface TokenUsage {
   input_tokens: number

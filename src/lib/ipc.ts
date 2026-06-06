@@ -3,6 +3,7 @@ import { Channel, invoke } from "@tauri-apps/api/core"
 import type { DiffFile, GitCommit } from "@/types/git-diff"
 import type {
   Backend,
+  ContextSource,
   EffortLevel,
   EventRecord,
   FileEntry,
@@ -21,6 +22,7 @@ import type {
   RepoStatus,
   RepoRefBody,
   Session,
+  SessionContextSource,
   SyncOutcome,
   SessionKind,
   SessionRole,
@@ -138,6 +140,34 @@ export function sessionGitStatus(sessionId: string): Promise<RepoStatus[]> {
 /** The browsable https URL for a repo path's origin remote, or null. */
 export function repoBrowseUrl(path: string): Promise<string | null> {
   return invoke("repo_browse_url", { path })
+}
+
+export function listContextSources(
+  sessionId: string
+): Promise<SessionContextSource[]> {
+  return invoke("list_context_sources", { sessionId })
+}
+
+export function addContextSource(
+  sessionId: string,
+  source: ContextSource
+): Promise<SessionContextSource> {
+  return invoke("add_context_source", { sessionId, source })
+}
+
+export function removeContextSource(
+  sessionId: string,
+  id: string
+): Promise<void> {
+  return invoke("remove_context_source", { sessionId, id })
+}
+
+export function setContextSourceEnabled(
+  sessionId: string,
+  id: string,
+  enabled: boolean
+): Promise<void> {
+  return invoke("set_context_source_enabled", { sessionId, id, enabled })
 }
 
 export function getSessionDiff(sessionId: string): Promise<DiffFile[]> {
