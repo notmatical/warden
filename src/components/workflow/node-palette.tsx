@@ -110,7 +110,6 @@ export function NodePalette({
         <div className="flex items-center gap-2 border-b border-border/60 px-2.5">
           <Search className="size-3.5 shrink-0 text-muted-foreground" />
           <input
-            autoFocus
             value={query}
             onChange={(e) => {
               setQuery(e.target.value)

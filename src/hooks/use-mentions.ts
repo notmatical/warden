@@ -1,18 +1,18 @@
 import {
+  type KeyboardEvent,
+  type RefObject,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
-  type KeyboardEvent,
-  type RefObject,
 } from "react"
 
 import {
-  MENTION_PROVIDERS,
+  type ActiveMention,
   detectMention,
   filterMentions,
-  type ActiveMention,
+  MENTION_PROVIDERS,
   type MentionChar,
   type MentionItem,
 } from "@/lib/mentions"
@@ -85,7 +85,7 @@ export function useMentions({
     }
     // Only re-load when the trigger char or project changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active?.char, workingDir])
+  }, [active?.char, workingDir, active])
 
   const items = useMemo(
     () => (active ? filterMentions(pool, active.query) : []),
@@ -95,7 +95,7 @@ export function useMentions({
   // Reset the highlight as the query or pool changes.
   useEffect(() => {
     setSelectedIndex(0)
-  }, [active?.char, active?.query, pool])
+  }, [])
 
   const handleInput = useCallback(
     (nextValue: string, cursor: number) => {

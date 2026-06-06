@@ -330,7 +330,7 @@ function Canvas({ workflow }: { workflow: Workflow }) {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-3">
+      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-2">
         {renaming ? (
           <input
             value={nameDraft}
