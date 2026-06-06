@@ -1,21 +1,21 @@
-//! Workflow run executor. For the vertical slice this runs nodes in topological
-//! (linear) order; parallel branches, conditional edges, and human gates arrive
-//! in later phases. Each AgentTask node maps to a session run to completion via
-//! `AgentManager::run_node_to_completion`; edges inject the source node's output
-//! as the target's context.
+//! Workflow run executor. Runs nodes in topological (linear) order, sharing one
+//! per-run worktree. Each AgentTask node's behavior comes from its `intent`
+//! (the prompt template, mode, and whether it gets the diff); edges inject the
+//! upstream node's output as context. A Gate node pauses the run. The walk skips
+//! already-`done` nodes, so it doubles as the resume path.
 
 use std::collections::{HashMap, VecDeque};
+use std::path::Path;
 
 use tauri::AppHandle;
 
 use crate::agent::AgentManager;
 use crate::domain::{
-    Backend, ContextSource, NodeKind, NodeRunStatus, RunStatus, SessionKind, WorkflowGraph,
-    WorkflowNodeRun,
+    ContextSource, NodeKind, NodeRunStatus, RunStatus, SessionKind, WorkflowGraph, WorkflowNodeRun,
 };
 use crate::error::{AppError, Result};
 use crate::events::emit_session;
-use crate::git::{provision_working_dir, ProvisionedDir};
+use crate::git::{self, provision_working_dir, ProvisionedDir};
 use crate::store::{NewSession, Store};
 use crate::util::uuid;
 
@@ -29,59 +29,98 @@ pub struct RunContext {
     pub project_id: String,
     pub group_id: String,
     pub graph: WorkflowGraph,
+    /// Branch for this run's worktree (used on first provision).
+    pub branch: String,
 }
 
-/// Drive a workflow run to completion, settling its final status.
+enum Outcome {
+    Completed,
+    Paused,
+}
+
+/// Drive a run to completion or a gate, settling its status.
 pub async fn drive(ctx: RunContext) {
-    let outcome = run_linear(&ctx).await;
-    let _ = match &outcome {
-        Ok(()) => ctx
-            .store
-            .set_workflow_run_status(&ctx.run_id, RunStatus::Completed, None),
-        Err(e) => {
-            ctx.store
-                .set_workflow_run_status(&ctx.run_id, RunStatus::Failed, Some(&e.to_string()))
+    match run_steps(&ctx).await {
+        Ok(Outcome::Completed) => {
+            let _ = ctx
+                .store
+                .set_workflow_run_status(&ctx.run_id, RunStatus::Completed, None);
         }
-    };
+        // Paused status is set inside run_steps; leave it.
+        Ok(Outcome::Paused) => {}
+        Err(e) => {
+            let _ = ctx.store.set_workflow_run_status(
+                &ctx.run_id,
+                RunStatus::Failed,
+                Some(&e.to_string()),
+            );
+        }
+    }
     emit_run(&ctx);
 }
 
-async fn run_linear(ctx: &RunContext) -> Result<()> {
+async fn run_steps(ctx: &RunContext) -> Result<Outcome> {
     ctx.store
         .set_workflow_run_status(&ctx.run_id, RunStatus::Running, None)?;
     emit_run(ctx);
 
     let order = topo_order(&ctx.graph)?;
     let project = ctx.store.get_project(&ctx.project_id)?;
-    let mut coding_dir: Option<ProvisionedDir> = None;
-    let mut node_session: HashMap<String, String> = HashMap::new();
+
+    // Existing per-node state lets a resumed run skip what already ran.
+    let existing: HashMap<String, WorkflowNodeRun> = ctx
+        .store
+        .list_node_runs(&ctx.run_id)?
+        .into_iter()
+        .map(|n| (n.node_id.clone(), n))
+        .collect();
+    let mut node_session: HashMap<String, String> = existing
+        .iter()
+        .filter_map(|(id, n)| n.session_id.clone().map(|s| (id.clone(), s)))
+        .collect();
+
+    // One worktree per run, shared by every node. Reuse the existing one on a
+    // resume (read from a prior node's session); otherwise provision it.
+    let dir = match node_session.values().next() {
+        Some(sid) => {
+            let s = ctx.store.get_session(sid)?;
+            ProvisionedDir {
+                working_dir: s.working_dir,
+                branch: s.branch,
+                base_sha: s.base_sha,
+                base_branch: s.base_branch,
+                is_isolated: s.is_isolated,
+            }
+        }
+        None => provision_working_dir(&ctx.app, &project, true, Some(&ctx.branch))?,
+    };
+
     let mut last_session: Option<String> = None;
 
     for node_id in order {
+        let already_done = existing
+            .get(&node_id)
+            .map(|n| matches!(n.status, NodeRunStatus::Done | NodeRunStatus::Skipped))
+            .unwrap_or(false);
+        if already_done {
+            last_session = node_session.get(&node_id).cloned().or(last_session);
+            continue;
+        }
+
         let Some(node) = ctx.graph.nodes.iter().find(|n| n.id == node_id) else {
             continue;
         };
+
         let cfg = match &node.kind {
             NodeKind::Start => continue,
-            NodeKind::AgentTask(cfg) => cfg,
-        };
-
-        // Coding nodes share one worktree on the named branch; read-only nodes
-        // reuse it, or run in the project checkout if none exists yet.
-        let dir = if cfg.writes_code() {
-            if coding_dir.is_none() {
-                coding_dir = Some(provision_working_dir(
-                    &ctx.app,
-                    &project,
-                    true,
-                    cfg.branch_hint.as_deref(),
-                )?);
+            NodeKind::Gate(_) => {
+                // Pause the run for human approval; resume re-enters here.
+                ctx.store
+                    .set_workflow_run_status(&ctx.run_id, RunStatus::Paused, None)?;
+                set_node(ctx, &node_id, NodeRunStatus::Paused, None, None, None)?;
+                return Ok(Outcome::Paused);
             }
-            coding_dir.clone().unwrap()
-        } else if let Some(d) = &coding_dir {
-            d.clone()
-        } else {
-            provision_working_dir(&ctx.app, &project, false, None)?
+            NodeKind::AgentTask(cfg) => cfg,
         };
 
         let parent_id = ctx
@@ -102,11 +141,11 @@ async fn run_linear(ctx: &RunContext) -> Result<()> {
             project_id: ctx.project_id.clone(),
             title,
             kind: SessionKind::Agent,
-            backend: Backend::for_model(&cfg.model),
+            backend: crate::domain::Backend::for_model(&cfg.model),
             model: cfg.model.clone(),
-            permission_mode: cfg.permission_mode,
+            permission_mode: cfg.effective_mode(),
             effort: cfg.effort,
-            role: cfg.role,
+            role: cfg.intent.role(),
             auto_named: false,
             agent_session_id: uuid(),
             terminal_command: None,
@@ -145,6 +184,22 @@ async fn run_linear(ctx: &RunContext) -> Result<()> {
             }
         }
 
+        // Review/Revise nodes also get the worktree diff as context.
+        if cfg.intent.needs_diff() {
+            if let Some(base) = &dir.base_sha {
+                let diff = git::worktree_diff(Path::new(&dir.working_dir), base);
+                if !diff.trim().is_empty() {
+                    ctx.store.add_context_source(
+                        &session.id,
+                        &ContextSource::Text {
+                            label: "Code changes (diff)".to_string(),
+                            body: format!("```diff\n{diff}\n```"),
+                        },
+                    )?;
+                }
+            }
+        }
+
         node_session.insert(node_id.clone(), session.id.clone());
         last_session = Some(session.id.clone());
         set_node(
@@ -156,23 +211,9 @@ async fn run_linear(ctx: &RunContext) -> Result<()> {
             None,
         )?;
 
-        // Never send an empty turn: a node with incoming context is directed at
-        // it; a root node with no prompt gets a minimal nudge.
-        let prompt = if cfg.prompt.trim().is_empty() {
-            if ctx.graph.edges.iter().any(|e| e.target == node_id) {
-                "Use the plan and context provided above to carry out this step \
-                 of the workflow."
-                    .to_string()
-            } else {
-                "Begin.".to_string()
-            }
-        } else {
-            cfg.prompt.clone()
-        };
-
         match ctx
             .manager
-            .run_node_to_completion(&ctx.app, &ctx.store, &session, &prompt)
+            .run_node_to_completion(&ctx.app, &ctx.store, &session, &cfg.effective_prompt())
             .await
         {
             Ok(output) => {
@@ -198,7 +239,7 @@ async fn run_linear(ctx: &RunContext) -> Result<()> {
             }
         }
     }
-    Ok(())
+    Ok(Outcome::Completed)
 }
 
 fn set_node(

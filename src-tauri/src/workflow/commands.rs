@@ -2,7 +2,7 @@
 
 use tauri::{AppHandle, State};
 
-use crate::domain::{NodeRunStatus, Workflow, WorkflowGraph, WorkflowNodeRun};
+use crate::domain::{NodeRunStatus, RunStatus, Workflow, WorkflowGraph, WorkflowNodeRun};
 use crate::error::Result;
 use crate::state::AppState;
 
@@ -83,6 +83,25 @@ pub async fn run_workflow(
         })?;
     }
 
+    // One branch per run: wf/<workflow-slug>-<run-short>.
+    let slug: String = wf
+        .name
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() {
+                c.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    let slug = slug.trim_matches('-');
+    let branch = format!(
+        "wf/{}-{}",
+        if slug.is_empty() { "workflow" } else { slug },
+        &run.id[..8.min(run.id.len())]
+    );
+
     let ctx = RunContext {
         app: app.clone(),
         store: state.store.clone(),
@@ -91,6 +110,7 @@ pub async fn run_workflow(
         project_id: wf.project_id.clone(),
         group_id,
         graph: wf.graph.clone(),
+        branch,
     };
     tauri::async_runtime::spawn(executor::drive(ctx));
 
@@ -103,6 +123,66 @@ pub async fn get_workflow_run(
     state: State<'_, AppState>,
     run_id: String,
 ) -> Result<WorkflowRunView> {
+    let run = state.store.get_workflow_run(&run_id)?;
+    let nodes = state.store.list_node_runs(&run_id)?;
+    Ok(WorkflowRunView { run, nodes })
+}
+
+/// Resume a run paused at a gate: approve to continue past it, or reject to
+/// cancel the run.
+#[tauri::command]
+pub async fn resume_workflow(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    run_id: String,
+    approve: bool,
+) -> Result<WorkflowRunView> {
+    let nodes = state.store.list_node_runs(&run_id)?;
+    let Some(paused) = nodes.iter().find(|n| n.status == NodeRunStatus::Paused) else {
+        let run = state.store.get_workflow_run(&run_id)?;
+        return Ok(WorkflowRunView { run, nodes });
+    };
+    let gate_id = paused.node_id.clone();
+
+    if !approve {
+        state.store.upsert_node_run(&WorkflowNodeRun {
+            run_id: run_id.clone(),
+            node_id: gate_id,
+            status: NodeRunStatus::Failed,
+            session_id: None,
+            output: None,
+            error: Some("Rejected at gate".to_string()),
+        })?;
+        state.store.set_workflow_run_status(
+            &run_id,
+            RunStatus::Canceled,
+            Some("rejected at gate"),
+        )?;
+    } else {
+        // Approve the gate, then re-enter the executor (it skips done nodes).
+        state.store.upsert_node_run(&WorkflowNodeRun {
+            run_id: run_id.clone(),
+            node_id: gate_id,
+            status: NodeRunStatus::Done,
+            session_id: None,
+            output: None,
+            error: None,
+        })?;
+        let run = state.store.get_workflow_run(&run_id)?;
+        let graph = state.store.get_workflow_run_graph(&run_id)?;
+        let ctx = RunContext {
+            app: app.clone(),
+            store: state.store.clone(),
+            manager: state.manager,
+            run_id: run_id.clone(),
+            project_id: run.project_id.clone(),
+            group_id: run.group_id.clone(),
+            graph,
+            branch: format!("wf/{}", &run_id[..8.min(run_id.len())]),
+        };
+        tauri::async_runtime::spawn(executor::drive(ctx));
+    }
+
     let run = state.store.get_workflow_run(&run_id)?;
     let nodes = state.store.list_node_runs(&run_id)?;
     Ok(WorkflowRunView { run, nodes })

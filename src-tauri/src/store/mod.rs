@@ -557,6 +557,17 @@ impl Store {
         })
     }
 
+    /// The frozen graph snapshot a run was launched with (for resume).
+    pub fn get_workflow_run_graph(&self, run_id: &str) -> Result<WorkflowGraph> {
+        let conn = self.lock();
+        let json: String = conn.query_row(
+            "SELECT graph FROM workflow_runs WHERE id = ?1",
+            [run_id],
+            |r| r.get(0),
+        )?;
+        Ok(serde_json::from_str(&json)?)
+    }
+
     /// The most recent run of a workflow, if any (for restoring run state when
     /// the editor reopens).
     pub fn latest_workflow_run(&self, workflow_id: &str) -> Result<Option<WorkflowRun>> {

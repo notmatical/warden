@@ -137,6 +137,7 @@ pub fn run() {
             workflow::commands::update_workflow,
             workflow::commands::delete_workflow,
             workflow::commands::run_workflow,
+            workflow::commands::resume_workflow,
             workflow::commands::get_workflow_run,
             workflow::commands::get_latest_workflow_run,
             // mentions
