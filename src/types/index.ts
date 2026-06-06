@@ -220,6 +220,15 @@ export interface SessionContextSource {
   source: ContextSource
 }
 
+/** A file staged as a per-message composer attachment. */
+export interface Attachment {
+  id: string
+  name: string
+  /** The path the agent reads (in place, or a staged copy). */
+  path: string
+  isImage: boolean
+}
+
 /** Token accounting for a turn; the input side + cache approximates context fill. */
 export interface TokenUsage {
   input_tokens: number

@@ -36,9 +36,9 @@ export const createTranscriptSlice: StateCreator<
 	startedAtBySession: {},
 	loadingEventsBySession: {},
 
-	sendMessage: async (sessionId, text) => {
+	sendMessage: async (sessionId, text, attachments) => {
 		try {
-			await ipc.sendMessage(sessionId, text);
+			await ipc.sendMessage(sessionId, text, attachments);
 		} catch (error) {
 			reportError("Failed to send message", error);
 		}

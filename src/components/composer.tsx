@@ -7,7 +7,9 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { toast } from "sonner";
 import { AgentToolbar } from "@/components/agent-panel";
+import { AttachmentRow } from "@/components/attachment-row";
 import { ContextMeter } from "@/components/context-meter";
 import { EffortMenu } from "@/components/controls/effort-menu";
 import { ModeMenu } from "@/components/controls/mode-menu";
@@ -22,11 +24,14 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useFileDrop } from "@/hooks/use-file-drop";
 import { useGitStatus } from "@/hooks/use-git-status";
 import { useMentions } from "@/hooks/use-mentions";
 import { useUiCommand } from "@/hooks/use-ui-command";
+import * as ipc from "@/lib/ipc";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app-store";
+import type { Attachment } from "@/types";
 
 const MAX_TEXTAREA_HEIGHT = 200;
 // Shared typography/padding so the highlight backdrop lines up with the textarea.
@@ -51,6 +56,19 @@ export function Composer({ sessionId }: { sessionId: string }) {
 		return false;
 	});
 	const [value, setValue] = useState("");
+
+	// Drag-and-drop attachments staged for the next message.
+	const [attachments, setAttachments] = useState<Attachment[]>([]);
+	const dropZoneRef = useRef<HTMLDivElement>(null);
+	const isDragOver = useFileDrop(dropZoneRef, (paths) => {
+		void ipc
+			.attachToSession(sessionId, paths)
+			.then((staged) => setAttachments((prev) => [...prev, ...staged]))
+			.catch((error) =>
+				toast.error(error instanceof Error ? error.message : String(error)),
+			);
+	});
+
 	// Only one toolbar menu open at a time.
 	const [openMenu, setOpenMenu] = useState<"model" | "mode" | "effort" | null>(
 		null,
@@ -124,7 +142,8 @@ export function Composer({ sessionId }: { sessionId: string }) {
 	}, [autosize]);
 
 	const running = session?.status === "running";
-	const canSend = value.trim().length > 0 && !running;
+	const canSend =
+		(value.trim().length > 0 || attachments.length > 0) && !running;
 
 	if (!session) {
 		return null;
@@ -156,8 +175,10 @@ export function Composer({ sessionId }: { sessionId: string }) {
 	const submit = () => {
 		if (!canSend) return;
 		const text = value.trim();
+		const paths = attachments.map((a) => a.path);
 		setValue("");
-		void sendMessage(sessionId, text);
+		setAttachments([]);
+		void sendMessage(sessionId, text, paths.length > 0 ? paths : undefined);
 	};
 
 	const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -169,7 +190,13 @@ export function Composer({ sessionId }: { sessionId: string }) {
 
 	return (
 		<div className="mx-auto w-full max-w-6xl px-3 pb-3">
-			<div className="flex flex-col">
+			<div
+				ref={dropZoneRef}
+				className={cn(
+					"flex flex-col rounded-2xl transition-shadow",
+					isDragOver && "ring-2 ring-primary/60 ring-offset-2 ring-offset-background",
+				)}
+			>
 				{showApproval && pendingApproval ? (
 					<PermissionApproval
 						sessionId={sessionId}
@@ -183,6 +210,12 @@ export function Composer({ sessionId }: { sessionId: string }) {
 						refresh={refresh}
 					/>
 				)}
+				<AttachmentRow
+					items={attachments}
+					onRemove={(id) =>
+						setAttachments((prev) => prev.filter((a) => a.id !== id))
+					}
+				/>
 				{/* Input card — single, solid surface, on top. Send/stop lives inline
             on the right as a ghost icon. */}
 				<div className="relative z-10 flex items-end gap-1 rounded-xl border border-border/60 bg-card pr-1.5 transition-colors focus-within:border-border/80">
