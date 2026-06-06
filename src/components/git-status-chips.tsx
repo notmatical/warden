@@ -53,12 +53,59 @@ function Counter({ added, removed }: { added: number; removed: number }) {
 	);
 }
 
+/** An ahead/behind counter that becomes a push/pull button when a handler is
+ *  given (the session's primary repo with a remote). */
+function AheadBehind({
+	count,
+	dir,
+	onClick,
+	busy,
+}: {
+	count: number;
+	dir: "ahead" | "behind";
+	onClick?: () => void;
+	busy?: boolean;
+}) {
+	const Icon = busy ? Loader2 : dir === "ahead" ? ArrowUp : ArrowDown;
+	const inner = (
+		<>
+			<Icon className={cn("size-3", busy && "animate-spin")} />
+			{count}
+		</>
+	);
+	if (!onClick) {
+		return (
+			<span className="inline-flex items-center tabular-nums">{inner}</span>
+		);
+	}
+	const verb = dir === "ahead" ? "Push" : "Pull";
+	return (
+		<button
+			type="button"
+			onClick={onClick}
+			disabled={busy}
+			title={`${verb} ${count} commit${count === 1 ? "" : "s"}`}
+			className="-mx-0.5 inline-flex items-center gap-0.5 rounded px-0.5 tabular-nums transition hover:bg-muted hover:text-foreground"
+		>
+			{inner}
+		</button>
+	);
+}
+
 function StatusChip({
 	status,
 	onRemove,
+	onPush,
+	onPull,
+	pushing,
+	pulling,
 }: {
 	status: RepoStatus;
 	onRemove?: () => void;
+	onPush?: () => void;
+	onPull?: () => void;
+	pushing?: boolean;
+	pulling?: boolean;
 }) {
 	return (
 		<span
@@ -84,16 +131,20 @@ function StatusChip({
 				removed={status.uncommittedRemoved}
 			/>
 			{status.ahead > 0 ? (
-				<span className="inline-flex items-center tabular-nums">
-					<ArrowUp className="size-3" />
-					{status.ahead}
-				</span>
+				<AheadBehind
+					count={status.ahead}
+					dir="ahead"
+					onClick={onPush}
+					busy={pushing}
+				/>
 			) : null}
 			{status.behind > 0 ? (
-				<span className="inline-flex items-center tabular-nums">
-					<ArrowDown className="size-3" />
-					{status.behind}
-				</span>
+				<AheadBehind
+					count={status.behind}
+					dir="behind"
+					onClick={onPull}
+					busy={pulling}
+				/>
 			) : null}
 			{onRemove ? (
 				<button
@@ -303,6 +354,39 @@ export function GitStatusChips({
 		[sessionId, statuses, refresh],
 	);
 
+	// Push/pull the primary worktree branch against its upstream tracking branch.
+	const [pending, setPending] = useState<"push" | "pull" | null>(null);
+	const push = useCallback(async () => {
+		setPending("push");
+		try {
+			await ipc.pushSession(sessionId);
+			toast.success("Pushed to remote");
+			refresh();
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : String(error));
+		} finally {
+			setPending(null);
+		}
+	}, [sessionId, refresh]);
+	const pull = useCallback(async () => {
+		setPending("pull");
+		try {
+			const outcome = await ipc.pullSession(sessionId);
+			if (outcome.status === "conflict") {
+				toast.error("Pull stopped on conflicts", {
+					description: `${outcome.files.join(", ")} — nothing was changed.`,
+				});
+			} else {
+				toast.success("Pulled latest commits");
+				refresh();
+			}
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : String(error));
+		} finally {
+			setPending(null);
+		}
+	}, [sessionId, refresh]);
+
 	return (
 		<div
 			className={cn(
@@ -317,6 +401,10 @@ export function GitStatusChips({
 					onRemove={
 						status.isPrimary ? undefined : () => remove(status.projectId)
 					}
+					onPush={status.isPrimary && status.hasRemote ? push : undefined}
+					onPull={status.isPrimary && status.hasRemote ? pull : undefined}
+					pushing={status.isPrimary && pending === "push"}
+					pulling={status.isPrimary && pending === "pull"}
 				/>
 			))}
 			<AddRootControl

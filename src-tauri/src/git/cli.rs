@@ -398,6 +398,30 @@ pub fn fetch_origin(worktree: &Path, base: &str) {
     let _ = run_raw(worktree, &["fetch", "origin", base]);
 }
 
+/// Pull the latest commits on the current branch from its upstream: fetch, then
+/// merge (or rebase) `@{upstream}` into HEAD. Refuses on a dirty tree; aborts
+/// cleanly on conflict, returning the clashing files.
+pub fn pull_upstream(worktree: &Path, mode: MergeMode) -> Result<MergeOutcome> {
+    if has_uncommitted_changes(worktree) {
+        return Err(AppError::Git(
+            "commit or discard the worktree's changes before pulling".to_string(),
+        ));
+    }
+    // Fetch whatever the branch tracks; @{upstream} then points at the new tip.
+    let _ = run_raw(worktree, &["fetch"]);
+    let (op, abort): (Vec<&str>, &[&str]) = match mode {
+        MergeMode::MergeCommit => (vec!["merge", "@{upstream}"], &["merge", "--abort"]),
+        _ => (vec!["rebase", "@{upstream}"], &["rebase", "--abort"]),
+    };
+    let out = run_raw(worktree, &op)?;
+    if !out.status.success() {
+        let files = conflicted_files(worktree);
+        let _ = run_raw(worktree, abort);
+        return Ok(MergeOutcome::Conflict(files));
+    }
+    Ok(MergeOutcome::Merged)
+}
+
 /// Bring the worktree's branch up to date with `origin/<base>` by rebase (or
 /// merge). Refuses on a dirty tree; aborts cleanly on conflict, leaving the
 /// branch untouched. (Squash has no meaning here and is treated as rebase.)

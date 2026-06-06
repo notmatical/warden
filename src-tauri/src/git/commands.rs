@@ -232,6 +232,32 @@ pub async fn sync_worktree(
     }
 }
 
+/// Push the session's worktree branch to its origin remote (publishing or
+/// updating the upstream tracking branch).
+#[tauri::command]
+pub async fn push_session(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Result<()> {
+    let session = state.store.get_session(&session_id)?;
+    git::push_branch(Path::new(&session.working_dir))
+}
+
+/// Pull the latest upstream commits onto the session's branch (fetch + merge).
+/// Reports clashing files on conflict, like `sync_worktree`.
+#[tauri::command]
+pub async fn pull_session(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Result<SyncOutcome> {
+    let session = state.store.get_session(&session_id)?;
+    let worktree = Path::new(&session.working_dir);
+    match git::pull_upstream(worktree, git::MergeMode::MergeCommit)? {
+        git::MergeOutcome::Conflict(files) => Ok(SyncOutcome::Conflict { files }),
+        git::MergeOutcome::Merged => Ok(SyncOutcome::Synced),
+    }
+}
+
 /// The browsable `https` URL for a repo path's `origin` remote, or `None` when
 /// there's no recognizable remote. Powers the header's "open repo" button.
 #[tauri::command]
