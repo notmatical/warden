@@ -1,5 +1,7 @@
 import { PanelLeft } from "lucide-react";
 
+import { CliUpdates } from "@/components/cli-updates";
+import { GithubButton } from "@/components/github-button";
 import { OpenInButtons } from "@/components/open-in-buttons";
 import { QuickSwitcher } from "@/components/quick-switcher";
 import { Button } from "@/components/ui/button";
@@ -63,7 +65,12 @@ export function Topbar() {
 				<SidebarToggle />
 			)}
 			<div className="flex-1" />
-			<OpenInButtons path={openPath} />
+			<div className="flex items-center gap-1">
+				<CliUpdates />
+				<GithubButton path={openPath} />
+				<div className="mx-0.5 h-4 w-px bg-border/60" />
+				<OpenInButtons path={openPath} />
+			</div>
 		</header>
 	);
 }

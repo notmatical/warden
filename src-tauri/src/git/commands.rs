@@ -231,3 +231,10 @@ pub async fn sync_worktree(
         git::MergeOutcome::Merged => Ok(SyncOutcome::Synced),
     }
 }
+
+/// The browsable `https` URL for a repo path's `origin` remote, or `None` when
+/// there's no recognizable remote. Powers the header's "open repo" button.
+#[tauri::command]
+pub async fn repo_browse_url(path: String) -> Result<Option<String>> {
+    Ok(git::remote_browse_url(Path::new(&path)))
+}

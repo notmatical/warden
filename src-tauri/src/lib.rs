@@ -115,6 +115,7 @@ pub fn run() {
             session::commands::approve_plan,
             // git
             git::commands::session_git_status,
+            git::commands::repo_browse_url,
             git::commands::integrate_session,
             git::commands::get_session_diff,
             git::commands::get_session_commits,
