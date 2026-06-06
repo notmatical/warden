@@ -23,6 +23,11 @@ import {
 	DropdownMenuLabel,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
+} from "@/components/ui/tooltip";
 import * as ipc from "@/lib/ipc";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app-store";
@@ -80,15 +85,22 @@ function AheadBehind({
 	}
 	const verb = dir === "ahead" ? "Push" : "Pull";
 	return (
-		<button
-			type="button"
-			onClick={onClick}
-			disabled={busy}
-			title={`${verb} ${count} commit${count === 1 ? "" : "s"}`}
-			className="-mx-0.5 inline-flex items-center gap-0.5 rounded px-0.5 tabular-nums transition hover:bg-muted hover:text-foreground"
-		>
-			{inner}
-		</button>
+		<Tooltip>
+			<TooltipTrigger asChild>
+				<button
+					type="button"
+					onClick={onClick}
+					disabled={busy}
+					className="-mx-0.5 inline-flex items-center gap-0.5 rounded px-0.5 tabular-nums transition hover:bg-muted hover:text-foreground"
+				>
+					{inner}
+				</button>
+			</TooltipTrigger>
+			<TooltipContent>
+				{verb} {count} commit{count === 1 ? "" : "s"}{" "}
+				{dir === "ahead" ? "to" : "from"} the remote
+			</TooltipContent>
+		</Tooltip>
 	);
 }
 
@@ -189,21 +201,25 @@ function PrChip({
 				? "text-red-500"
 				: "text-emerald-500";
 	return (
-		<button
-			type="button"
-			onClick={() => url && void openUrl(url)}
-			title={url ?? `PR #${number}`}
-			className="inline-flex items-center gap-1 rounded-lg bg-muted/60 px-2 py-0.5 text-xs text-muted-foreground transition hover:bg-muted hover:text-foreground"
-		>
-			<GitPullRequest className={cn("size-3", tone)} />
-			<span className="font-medium">#{number}</span>
-			{state ? (
-				<span className="text-[10px] text-muted-foreground/70">
-					{state.toLowerCase()}
-				</span>
-			) : null}
-			<CheckGlyph status={checkStatus} />
-		</button>
+		<Tooltip>
+			<TooltipTrigger asChild>
+				<button
+					type="button"
+					onClick={() => url && void openUrl(url)}
+					className="inline-flex items-center gap-1 rounded-lg bg-muted/60 px-2 py-0.5 text-xs text-muted-foreground transition hover:bg-muted hover:text-foreground"
+				>
+					<GitPullRequest className={cn("size-3", tone)} />
+					<span className="font-medium">#{number}</span>
+					{state ? (
+						<span className="text-[10px] text-muted-foreground/70">
+							{state.toLowerCase()}
+						</span>
+					) : null}
+					<CheckGlyph status={checkStatus} />
+				</button>
+			</TooltipTrigger>
+			<TooltipContent>View pull request #{number}</TooltipContent>
+		</Tooltip>
 	);
 }
 
@@ -234,21 +250,25 @@ function SyncButton({
 		refresh();
 	};
 	return (
-		<Button
-			variant="ghost"
-			size="xs"
-			onClick={() => void run()}
-			disabled={busy}
-			title="Rebase onto the latest base branch"
-			className="gap-1 text-muted-foreground hover:text-foreground"
-		>
-			{busy ? (
-				<Loader2 className="size-3.5 animate-spin" />
-			) : (
-				<ArrowDown className="size-3.5" />
-			)}
-			Sync {behind}
-		</Button>
+		<Tooltip>
+			<TooltipTrigger asChild>
+				<Button
+					variant="ghost"
+					size="xs"
+					onClick={() => void run()}
+					disabled={busy}
+					className="gap-1 text-muted-foreground hover:text-foreground"
+				>
+					{busy ? (
+						<Loader2 className="size-3.5 animate-spin" />
+					) : (
+						<ArrowDown className="size-3.5" />
+					)}
+					Sync {behind}
+				</Button>
+			</TooltipTrigger>
+			<TooltipContent>Rebase onto the latest base branch</TooltipContent>
+		</Tooltip>
 	);
 }
 
@@ -290,16 +310,21 @@ function AddRootControl({
 
 	return (
 		<DropdownMenu modal={false}>
-			<DropdownMenuTrigger asChild>
-				<Button
-					variant="ghost"
-					size="icon-xs"
-					title="Add a repository to this session"
-					className="text-muted-foreground hover:text-foreground"
-				>
-					<Plus />
-				</Button>
-			</DropdownMenuTrigger>
+			<Tooltip>
+				<TooltipTrigger asChild>
+					<DropdownMenuTrigger asChild>
+						<Button
+							variant="ghost"
+							size="icon-xs"
+							aria-label="Add a repository to this session"
+							className="text-muted-foreground hover:text-foreground"
+						>
+							<Plus />
+						</Button>
+					</DropdownMenuTrigger>
+				</TooltipTrigger>
+				<TooltipContent>Add a repository</TooltipContent>
+			</Tooltip>
 			<DropdownMenuContent align="start" className="w-56">
 				<DropdownMenuLabel>Add a root</DropdownMenuLabel>
 				{available.map((project) => (
