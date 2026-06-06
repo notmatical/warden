@@ -13,10 +13,13 @@ import { cn } from "@/lib/utils";
 export function PlanApproval({
 	plan,
 	answered,
+	autoAccepted,
 	onApprove,
 }: {
 	plan: string;
 	answered: boolean;
+	/** A workflow node's plan — auto-accepted and handed to the next node. */
+	autoAccepted?: boolean;
 	onApprove: () => void;
 }) {
 	const [dismissed, setDismissed] = useState(false);
@@ -42,6 +45,11 @@ export function PlanApproval({
 				<span className="text-[13px] font-semibold text-foreground">
 					{readOnly ? "Plan" : "Plan ready for review"}
 				</span>
+				{autoAccepted ? (
+					<span className="text-[11px] text-muted-foreground">
+						· auto-accepted, handed to the next node
+					</span>
+				) : null}
 			</div>
 
 			<div className="max-h-80 min-w-0 overflow-auto rounded-lg border border-border/60 bg-muted/20 px-4 py-3">

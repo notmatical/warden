@@ -345,9 +345,10 @@ impl Store {
         Ok(())
     }
 
-    /// Concatenate a session's assistant text across its turns — used to hand one
-    /// workflow node's output to the next. Skips transient deltas and tool
-    /// chatter; joins `AssistantText` blocks in order.
+    /// Concatenate a session's output across its turns — used to hand one
+    /// workflow node's result to the next. Joins `AssistantText` blocks, plus the
+    /// plan from an `ExitPlanMode` call (a plan node delivers its plan there, not
+    /// as assistant text), in order. Skips transient deltas and tool chatter.
     pub fn get_session_assistant_text(&self, session_id: &str) -> Result<String> {
         let conn = self.lock();
         let mut stmt =
@@ -355,14 +356,22 @@ impl Store {
         let rows = stmt.query_map([session_id], |row| row.get::<_, String>("payload"))?;
         let mut out = String::new();
         for payload in rows {
-            if let Ok(AgentEvent::AssistantText { text, .. }) =
-                serde_json::from_str::<AgentEvent>(&payload?)
-            {
-                if !out.is_empty() {
-                    out.push_str("\n\n");
-                }
-                out.push_str(&text);
+            let text = match serde_json::from_str::<AgentEvent>(&payload?) {
+                Ok(AgentEvent::AssistantText { text, .. }) => text,
+                Ok(AgentEvent::ToolUse { name, input, .. }) if name == "ExitPlanMode" => input
+                    .get("plan")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default()
+                    .to_string(),
+                _ => continue,
+            };
+            if text.trim().is_empty() {
+                continue;
             }
+            if !out.is_empty() {
+                out.push_str("\n\n");
+            }
+            out.push_str(&text);
         }
         Ok(out)
     }

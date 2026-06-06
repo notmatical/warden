@@ -169,10 +169,12 @@ function PlanBlock({
 	event,
 	sessionId,
 	answered,
+	autoAccepted,
 }: {
 	event: EventRecord;
 	sessionId: string;
 	answered: boolean;
+	autoAccepted?: boolean;
 }) {
 	const approvePlan = useAppStore((s) => s.approvePlan);
 	if (event.type !== "tool_use") return null;
@@ -180,6 +182,7 @@ function PlanBlock({
 		<PlanApproval
 			plan={resolvePlanContent(event.input)}
 			answered={answered}
+			autoAccepted={autoAccepted}
 			onApprove={() => void approvePlan(sessionId)}
 		/>
 	);
@@ -202,7 +205,11 @@ function repliedAfter(events: EventRecord[], i: number): boolean {
  *    the agent tends to restate the question with afterwards is hidden until the
  *    user replies;
  *  - everything else renders standalone. */
-function renderTimeline(events: EventRecord[], sessionId: string): ReactNode[] {
+function renderTimeline(
+	events: EventRecord[],
+	sessionId: string,
+	autoAcceptPlan: boolean,
+): ReactNode[] {
 	const nodes: ReactNode[] = [];
 	const droppedResults = new Set<string>();
 	let toolRun: EventRecord[] = [];
@@ -253,15 +260,19 @@ function renderTimeline(events: EventRecord[], sessionId: string): ReactNode[] {
 			}
 			if (event.name === "ExitPlanMode") {
 				// The plan lives in the call's input; drop its auto-denied result.
+				// In a workflow the plan is auto-accepted (handed to the next node),
+				// so never show approval controls — they'd wrongly resume this node.
 				flushTools();
 				droppedResults.add(event.id);
-				pendingPlan = !repliedAfter(events, i);
+				const planAnswered = autoAcceptPlan || repliedAfter(events, i);
+				pendingPlan = !planAnswered;
 				nodes.push(
 					<PlanBlock
 						key={`plan-${event.id}`}
 						event={event}
 						sessionId={sessionId}
-						answered={repliedAfter(events, i)}
+						answered={planAnswered}
+						autoAccepted={autoAcceptPlan}
 					/>,
 				);
 				return;
@@ -291,12 +302,16 @@ export function Transcript({
 	const events = useAppStore((s) => s.eventsBySession[sessionId]);
 	const streaming = useAppStore((s) => s.streamingBySession[sessionId]);
 	const loading = useAppStore((s) => s.loadingEventsBySession[sessionId]);
+	// Workflow node sessions auto-accept their plan (handed to the next node).
+	const isWorkflowSession = useAppStore(
+		(s) => s.sessions[sessionId]?.workflowId != null,
+	);
 
 	// Memoized so streaming deltas (which only touch `streaming`) don't re-walk
 	// the whole event log every tick.
 	const timeline = useMemo(
-		() => (events ? renderTimeline(events, sessionId) : null),
-		[events, sessionId],
+		() => (events ? renderTimeline(events, sessionId, isWorkflowSession) : null),
+		[events, sessionId, isWorkflowSession],
 	);
 
 	// An AskUserQuestion is awaiting a reply: the agent sometimes keeps narrating
