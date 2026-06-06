@@ -116,7 +116,7 @@ async fn run_steps(ctx: &RunContext) -> Result<Outcome> {
 
         let cfg = match &node.kind {
             NodeKind::Start => continue,
-            NodeKind::Gate(_) => {
+            NodeKind::Gate => {
                 // Pause the run for human approval; resume re-enters here.
                 ctx.store
                     .set_workflow_run_status(&ctx.run_id, RunStatus::Paused, None)?;

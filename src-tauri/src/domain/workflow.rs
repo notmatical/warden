@@ -54,8 +54,9 @@ pub enum NodeKind {
     Start,
     /// Run an agent task — its `intent` defines what it does.
     AgentTask(AgentTaskConfig),
-    /// Pause the run for human approval.
-    Gate(GateConfig),
+    /// Pause the run for the user's sign-off. No config — a gate is just a
+    /// human checkpoint between agent steps; you click Approve or Reject.
+    Gate,
 }
 
 /// What an agent node does. The intent carries a built-in instruction and the
@@ -177,14 +178,6 @@ impl AgentTaskConfig {
             _ => format!("{base}\n\nAdditional instructions from the user:\n{extra}"),
         }
     }
-}
-
-/// A human-approval gate.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GateConfig {
-    #[serde(default)]
-    pub prompt: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

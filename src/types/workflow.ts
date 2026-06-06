@@ -15,15 +15,12 @@ export interface AgentTaskConfig {
   permissionMode?: PermissionMode | null
 }
 
-export interface GateConfig {
-  prompt?: string | null
-}
-
-/** A node's behavior, internally tagged by `type` to match serde. */
+/** A node's behavior, internally tagged by `type` to match serde. Gate carries
+ *  no config — it's a pure user sign-off checkpoint between agent steps. */
 export type NodeKind =
   | { type: "start" }
   | ({ type: "agentTask" } & AgentTaskConfig)
-  | ({ type: "gate" } & GateConfig)
+  | { type: "gate" }
 
 export interface WorkflowNode {
   id: string
