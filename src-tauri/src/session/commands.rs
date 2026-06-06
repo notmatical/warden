@@ -4,8 +4,8 @@
 use tauri::{AppHandle, State};
 
 use crate::domain::{
-    Backend, ContextSource, EffortLevel, EventRecord, PermissionMode, Session, SessionContextSource,
-    SessionKind, SessionRole,
+    Backend, ContextSource, EffortLevel, EventRecord, PermissionMode, Session,
+    SessionContextSource, SessionKind, SessionRole,
 };
 use crate::error::{AppError, Result};
 use crate::events::emit_session;
@@ -37,6 +37,7 @@ pub async fn get_events(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn create_session(
     app: AppHandle,
     state: State<'_, AppState>,

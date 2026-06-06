@@ -24,6 +24,7 @@ pub struct PlanToCodeResult {
 
 /// Build a `NewSession` that shares a provisioned worktree, varying only the
 /// per-role fields. Each session still owns a distinct agent conversation id.
+#[allow(clippy::too_many_arguments)]
 fn session_in_dir(
     group_id: &str,
     project_id: &str,
