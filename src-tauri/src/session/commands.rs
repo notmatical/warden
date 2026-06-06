@@ -1,13 +1,15 @@
 //! Session commands: creation, transcript reads, the message/cancel controls
 //! that drive agent turns, and live updates to a session's agent settings.
 
+use serde::Deserialize;
+use specta::Type;
 use tauri::{AppHandle, State};
 
 use crate::domain::{
     Backend, ContextSource, EffortLevel, EventRecord, PermissionMode, Session,
     SessionContextSource, SessionKind, SessionRole,
 };
-use crate::error::{AppError, Result};
+use crate::error::{AppError, CommandResult};
 use crate::events::emit_session;
 use crate::git::{self, provision_working_dir};
 use crate::state::AppState;
@@ -29,58 +31,72 @@ fn backend_for_model(model: &str) -> Backend {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn get_events(
     state: State<'_, AppState>,
     session_id: String,
-) -> Result<Vec<EventRecord>> {
-    state.store.list_events(&session_id)
+) -> CommandResult<Vec<EventRecord>> {
+    state.store.list_events(&session_id).map_err(Into::into)
+}
+
+/// Optional fields for `create_session`. Grouped into a struct so the command
+/// stays within specta's 10-parameter limit while remaining fully expressive.
+#[derive(Debug, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateSessionOptions {
+    pub group_id: Option<String>,
+    pub permission_mode: Option<String>,
+    pub effort: Option<String>,
+    pub role: Option<String>,
+    pub kind: Option<String>,
+    pub backend: Option<String>,
+    pub isolate: Option<bool>,
+    pub native_command: Option<String>,
 }
 
 #[tauri::command]
-#[allow(clippy::too_many_arguments)]
+#[specta::specta]
 pub async fn create_session(
     app: AppHandle,
     state: State<'_, AppState>,
     project_id: String,
     title: String,
     model: String,
-    group_id: Option<String>,
-    permission_mode: Option<String>,
-    effort: Option<String>,
-    role: Option<String>,
-    kind: Option<String>,
-    backend: Option<String>,
-    isolate: Option<bool>,
-    native_command: Option<String>,
-) -> Result<Session> {
+    options: CreateSessionOptions,
+) -> CommandResult<Session> {
     let project = state.store.get_project(&project_id)?;
-    let group_id = match group_id {
+    let group_id = match options.group_id {
         Some(id) => id,
         None => state
             .store
             .ensure_group_for_project(&project_id, &project.name)?,
     };
-    let dir = provision_working_dir(&app, &project, isolate.unwrap_or(false), None)?;
+    let dir = provision_working_dir(&app, &project, options.isolate.unwrap_or(false), None)?;
 
-    let permission_mode = permission_mode
+    let permission_mode = options
+        .permission_mode
         .as_deref()
         .and_then(PermissionMode::parse)
         .unwrap_or(PermissionMode::BypassPermissions);
-    let effort = effort
+    let effort = options
+        .effort
         .as_deref()
         .and_then(EffortLevel::parse)
         .unwrap_or(DEFAULT_EFFORT);
-    let role = role
+    let role = options
+        .role
         .as_deref()
         .and_then(SessionRole::parse)
         .unwrap_or(SessionRole::Chat);
-    let kind = kind
+    let kind = options
+        .kind
         .as_deref()
         .and_then(SessionKind::parse)
         .unwrap_or(SessionKind::Agent);
     // An explicit backend wins; otherwise it follows from the model id, since
     // the model picks its own backend (codex/gpt ids run on Codex).
-    let backend = backend
+    let backend = options
+        .backend
         .as_deref()
         .and_then(Backend::parse)
         .unwrap_or_else(|| backend_for_model(&model));
@@ -97,7 +113,7 @@ pub async fn create_session(
         role,
         auto_named: true,
         agent_session_id: uuid(),
-        terminal_command: native_command,
+        terminal_command: options.native_command,
         working_dir: dir.working_dir,
         branch: dir.branch,
         base_sha: dir.base_sha,
@@ -114,6 +130,7 @@ pub async fn create_session(
 /// Change a session's model, permission mode, and/or effort. Each field is
 /// optional; omitted fields keep their current value. Applies to the next turn.
 #[tauri::command]
+#[specta::specta]
 pub async fn update_session(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -121,7 +138,7 @@ pub async fn update_session(
     model: Option<String>,
     permission_mode: Option<String>,
     effort: Option<String>,
-) -> Result<Session> {
+) -> CommandResult<Session> {
     let session = state.store.get_session(&session_id)?;
 
     let model = model.unwrap_or(session.model);
@@ -146,12 +163,13 @@ pub async fn update_session(
 
 /// Rename a session (its tab title).
 #[tauri::command]
+#[specta::specta]
 pub async fn rename_session(
     app: AppHandle,
     state: State<'_, AppState>,
     session_id: String,
     title: String,
-) -> Result<Session> {
+) -> CommandResult<Session> {
     state.store.rename_session(&session_id, title.trim())?;
     let updated = state.store.get_session(&session_id)?;
     emit_session(&app, &updated);
@@ -161,11 +179,12 @@ pub async fn rename_session(
 /// Permanently delete a session: stop any running turn, tear down its isolated
 /// worktree (best-effort), and remove its rows (events cascade).
 #[tauri::command]
+#[specta::specta]
 pub async fn delete_session(
     app: AppHandle,
     state: State<'_, AppState>,
     session_id: String,
-) -> Result<()> {
+) -> CommandResult<()> {
     let session = state.store.get_session(&session_id)?;
     state.manager.cancel(&app, &state.store, &session_id);
 
@@ -186,17 +205,18 @@ pub async fn delete_session(
 /// Toggle a session's git-worktree isolation. Only allowed before the first
 /// turn — afterward the agent's conversation is tied to its working directory.
 #[tauri::command]
+#[specta::specta]
 pub async fn set_session_isolation(
     app: AppHandle,
     state: State<'_, AppState>,
     session_id: String,
     isolate: bool,
-) -> Result<Session> {
+) -> CommandResult<Session> {
     let session = state.store.get_session(&session_id)?;
     if session.turns != 0 {
         return Err(AppError::Invalid(
             "isolation can only change before the session's first turn".to_string(),
-        ));
+        ).into());
     }
     if session.is_isolated == isolate {
         return Ok(session);
@@ -229,13 +249,14 @@ pub async fn set_session_isolation(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn send_message(
     app: AppHandle,
     state: State<'_, AppState>,
     session_id: String,
     text: String,
     attachments: Option<Vec<String>>,
-) -> Result<()> {
+) -> CommandResult<()> {
     let session = state.store.get_session(&session_id)?;
 
     // A brand-new chat session gets a clean title generated from its first
@@ -289,40 +310,44 @@ pub async fn send_message(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn cancel_session(
     app: AppHandle,
     state: State<'_, AppState>,
     session_id: String,
-) -> Result<()> {
+) -> CommandResult<()> {
     state.manager.cancel(&app, &state.store, &session_id);
     Ok(())
 }
 
 /// Approve denied tool patterns for a session and resume the turn.
 #[tauri::command]
+#[specta::specta]
 pub async fn approve_tools(
     app: AppHandle,
     state: State<'_, AppState>,
     session_id: String,
     patterns: Vec<String>,
-) -> Result<()> {
+) -> CommandResult<()> {
     state.store.add_allowed_tools(&session_id, &patterns)?;
     let session = state.store.get_session(&session_id)?;
     state
         .manager
         .resume(app, state.store.clone(), session)
         .await
+        .map_err(Into::into)
 }
 
 /// Approve the agent's plan: leave `plan` mode for `acceptEdits` and resume so
 /// the agent implements it. The persistent process is killed inside
 /// `resume_with`, so it respawns with the new permission mode.
 #[tauri::command]
+#[specta::specta]
 pub async fn approve_plan(
     app: AppHandle,
     state: State<'_, AppState>,
     session_id: String,
-) -> Result<()> {
+) -> CommandResult<()> {
     let session = state.store.get_session(&session_id)?;
     state.store.update_session_settings(
         &session_id,
@@ -342,40 +367,45 @@ pub async fn approve_plan(
             "The plan is approved. Please implement it now.".to_string(),
         )
         .await
+        .map_err(Into::into)
 }
 
 /// Stage files dropped on the composer: copy any outside the working dir into
 /// the session's attachments dir, returning records to reference on send.
 #[tauri::command]
+#[specta::specta]
 pub async fn attach_to_session(
     app: AppHandle,
     state: State<'_, AppState>,
     session_id: String,
     paths: Vec<String>,
-) -> Result<Vec<crate::agent::attachments::Attachment>> {
+) -> CommandResult<Vec<crate::agent::attachments::Attachment>> {
     let session = state.store.get_session(&session_id)?;
     crate::agent::attachments::stage(&app, &session_id, &session.working_dir, &paths)
+        .map_err(Into::into)
 }
 
 // ----- context sources -------------------------------------------------------
 
 /// List a session's context sources (files, dirs, saved text), in order.
 #[tauri::command]
+#[specta::specta]
 pub async fn list_context_sources(
     state: State<'_, AppState>,
     session_id: String,
-) -> Result<Vec<SessionContextSource>> {
-    state.store.list_context_sources(&session_id)
+) -> CommandResult<Vec<SessionContextSource>> {
+    state.store.list_context_sources(&session_id).map_err(Into::into)
 }
 
 /// Append a context source to a session and drop its warm process so the next
 /// turn picks up the new context.
 #[tauri::command]
+#[specta::specta]
 pub async fn add_context_source(
     state: State<'_, AppState>,
     session_id: String,
     source: ContextSource,
-) -> Result<SessionContextSource> {
+) -> CommandResult<SessionContextSource> {
     let record = state.store.add_context_source(&session_id, &source)?;
     crate::agent::refresh_session(&session_id);
     Ok(record)
@@ -383,11 +413,12 @@ pub async fn add_context_source(
 
 /// Remove a context source from a session.
 #[tauri::command]
+#[specta::specta]
 pub async fn remove_context_source(
     state: State<'_, AppState>,
     session_id: String,
     id: String,
-) -> Result<()> {
+) -> CommandResult<()> {
     state.store.remove_context_source(&id)?;
     crate::agent::refresh_session(&session_id);
     Ok(())
@@ -395,12 +426,13 @@ pub async fn remove_context_source(
 
 /// Enable or disable a context source without removing it.
 #[tauri::command]
+#[specta::specta]
 pub async fn set_context_source_enabled(
     state: State<'_, AppState>,
     session_id: String,
     id: String,
     enabled: bool,
-) -> Result<()> {
+) -> CommandResult<()> {
     state.store.set_context_source_enabled(&id, enabled)?;
     crate::agent::refresh_session(&session_id);
     Ok(())

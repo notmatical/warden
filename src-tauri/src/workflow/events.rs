@@ -3,13 +3,14 @@
 //! existing `session-updated`/`agent-event` channels.
 
 use serde::Serialize;
+use specta::Type;
 use tauri::{AppHandle, Emitter};
 
 use crate::domain::{WorkflowNodeRun, WorkflowRun};
 
 pub const EVENT_WORKFLOW_RUN: &str = "workflow-run-updated";
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkflowRunView {
     pub run: WorkflowRun,

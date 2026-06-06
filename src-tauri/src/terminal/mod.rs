@@ -5,9 +5,10 @@ mod pty;
 mod registry;
 
 use serde::Serialize;
+use specta::Type;
 
 /// Streamed from a terminal's PTY to the frontend over a Tauri channel.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Type)]
 #[serde(tag = "event", rename_all = "snake_case")]
 pub enum TerminalEvent {
     Output { data: String },

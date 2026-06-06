@@ -3,60 +3,67 @@
 use tauri::{AppHandle, State};
 
 use crate::domain::{NodeRunStatus, RunStatus, Workflow, WorkflowGraph, WorkflowNodeRun};
-use crate::error::Result;
+use crate::error::CommandResult;
 use crate::state::AppState;
 
 use super::events::WorkflowRunView;
 use super::executor::{self, RunContext};
 
 #[tauri::command]
+#[specta::specta]
 pub async fn create_workflow(
     state: State<'_, AppState>,
     project_id: String,
     name: String,
     graph: WorkflowGraph,
-) -> Result<Workflow> {
-    state.store.create_workflow(&project_id, &name, &graph)
+) -> CommandResult<Workflow> {
+    state.store.create_workflow(&project_id, &name, &graph).map_err(Into::into)
 }
 
 #[tauri::command]
-pub async fn get_workflow(state: State<'_, AppState>, id: String) -> Result<Workflow> {
-    state.store.get_workflow(&id)
+#[specta::specta]
+pub async fn get_workflow(state: State<'_, AppState>, id: String) -> CommandResult<Workflow> {
+    state.store.get_workflow(&id).map_err(Into::into)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn list_workflows(
     state: State<'_, AppState>,
     project_id: String,
-) -> Result<Vec<Workflow>> {
-    state.store.list_workflows(&project_id)
+) -> CommandResult<Vec<Workflow>> {
+    state.store.list_workflows(&project_id).map_err(Into::into)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn update_workflow(
     state: State<'_, AppState>,
     id: String,
     name: Option<String>,
     graph: Option<WorkflowGraph>,
-) -> Result<Workflow> {
+) -> CommandResult<Workflow> {
     state
         .store
         .update_workflow(&id, name.as_deref(), graph.as_ref())
+        .map_err(Into::into)
 }
 
 #[tauri::command]
-pub async fn delete_workflow(state: State<'_, AppState>, id: String) -> Result<()> {
-    state.store.delete_workflow(&id)
+#[specta::specta]
+pub async fn delete_workflow(state: State<'_, AppState>, id: String) -> CommandResult<()> {
+    state.store.delete_workflow(&id).map_err(Into::into)
 }
 
 /// Snapshot the workflow's graph, seed its node runs, and spawn the executor.
 #[tauri::command]
+#[specta::specta]
 pub async fn run_workflow(
     app: AppHandle,
     state: State<'_, AppState>,
     workflow_id: String,
     group_id: Option<String>,
-) -> Result<WorkflowRunView> {
+) -> CommandResult<WorkflowRunView> {
     let wf = state.store.get_workflow(&workflow_id)?;
     let project = state.store.get_project(&wf.project_id)?;
     let group_id = match group_id {
@@ -121,18 +128,20 @@ pub async fn run_workflow(
 
 /// The sessions a workflow's runs have spawned (for the sidebar).
 #[tauri::command]
+#[specta::specta]
 pub async fn list_workflow_sessions(
     state: State<'_, AppState>,
     workflow_id: String,
-) -> Result<Vec<crate::domain::Session>> {
-    state.store.list_workflow_sessions(&workflow_id)
+) -> CommandResult<Vec<crate::domain::Session>> {
+    state.store.list_workflow_sessions(&workflow_id).map_err(Into::into)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn get_workflow_run(
     state: State<'_, AppState>,
     run_id: String,
-) -> Result<WorkflowRunView> {
+) -> CommandResult<WorkflowRunView> {
     let run = state.store.get_workflow_run(&run_id)?;
     let nodes = state.store.list_node_runs(&run_id)?;
     Ok(WorkflowRunView { run, nodes })
@@ -141,12 +150,13 @@ pub async fn get_workflow_run(
 /// Resume a run paused at a gate: approve to continue past it, or reject to
 /// cancel the run.
 #[tauri::command]
+#[specta::specta]
 pub async fn resume_workflow(
     app: AppHandle,
     state: State<'_, AppState>,
     run_id: String,
     approve: bool,
-) -> Result<WorkflowRunView> {
+) -> CommandResult<WorkflowRunView> {
     let nodes = state.store.list_node_runs(&run_id)?;
     let Some(paused) = nodes.iter().find(|n| n.status == NodeRunStatus::Paused) else {
         let run = state.store.get_workflow_run(&run_id)?;
@@ -201,10 +211,11 @@ pub async fn resume_workflow(
 
 /// The workflow's most recent run (node statuses + sessions), or `None`.
 #[tauri::command]
+#[specta::specta]
 pub async fn get_latest_workflow_run(
     state: State<'_, AppState>,
     workflow_id: String,
-) -> Result<Option<WorkflowRunView>> {
+) -> CommandResult<Option<WorkflowRunView>> {
     match state.store.latest_workflow_run(&workflow_id)? {
         Some(run) => {
             let nodes = state.store.list_node_runs(&run.id)?;

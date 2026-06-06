@@ -5,7 +5,7 @@ use tauri::State;
 
 use crate::cli::{self, Tool};
 use crate::domain::{Backend, Session};
-use crate::error::Result;
+use crate::error::{CommandResult, Result};
 use crate::providers::codex::history as codex_history;
 use crate::state::AppState;
 use crate::store::Store;
@@ -66,6 +66,7 @@ fn codex_resume_id(store: &Store, session: &Session) -> Result<Option<String>> {
 /// from the persisted session, so a native CLI session relaunches (and resumes)
 /// its provider across app restarts instead of falling back to a bare shell.
 #[tauri::command]
+#[specta::specta]
 pub async fn start_terminal(
     on_output: Channel<TerminalEvent>,
     state: State<'_, AppState>,
@@ -73,7 +74,7 @@ pub async fn start_terminal(
     working_dir: String,
     cols: u16,
     rows: u16,
-) -> Result<()> {
+) -> CommandResult<()> {
     let session = state.store.get_session(&terminal_id).ok();
     let (command, args) = match session.as_ref() {
         Some(session) => launch_recipe(&state.store, session)?,
@@ -100,17 +101,20 @@ pub async fn start_terminal(
 }
 
 #[tauri::command]
-pub async fn terminal_write(terminal_id: String, data: String) -> Result<()> {
-    terminal::write(&terminal_id, &data)
+#[specta::specta]
+pub async fn terminal_write(terminal_id: String, data: String) -> CommandResult<()> {
+    terminal::write(&terminal_id, &data).map_err(Into::into)
 }
 
 #[tauri::command]
-pub async fn terminal_resize(terminal_id: String, cols: u16, rows: u16) -> Result<()> {
-    terminal::resize(&terminal_id, cols, rows)
+#[specta::specta]
+pub async fn terminal_resize(terminal_id: String, cols: u16, rows: u16) -> CommandResult<()> {
+    terminal::resize(&terminal_id, cols, rows).map_err(Into::into)
 }
 
 #[tauri::command]
-pub async fn stop_terminal(terminal_id: String) -> Result<()> {
+#[specta::specta]
+pub async fn stop_terminal(terminal_id: String) -> CommandResult<()> {
     terminal::kill(&terminal_id);
     Ok(())
 }

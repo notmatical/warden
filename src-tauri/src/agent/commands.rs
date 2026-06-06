@@ -3,10 +3,11 @@
 use tauri::{AppHandle, State};
 
 use crate::agent::recipes::{self, PlanToCodeResult};
-use crate::error::Result;
+use crate::error::CommandResult;
 use crate::state::AppState;
 
 #[tauri::command]
+#[specta::specta]
 pub async fn run_plan_to_code(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -14,7 +15,7 @@ pub async fn run_plan_to_code(
     task: String,
     planner_model: String,
     coder_model: String,
-) -> Result<PlanToCodeResult> {
+) -> CommandResult<PlanToCodeResult> {
     let store = state.store.clone();
     let manager = state.manager;
     recipes::run_plan_to_code(
@@ -27,4 +28,5 @@ pub async fn run_plan_to_code(
         coder_model,
     )
     .await
+    .map_err(Into::into)
 }

@@ -2,6 +2,7 @@
 //! implementation plan and a coder session executes it in the same worktree.
 
 use serde::{Deserialize, Serialize};
+use specta::Type;
 use tauri::AppHandle;
 
 use crate::agent::AgentManager;
@@ -15,7 +16,7 @@ use crate::store::{NewSession, Store};
 use crate::util::uuid;
 
 /// The pair of sessions a plan → code handoff produces.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PlanToCodeResult {
     pub planner: Session,
