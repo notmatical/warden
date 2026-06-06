@@ -210,15 +210,9 @@ export function Composer({ sessionId }: { sessionId: string }) {
 						refresh={refresh}
 					/>
 				)}
-				<AttachmentRow
-					items={attachments}
-					onRemove={(id) =>
-						setAttachments((prev) => prev.filter((a) => a.id !== id))
-					}
-				/>
-				{/* Input card — single, solid surface, on top. Send/stop lives inline
-            on the right as a ghost icon. */}
-				<div className="relative z-10 flex items-end gap-1 rounded-xl border border-border/60 bg-card pr-1.5 transition-colors focus-within:border-border/80">
+				{/* Input card — solid surface. Attachments stack inside, above the
+            textarea; send/stop lives inline on the right. */}
+				<div className="relative z-10 flex flex-col rounded-xl border border-border/60 bg-card transition-colors focus-within:border-border/80">
 					{mentions.active && (
 						<MentionPopover
 							items={mentions.items}
@@ -230,73 +224,82 @@ export function Composer({ sessionId }: { sessionId: string }) {
 							className="absolute bottom-full left-0 z-20 mb-2 w-full max-w-md"
 						/>
 					)}
-					{/* Highlight backdrop + transparent textarea: mention tokens are
-              colored on the backdrop and show through the textarea. */}
-					<div className="relative min-w-0 flex-1">
-						<div
-							ref={backdropRef}
-							aria-hidden
-							className={cn(
-								"pointer-events-none absolute inset-0 overflow-hidden text-foreground",
-								INPUT_BOX,
-							)}
-						>
-							<MentionHighlight value={value} />
-						</div>
-						<textarea
-							ref={textareaRef}
-							value={value}
-							onChange={(e) => {
-								setValue(e.target.value);
-								mentions.handleInput(
-									e.target.value,
-									e.target.selectionStart ?? 0,
-								);
-							}}
-							onKeyDown={(e) => {
-								if (mentions.handleKeyDown(e)) return;
-								handleKeyDown(e);
-							}}
-							onScroll={(e) => {
-								if (backdropRef.current) {
-									backdropRef.current.scrollTop = e.currentTarget.scrollTop;
+					<AttachmentRow
+						items={attachments}
+						onRemove={(id) =>
+							setAttachments((prev) => prev.filter((a) => a.id !== id))
+						}
+					/>
+					{/* Textarea + send/stop, laid out as a row. */}
+					<div className="flex items-end gap-1 pr-1.5">
+						{/* Highlight backdrop + transparent textarea: mention tokens are
+						    colored on the backdrop and show through the textarea. */}
+						<div className="relative min-w-0 flex-1">
+							<div
+								ref={backdropRef}
+								aria-hidden
+								className={cn(
+									"pointer-events-none absolute inset-0 overflow-hidden text-foreground",
+									INPUT_BOX,
+								)}
+							>
+								<MentionHighlight value={value} />
+							</div>
+							<textarea
+								ref={textareaRef}
+								value={value}
+								onChange={(e) => {
+									setValue(e.target.value);
+									mentions.handleInput(
+										e.target.value,
+										e.target.selectionStart ?? 0,
+									);
+								}}
+								onKeyDown={(e) => {
+									if (mentions.handleKeyDown(e)) return;
+									handleKeyDown(e);
+								}}
+								onScroll={(e) => {
+									if (backdropRef.current) {
+										backdropRef.current.scrollTop = e.currentTarget.scrollTop;
+									}
+								}}
+								disabled={running}
+								rows={1}
+								placeholder={
+									running
+										? "Agent is working…"
+										: "Message the agent…  (Enter to send)"
 								}
-							}}
-							disabled={running}
-							rows={1}
-							placeholder={
-								running
-									? "Agent is working…"
-									: "Message the agent…  (Enter to send)"
-							}
-							className={cn(
-								"relative block max-h-[200px] w-full resize-none bg-transparent text-transparent caret-foreground outline-none placeholder:text-muted-foreground/60 disabled:opacity-60",
-								INPUT_BOX,
-							)}
-						/>
+								className={cn(
+									"relative block max-h-[200px] w-full resize-none bg-transparent text-transparent caret-foreground outline-none placeholder:text-muted-foreground/60 disabled:opacity-60",
+									INPUT_BOX,
+								)}
+							/>
+						</div>
+						{running ? (
+							<Button
+								size="icon-sm"
+								variant="ghost"
+								onClick={() => void cancel(sessionId)}
+								aria-label="Stop the agent"
+								className="mb-1.5 shrink-0 text-muted-foreground hover:text-foreground"
+							>
+								<Square />
+							</Button>
+						) : (
+							<Button
+								size="icon-sm"
+								variant="ghost"
+								onClick={submit}
+								disabled={!canSend}
+								aria-label="Send message"
+								className="mb-1.5 shrink-0 text-muted-foreground hover:text-foreground"
+							>
+								<CornerDownLeft />
+							</Button>
+						)}
 					</div>
-					{running ? (
-						<Button
-							size="icon-sm"
-							variant="ghost"
-							onClick={() => void cancel(sessionId)}
-							aria-label="Stop the agent"
-							className="mb-1.5 shrink-0 text-muted-foreground hover:text-foreground"
-						>
-							<Square />
-						</Button>
-					) : (
-						<Button
-							size="icon-sm"
-							variant="ghost"
-							onClick={submit}
-							disabled={!canSend}
-							aria-label="Send message"
-							className="mb-1.5 shrink-0 text-muted-foreground hover:text-foreground"
-						>
-							<CornerDownLeft />
-						</Button>
-					)}
 				</div>
 
 				{/* Attached settings panel — tucked behind the card, tinted. */}
