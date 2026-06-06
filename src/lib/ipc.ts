@@ -2,6 +2,7 @@ import { Channel, invoke } from "@tauri-apps/api/core"
 
 import type { DiffFile, GitCommit } from "@/types/git-diff"
 import type {
+  Attachment,
   Backend,
   ContextSource,
   EffortLevel,
@@ -367,8 +368,24 @@ export function openIn(target: OpenTarget, path: string): Promise<void> {
   return invoke("open_in", { target, path })
 }
 
-export function sendMessage(sessionId: string, text: string): Promise<void> {
-  return invoke("send_message", { sessionId, text })
+export function sendMessage(
+  sessionId: string,
+  text: string,
+  attachments?: string[]
+): Promise<void> {
+  return invoke("send_message", {
+    sessionId,
+    text,
+    attachments: attachments ?? null,
+  })
+}
+
+/** Stage files dropped on the composer; returns records to reference on send. */
+export function attachToSession(
+  sessionId: string,
+  paths: string[]
+): Promise<Attachment[]> {
+  return invoke("attach_to_session", { sessionId, paths })
 }
 
 export function cancelSession(sessionId: string): Promise<void> {

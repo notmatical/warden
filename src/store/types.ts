@@ -159,7 +159,11 @@ export interface AppState {
 	selectSession: (id: string) => void;
 	closeTab: (id: string) => void;
 	closeOthers: (id: string) => void;
-	sendMessage: (sessionId: string, text: string) => Promise<void>;
+	sendMessage: (
+		sessionId: string,
+		text: string,
+		attachments?: string[],
+	) => Promise<void>;
 	cancel: (sessionId: string) => Promise<void>;
 	approveTools: (sessionId: string, patterns: string[]) => Promise<void>;
 	approvePlan: (sessionId: string) => Promise<void>;
