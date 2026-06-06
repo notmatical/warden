@@ -110,6 +110,7 @@ pub fn run() {
             session::commands::rename_session,
             session::commands::delete_session,
             session::commands::send_message,
+            session::commands::attach_to_session,
             session::commands::cancel_session,
             session::commands::approve_tools,
             session::commands::approve_plan,
