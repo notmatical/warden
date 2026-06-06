@@ -24,6 +24,7 @@ pub struct Attachment {
     /// The path the agent reads — in place, or the staged copy.
     pub path: String,
     pub is_image: bool,
+    pub is_dir: bool,
 }
 
 /// The per-session directory staged attachments are copied into (created on
@@ -59,13 +60,14 @@ pub fn stage(
     let mut out = Vec::with_capacity(paths.len());
     for raw in paths {
         let src = Path::new(raw);
+        let is_dir = src.is_dir();
         let name = src
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_else(|| raw.clone());
         // In the working dir (or a directory) → already readable; reference as
         // is. Otherwise copy the file into the attachments dir.
-        let effective = if src.is_dir() || src.starts_with(working) {
+        let effective = if is_dir || src.starts_with(working) {
             raw.clone()
         } else {
             let dest = staged_dir.join(format!("{}-{name}", &uuid()[..8]));
@@ -76,6 +78,7 @@ pub fn stage(
             id: uuid(),
             name,
             is_image: is_image(src),
+            is_dir,
             path: effective,
         });
     }
