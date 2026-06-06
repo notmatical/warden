@@ -77,7 +77,7 @@ export function AttachmentRow({
 	}
 
 	return (
-		<div className="flex flex-wrap gap-2 px-3.5 pt-3 pb-1">
+		<div className="flex flex-wrap gap-2 px-2 pt-2">
 			{items.map((att) => {
 				const { Icon, label } = fileMeta(att);
 				return (
@@ -98,6 +98,7 @@ export function AttachmentRow({
 								) : null}
 							</div>
 						)}
+
 						<button
 							type="button"
 							onClick={() => onRemove(att.id)}
