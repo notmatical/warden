@@ -343,29 +343,40 @@ export function Transcript({
 	const isEmpty = eventCount === 0 && !streaming;
 
 	return (
-		<ScrollArea
-			className="h-full"
-			// Radix wraps content in a `display:table` element that grows to its
-			// widest child, which lets wide code/diffs/plans push the column off
-			// screen. Force it to block so children honor their `min-w-0` and scroll
-			// internally instead.
-			viewportClassName="[&>div]:!block [&>div]:!min-w-0"
-			viewportRef={viewportRef}
-			onScrollCapture={handleScroll}
-		>
-			<div
-				className="mx-auto flex min-h-full w-full max-w-6xl flex-col gap-2.5 px-4 pt-8"
-				style={{ paddingBottom: bottomInset }}
+		<div className="relative h-full">
+			<ScrollArea
+				className="h-full"
+				// Radix wraps content in a `display:table` element that grows to its
+				// widest child, which lets wide code/diffs/plans push the column off
+				// screen. Force it to block so children honor their `min-w-0` and scroll
+				// internally instead.
+				viewportClassName="[&>div]:!block [&>div]:!min-w-0"
+				viewportRef={viewportRef}
+				onScrollCapture={handleScroll}
 			>
-				{isEmpty &&
-					(loading ? (
-						<div className="flex flex-1 items-center justify-center">
-							<p className="text-sm text-muted-foreground">
-								Loading transcript…
-							</p>
-						</div>
+				<div
+					className="mx-auto flex w-full max-w-6xl flex-col gap-2.5 px-4 pt-8"
+					style={{ paddingBottom: bottomInset }}
+				>
+					{timeline}
+					{streaming && !pendingQuestion && (
+						<AssistantMessage text={streaming} />
+					)}
+					<StreamingStatus sessionId={sessionId} />
+				</div>
+			</ScrollArea>
+
+			{/* Centered in the space above the floating composer (so it doesn't
+			    depend on the scroll area's height chain). */}
+			{isEmpty ? (
+				<div
+					className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-center px-4 text-center"
+					style={{ bottom: bottomInset }}
+				>
+					{loading ? (
+						<p className="text-sm text-muted-foreground">Loading transcript…</p>
 					) : (
-						<div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
+						<div className="flex flex-col items-center gap-4">
 							<div className="flex size-14 items-center justify-center rounded-lg bg-muted text-muted-foreground">
 								<MessageSquarePlus className="size-6" />
 							</div>
@@ -376,13 +387,9 @@ export function Transcript({
 								</p>
 							</div>
 						</div>
-					))}
-				{timeline}
-				{streaming && !pendingQuestion && (
-					<AssistantMessage text={streaming} />
-				)}
-				<StreamingStatus sessionId={sessionId} />
-			</div>
-		</ScrollArea>
+					)}
+				</div>
+			) : null}
+		</div>
 	);
 }
