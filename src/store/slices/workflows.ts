@@ -12,7 +12,9 @@ type WorkflowsSlice = Pick<
 	AppState,
 	| "workflows"
 	| "workflowRun"
+	| "sessionsByWorkflow"
 	| "loadWorkflows"
+	| "loadWorkflowSessions"
 	| "ensureWorkflow"
 	| "createWorkflow"
 	| "saveWorkflowGraph"
@@ -34,13 +36,38 @@ export const createWorkflowsSlice: StateCreator<
 > = (set, get) => ({
 	workflows: {},
 	workflowRun: null,
+	sessionsByWorkflow: {},
 
 	loadWorkflows: async (projectId) => {
 		try {
 			const list = await ipc.listWorkflows(projectId);
-			set({ workflows: Object.fromEntries(list.map((w) => [w.id, w])) });
+			// Merge — several groups/projects populate this for the sidebar.
+			set((s) => ({
+				workflows: {
+					...s.workflows,
+					...Object.fromEntries(list.map((w) => [w.id, w])),
+				},
+			}));
 		} catch (error) {
 			reportError("Failed to load workflows", error);
+		}
+	},
+
+	loadWorkflowSessions: async (workflowId) => {
+		try {
+			const list = await ipc.listWorkflowSessions(workflowId);
+			set((s) => ({
+				sessions: {
+					...s.sessions,
+					...Object.fromEntries(list.map((x) => [x.id, x])),
+				},
+				sessionsByWorkflow: {
+					...s.sessionsByWorkflow,
+					[workflowId]: list.map((x) => x.id),
+				},
+			}));
+		} catch (error) {
+			reportError("Failed to load workflow sessions", error);
 		}
 	},
 
@@ -118,7 +145,9 @@ export const createWorkflowsSlice: StateCreator<
 			set((s) => {
 				const next = { ...s.workflows };
 				delete next[id];
-				return { workflows: next };
+				const nextSessions = { ...s.sessionsByWorkflow };
+				delete nextSessions[id];
+				return { workflows: next, sessionsByWorkflow: nextSessions };
 			});
 		} catch (error) {
 			reportError("Failed to delete workflow", error);

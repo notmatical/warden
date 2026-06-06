@@ -32,6 +32,8 @@ pub struct RunContext {
     pub graph: WorkflowGraph,
     /// Branch for this run's worktree (used on first provision).
     pub branch: String,
+    /// The workflow this run belongs to (tags node sessions for the sidebar).
+    pub workflow_id: Option<String>,
 }
 
 enum Outcome {
@@ -156,6 +158,7 @@ async fn run_steps(ctx: &RunContext) -> Result<Outcome> {
             base_branch: dir.base_branch.clone(),
             is_isolated: dir.is_isolated,
             parent_id,
+            workflow_id: ctx.workflow_id.clone(),
         })?;
         emit_session(&ctx.app, &session);
 

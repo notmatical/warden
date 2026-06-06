@@ -253,6 +253,7 @@ pub async fn checkout_pr(
         base_branch: dir.base_branch,
         is_isolated: dir.is_isolated,
         parent_id: None,
+        workflow_id: None,
     })?;
 
     // Light up the PR chip + merge controls for the reviewed PR.

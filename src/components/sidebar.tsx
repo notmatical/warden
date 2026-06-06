@@ -1,5 +1,7 @@
 import {
 	ChevronRight,
+	Copy,
+	ExternalLink,
 	FolderGit2,
 	FolderPlus,
 	Layers,
@@ -8,6 +10,7 @@ import {
 	Settings2,
 	SquareTerminal,
 	Trash2,
+	Workflow as WorkflowIcon,
 } from "lucide-react";
 import { useDraggable } from "@dnd-kit/core";
 import { type KeyboardEvent, type ReactNode, useEffect, useState } from "react";
@@ -60,6 +63,7 @@ import { DEFAULT_CHAT_MODEL } from "@/lib/models";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app-store";
 import type { Group, Project, SessionKind } from "@/types";
+import type { Workflow } from "@/types/workflow";
 
 // Keep shadcn's left connector line + indent, but drop the right margin/padding
 // (default `mx-3.5 px-2.5`) so sub-rows reach the same right edge as the group
@@ -357,6 +361,248 @@ function RootRow({
 	);
 }
 
+const WF_SUB_BUTTON =
+	"w-full cursor-default text-left text-sidebar-foreground/70 hover:bg-transparent hover:text-sidebar-foreground active:bg-transparent active:text-sidebar-foreground";
+
+/** A workflow in the sidebar: the row toggles its child node-sessions; the hover
+ *  action (and double-click) opens the workflow editor tab. */
+function WorkflowRow({
+	workflow,
+	expanded,
+	onToggle,
+}: {
+	workflow: Workflow;
+	expanded: boolean;
+	onToggle: () => void;
+}) {
+	const sessionIds = useAppStore((s) => s.sessionsByWorkflow[workflow.id]);
+	const loadWorkflowSessions = useAppStore((s) => s.loadWorkflowSessions);
+	const openWorkflow = useAppStore((s) => s.openWorkflow);
+	const renameWorkflow = useAppStore((s) => s.renameWorkflow);
+	const duplicateWorkflow = useAppStore((s) => s.duplicateWorkflow);
+	const deleteWorkflow = useAppStore((s) => s.deleteWorkflow);
+	const confirm = useConfirm();
+
+	const [editing, setEditing] = useState(false);
+	const [draft, setDraft] = useState("");
+
+	useEffect(() => {
+		if (expanded && sessionIds === undefined)
+			void loadWorkflowSessions(workflow.id);
+	}, [expanded, sessionIds, workflow.id, loadWorkflowSessions]);
+
+	const commitRename = () => {
+		setEditing(false);
+		const name = draft.trim();
+		if (name && name !== workflow.name) void renameWorkflow(workflow.id, name);
+	};
+
+	const ids = sessionIds ?? [];
+
+	return (
+		<SidebarMenuSubItem>
+			<ContextMenu>
+				<ContextMenuTrigger asChild>
+					{editing ? (
+						<div className="flex h-7 items-center gap-2 rounded-md bg-sidebar-accent pr-2 pl-2 ring-1 ring-transparent ring-inset focus-within:ring-ring/50">
+							<WorkflowIcon className="size-4 shrink-0 opacity-70" />
+							<Input
+								autoFocus
+								value={draft}
+								onChange={(e) => setDraft(e.target.value)}
+								onKeyDown={(e) => {
+									e.stopPropagation();
+									if (e.key === "Enter") {
+										e.preventDefault();
+										commitRename();
+									} else if (e.key === "Escape") {
+										e.preventDefault();
+										setEditing(false);
+									}
+								}}
+								onBlur={commitRename}
+								onFocus={(e) => e.target.select()}
+								className="h-full min-w-0 flex-1 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:border-0 focus-visible:ring-0"
+							/>
+						</div>
+					) : (
+						<SidebarMenuSubButton asChild className={WF_SUB_BUTTON}>
+							<button
+								type="button"
+								onClick={onToggle}
+								onDoubleClick={() => openWorkflow(workflow.id)}
+								title={workflow.name}
+							>
+								<ChevronRight
+									className={cn(
+										"transition-transform",
+										expanded && "rotate-90",
+									)}
+								/>
+								<WorkflowIcon className="opacity-70" />
+								<span className="min-w-0 flex-1 truncate">{workflow.name}</span>
+							</button>
+						</SidebarMenuSubButton>
+					)}
+				</ContextMenuTrigger>
+				<ContextMenuContent className="w-40">
+					<ContextMenuItem onSelect={() => openWorkflow(workflow.id)}>
+						<ExternalLink />
+						Open
+					</ContextMenuItem>
+					<ContextMenuItem
+						onSelect={() => {
+							setDraft(workflow.name);
+							setEditing(true);
+						}}
+					>
+						<Pencil />
+						Rename
+					</ContextMenuItem>
+					<ContextMenuItem
+						onSelect={() =>
+							void duplicateWorkflow(workflow.id).then(
+								(c) => c && openWorkflow(c.id),
+							)
+						}
+					>
+						<Copy />
+						Duplicate
+					</ContextMenuItem>
+					<ContextMenuSeparator />
+					<ContextMenuItem
+						variant="destructive"
+						onSelect={async () => {
+							if (
+								await confirm({
+									title: "Delete workflow?",
+									description: `"${workflow.name}" will be permanently deleted.`,
+									confirmLabel: "Delete",
+									destructive: true,
+								})
+							) {
+								void deleteWorkflow(workflow.id);
+							}
+						}}
+					>
+						<Trash2 />
+						Delete
+					</ContextMenuItem>
+				</ContextMenuContent>
+			</ContextMenu>
+			{editing ? null : (
+				<RowAction scope="sub-item">
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<button
+								type="button"
+								aria-label={`Open ${workflow.name}`}
+								onClick={() => openWorkflow(workflow.id)}
+								className={ROW_ICON}
+							>
+								<ExternalLink />
+							</button>
+						</TooltipTrigger>
+						<TooltipContent side="right">Open workflow</TooltipContent>
+					</Tooltip>
+				</RowAction>
+			)}
+
+			{expanded ? (
+				<SidebarMenuSub className={SUB_CLASS}>
+					{ids.length > 0 ? (
+						ids.map((id) => <SessionRow key={id} sessionId={id} />)
+					) : (
+						<p className="px-2 py-1 text-xs text-muted-foreground/60">
+							No runs yet
+						</p>
+					)}
+				</SidebarMenuSub>
+			) : null}
+		</SidebarMenuSubItem>
+	);
+}
+
+/** The group's "Workflows" collapsible — peer to the repo folders. */
+function WorkflowsSection({ projectIds }: { projectIds: string[] }) {
+	const workflowsMap = useAppStore((s) => s.workflows);
+	const createWorkflow = useAppStore((s) => s.createWorkflow);
+	const openWorkflow = useAppStore((s) => s.openWorkflow);
+	const [open, setOpen] = useState(true);
+	const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+	if (projectIds.length === 0) return null;
+
+	const list = Object.values(workflowsMap)
+		.filter((w) => projectIds.includes(w.projectId))
+		.sort((a, b) => a.name.localeCompare(b.name));
+
+	const toggle = (id: string) =>
+		setExpanded((prev) => {
+			const next = new Set(prev);
+			if (next.has(id)) next.delete(id);
+			else next.add(id);
+			return next;
+		});
+
+	const createNew = async () => {
+		const wf = await createWorkflow(projectIds[0], "New workflow");
+		if (wf) openWorkflow(wf.id);
+	};
+
+	return (
+		<SidebarMenuSubItem>
+			<SidebarMenuSubButton asChild className={WF_SUB_BUTTON}>
+				<button type="button" onClick={() => setOpen((o) => !o)}>
+					<ChevronRight
+						className={cn("transition-transform", open && "rotate-90")}
+					/>
+					<WorkflowIcon className="opacity-70" />
+					<span className="min-w-0 flex-1 truncate">Workflows</span>
+				</button>
+			</SidebarMenuSubButton>
+			<RowAction scope="sub-item">
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<button
+							type="button"
+							aria-label="New workflow"
+							onClick={() => void createNew()}
+							className={ROW_ICON}
+						>
+							<Plus />
+						</button>
+					</TooltipTrigger>
+					<TooltipContent side="right">New workflow</TooltipContent>
+				</Tooltip>
+			</RowAction>
+			{open ? (
+				<SidebarMenuSub className={SUB_CLASS}>
+					{list.length > 0 ? (
+						list.map((w) => (
+							<WorkflowRow
+								key={w.id}
+								workflow={w}
+								expanded={expanded.has(w.id)}
+								onToggle={() => toggle(w.id)}
+							/>
+						))
+					) : (
+						<button
+							type="button"
+							onClick={() => void createNew()}
+							className="flex items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground/70 transition-colors hover:text-foreground"
+						>
+							<Plus className="size-3.5" />
+							New workflow
+						</button>
+					)}
+				</SidebarMenuSub>
+			) : null}
+		</SidebarMenuSubItem>
+	);
+}
+
 function GroupRow({
 	group,
 	active,
@@ -510,6 +756,7 @@ function GroupRow({
 							Add folder
 						</button>
 					)}
+					<WorkflowsSection projectIds={(roots ?? []).map((r) => r.id)} />
 				</SidebarMenuSub>
 			) : null}
 		</SidebarMenuItem>
@@ -533,14 +780,15 @@ export function Sidebar() {
 		() => new Set(activeGroupId ? [activeGroupId] : []),
 	);
 
-	// Keep the active group expanded as it changes (initial load, create).
-	useEffect(() => {
-		if (activeGroupId) {
-			setExpanded((prev) =>
-				prev.has(activeGroupId) ? prev : new Set(prev).add(activeGroupId),
-			);
+	// Keep the active group expanded as it changes (initial load, create) — the
+	// "adjust state during render when a value changes" pattern, no effect needed.
+	const [seenGroup, setSeenGroup] = useState(activeGroupId);
+	if (activeGroupId && activeGroupId !== seenGroup) {
+		setSeenGroup(activeGroupId);
+		if (!expanded.has(activeGroupId)) {
+			setExpanded((prev) => new Set(prev).add(activeGroupId));
 		}
-	}, [activeGroupId]);
+	}
 
 	const toggle = (id: string) => {
 		setExpanded((prev) => {

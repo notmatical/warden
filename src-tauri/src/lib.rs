@@ -140,6 +140,7 @@ pub fn run() {
             workflow::commands::resume_workflow,
             workflow::commands::get_workflow_run,
             workflow::commands::get_latest_workflow_run,
+            workflow::commands::list_workflow_sessions,
             // mentions
             mentions::commands::list_files,
             mentions::commands::list_commands,

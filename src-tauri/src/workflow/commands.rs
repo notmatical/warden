@@ -111,11 +111,21 @@ pub async fn run_workflow(
         group_id,
         graph: wf.graph.clone(),
         branch,
+        workflow_id: Some(workflow_id.clone()),
     };
     tauri::async_runtime::spawn(executor::drive(ctx));
 
     let nodes = state.store.list_node_runs(&run.id)?;
     Ok(WorkflowRunView { run, nodes })
+}
+
+/// The sessions a workflow's runs have spawned (for the sidebar).
+#[tauri::command]
+pub async fn list_workflow_sessions(
+    state: State<'_, AppState>,
+    workflow_id: String,
+) -> Result<Vec<crate::domain::Session>> {
+    state.store.list_workflow_sessions(&workflow_id)
 }
 
 #[tauri::command]
@@ -179,6 +189,7 @@ pub async fn resume_workflow(
             group_id: run.group_id.clone(),
             graph,
             branch: format!("wf/{}", &run_id[..8.min(run_id.len())]),
+            workflow_id: run.workflow_id.clone(),
         };
         tauri::async_runtime::spawn(executor::drive(ctx));
     }

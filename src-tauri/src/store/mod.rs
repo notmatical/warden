@@ -38,6 +38,7 @@ pub struct NewSession {
     pub base_branch: Option<String>,
     pub is_isolated: bool,
     pub parent_id: Option<String>,
+    pub workflow_id: Option<String>,
 }
 
 /// Thread-safe handle to the SQLite database. Cloneable and `Send + Sync` so it
@@ -228,11 +229,24 @@ impl Store {
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
+    /// A group's regular sessions — workflow-spawned sessions are excluded (they
+    /// live under their workflow in the sidebar).
     pub fn list_group_sessions(&self, group_id: &str) -> Result<Vec<Session>> {
         let conn = self.lock();
-        let sql = format!("{SESSION_SELECT_ALL} WHERE group_id = ?1 ORDER BY created_at");
+        let sql = format!(
+            "{SESSION_SELECT_ALL} WHERE group_id = ?1 AND workflow_id IS NULL ORDER BY created_at"
+        );
         let mut stmt = conn.prepare(&sql)?;
         let rows = stmt.query_map([group_id], map_session)?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    /// The sessions a workflow's runs have spawned, newest first.
+    pub fn list_workflow_sessions(&self, workflow_id: &str) -> Result<Vec<Session>> {
+        let conn = self.lock();
+        let sql = format!("{SESSION_SELECT_ALL} WHERE workflow_id = ?1 ORDER BY created_at DESC");
+        let mut stmt = conn.prepare(&sql)?;
+        let rows = stmt.query_map([workflow_id], map_session)?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
@@ -485,8 +499,13 @@ impl Store {
     }
 
     pub fn delete_workflow(&self, id: &str) -> Result<()> {
-        self.lock()
-            .execute("DELETE FROM workflows WHERE id = ?1", [id])?;
+        let conn = self.lock();
+        // Orphan its sessions back to the regular list, then drop the workflow.
+        conn.execute(
+            "UPDATE sessions SET workflow_id = NULL WHERE workflow_id = ?1",
+            [id],
+        )?;
+        conn.execute("DELETE FROM workflows WHERE id = ?1", [id])?;
         Ok(())
     }
 
@@ -679,6 +698,7 @@ impl Store {
             turns: 0,
             cost_usd: 0.0,
             parent_id: new.parent_id,
+            workflow_id: new.workflow_id,
             merged_at: None,
             pr_number: None,
             pr_url: None,
@@ -695,9 +715,9 @@ impl Store {
                 id, group_id, project_id, title, backend, model, permission_mode, status, role,
                 agent_session_id, working_dir, branch, base_sha, is_isolated, allowed_tools, turns,
                 cost_usd, parent_id, created_at, updated_at, effort, auto_named, kind,
-                terminal_command, base_branch
+                terminal_command, base_branch, workflow_id
              ) VALUES (
-                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25
+                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26
              )",
             rusqlite::params![
                 session.id,
@@ -725,6 +745,7 @@ impl Store {
                 session.kind.as_str(),
                 session.terminal_command,
                 session.base_branch,
+                session.workflow_id,
             ],
         )?;
         // Seed the primary root. Additional roots are added via set_session_roots.
@@ -1056,14 +1077,14 @@ impl Store {
 const SESSION_SELECT: &str =
     "SELECT id, group_id, project_id, title, backend, model, permission_mode, status, role, \
     agent_session_id, working_dir, branch, base_sha, is_isolated, allowed_tools, turns, cost_usd, \
-    parent_id, created_at, updated_at, effort, auto_named, kind, terminal_command, terminal_started, \
+    parent_id, workflow_id, created_at, updated_at, effort, auto_named, kind, terminal_command, terminal_started, \
     terminal_resume_id, base_branch, merged_at, pr_number, pr_url, pr_state, pr_check_status, \
     pr_checked_at FROM sessions WHERE id = ?1";
 
 const SESSION_SELECT_ALL: &str =
     "SELECT id, group_id, project_id, title, backend, model, permission_mode, status, role, \
     agent_session_id, working_dir, branch, base_sha, is_isolated, allowed_tools, turns, cost_usd, \
-    parent_id, created_at, updated_at, effort, auto_named, kind, terminal_command, terminal_started, \
+    parent_id, workflow_id, created_at, updated_at, effort, auto_named, kind, terminal_command, terminal_started, \
     terminal_resume_id, base_branch, merged_at, pr_number, pr_url, pr_state, pr_check_status, \
     pr_checked_at FROM sessions";
 
@@ -1138,6 +1159,7 @@ fn map_session(row: &Row<'_>) -> rusqlite::Result<Session> {
         turns: row.get("turns")?,
         cost_usd: row.get("cost_usd")?,
         parent_id: row.get("parent_id")?,
+        workflow_id: row.get("workflow_id")?,
         merged_at: row.get("merged_at")?,
         pr_number: row.get("pr_number")?,
         pr_url: row.get("pr_url")?,

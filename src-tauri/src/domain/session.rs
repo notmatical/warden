@@ -272,6 +272,9 @@ pub struct Session {
     pub cost_usd: f64,
     /// Set when this session was produced by a handoff from another session.
     pub parent_id: Option<String>,
+    /// Set when a workflow run spawned this session (groups it under the
+    /// workflow in the sidebar).
+    pub workflow_id: Option<String>,
     /// When the session's branch was merged back into its base — `None` until
     /// then. A merged session's worktree is gone, so it becomes read-only.
     pub merged_at: Option<String>,

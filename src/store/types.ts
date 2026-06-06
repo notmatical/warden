@@ -95,7 +95,10 @@ export interface AppState {
 	// ----- workflows -----
 	workflows: Record<string, Workflow>;
 	workflowRun: WorkflowRunView | null;
+	/** workflowId → its node-session ids (for the sidebar's Workflows section). */
+	sessionsByWorkflow: Record<string, string[]>;
 	loadWorkflows: (projectId: string) => Promise<void>;
+	loadWorkflowSessions: (workflowId: string) => Promise<void>;
 	ensureWorkflow: (id: string) => Promise<void>;
 	createWorkflow: (projectId: string, name: string) => Promise<Workflow | null>;
 	saveWorkflowGraph: (id: string, graph: WorkflowGraph) => Promise<void>;

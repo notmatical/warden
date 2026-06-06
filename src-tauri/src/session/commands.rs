@@ -104,6 +104,7 @@ pub async fn create_session(
         base_branch: dir.base_branch,
         is_isolated: dir.is_isolated,
         parent_id: None,
+        workflow_id: None,
     })?;
 
     emit_session(&app, &session);

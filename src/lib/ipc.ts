@@ -399,6 +399,10 @@ export function listWorkflows(projectId: string): Promise<Workflow[]> {
   return invoke("list_workflows", { projectId })
 }
 
+export function listWorkflowSessions(workflowId: string): Promise<Session[]> {
+  return invoke("list_workflow_sessions", { workflowId })
+}
+
 export function getWorkflow(id: string): Promise<Workflow> {
   return invoke("get_workflow", { id })
 }

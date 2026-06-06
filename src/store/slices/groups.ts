@@ -57,6 +57,10 @@ export const createGroupsSlice: StateCreator<AppState, [], [], GroupsSlice> = (
 					},
 				};
 			});
+			// Load the group's workflows so the sidebar's Workflows section fills in.
+			for (const project of roots) {
+				void get().loadWorkflows(project.id);
+			}
 		} catch (error) {
 			reportError("Failed to load group", error);
 		}

@@ -55,6 +55,7 @@ fn session_in_dir(
         base_branch: dir.base_branch.clone(),
         is_isolated: dir.is_isolated,
         parent_id,
+        workflow_id: None,
     }
 }
 
