@@ -4,11 +4,12 @@
 //! `kind`/`edges` and ignores `position`.
 
 use serde::{Deserialize, Serialize};
+use specta::Type;
 
 use crate::domain::{EffortLevel, PermissionMode, SessionRole};
 
 /// A persisted workflow definition.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Workflow {
     pub id: String,
@@ -19,7 +20,7 @@ pub struct Workflow {
     pub updated_at: String,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkflowGraph {
     #[serde(default)]
@@ -28,7 +29,7 @@ pub struct WorkflowGraph {
     pub edges: Vec<WorkflowEdge>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkflowNode {
     pub id: String,
@@ -40,14 +41,14 @@ pub struct WorkflowNode {
     pub position: Option<NodePosition>,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type)]
 pub struct NodePosition {
     pub x: f64,
     pub y: f64,
 }
 
 /// The node's behavior.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum NodeKind {
     /// Topological root; synthesized if absent. Carries no agent.
@@ -62,7 +63,7 @@ pub enum NodeKind {
 /// What an agent node does. The intent carries a built-in instruction and the
 /// right read/write posture, so downstream nodes need no hand-written task —
 /// the edge supplies the content (the upstream plan/review/diff as context).
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub enum Intent {
     /// Research + produce an implementation plan (read-only).
@@ -132,7 +133,7 @@ impl Intent {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentTaskConfig {
     #[serde(default)]
@@ -180,7 +181,7 @@ impl AgentTaskConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkflowEdge {
     pub id: String,
@@ -189,7 +190,7 @@ pub struct WorkflowEdge {
 }
 
 /// A single execution of a workflow.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkflowRun {
     pub id: String,
@@ -202,7 +203,7 @@ pub struct WorkflowRun {
     pub updated_at: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub enum RunStatus {
     Pending,
@@ -239,7 +240,7 @@ impl RunStatus {
 
 /// Per-node execution state, overlaying the graph (the node's session row stays
 /// the source of truth for transcript/cost/status).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkflowNodeRun {
     pub run_id: String,
@@ -250,7 +251,7 @@ pub struct WorkflowNodeRun {
     pub error: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub enum NodeRunStatus {
     Pending,

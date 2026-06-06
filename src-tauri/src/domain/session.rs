@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
+use specta::Type;
 
 /// Which agent backend powers a session. Only Claude is implemented today, but
 /// the enum is the seam where future providers (codex, cursor, ...) plug in.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum Backend {
     Claude,
@@ -39,7 +40,7 @@ impl Backend {
 
 /// Permission posture handed to the agent CLI. Sessions are worktree-isolated,
 /// so `BypassPermissions` is the default for autonomous, prompt-free turns.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub enum PermissionMode {
     AcceptEdits,
@@ -75,7 +76,7 @@ impl PermissionMode {
 }
 
 /// Reasoning effort handed to the agent CLI (`claude --effort`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum EffortLevel {
     Low,
@@ -114,7 +115,7 @@ impl EffortLevel {
 }
 
 /// Lifecycle state of a session.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionStatus {
     Idle,
@@ -143,7 +144,7 @@ impl SessionStatus {
 
 /// Aggregate CI-check state for a session's pull request, distilled from `gh`'s
 /// `statusCheckRollup`. Absent when the PR has no checks.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum CheckStatus {
     Success,
@@ -172,7 +173,7 @@ impl CheckStatus {
 
 /// Whether a session is a headless agent (stream-json adapter) or an
 /// interactive terminal running the native `claude` TUI in a PTY.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionKind {
     Agent,
@@ -198,7 +199,7 @@ impl SessionKind {
 
 /// The role a session plays inside a recipe. Plain sessions are `Chat`; the
 /// plan→code handoff produces a `Planner` and a `Coder`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionRole {
     Chat,
@@ -227,7 +228,7 @@ impl SessionRole {
 
 /// A single agent session — one tab in the browser. Carries everything needed
 /// to resume the underlying CLI conversation and to render its state.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Session {
     pub id: String,

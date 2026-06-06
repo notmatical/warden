@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
+use specta::Type;
 
 /// A piece of context injected into an agent's system prompt for a session.
 /// Phase 1 covers manual sources; GitHub refs and node-graph outputs come later.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum ContextSource {
     /// A single file: its directory is made accessible and it's referenced by
@@ -21,7 +22,7 @@ pub enum ContextSource {
 }
 
 /// A persisted, ordered, toggleable context source on a session.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionContextSource {
     pub id: String,

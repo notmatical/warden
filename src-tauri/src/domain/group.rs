@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
+use specta::Type;
 
 /// The top-level workspace: a named set of project roots plus a saved pane
 /// layout. Sessions are opened against a group and may pull any of its roots
 /// into context.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Group {
     pub id: String,

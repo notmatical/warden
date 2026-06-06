@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
+use specta::Type;
 
 /// A tool call the CLI denied for lack of permission. `pattern` is the
 /// `--allowedTools` token that would permit it (e.g. `Bash(echo hi)` or `Read`).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolDenial {
     pub tool_name: String,
@@ -12,7 +13,7 @@ pub struct ToolDenial {
 
 /// Token accounting for a turn, mirrored from the model's `usage` report. The
 /// input side plus cache reads/writes approximates the context-window fill.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, Type)]
 pub struct TokenUsage {
     pub input_tokens: u64,
     pub output_tokens: u64,
@@ -25,7 +26,7 @@ pub struct TokenUsage {
 /// A normalized agent event — the single contract the whole UI renders against,
 /// regardless of which backend produced it. Backend-specific stream formats are
 /// translated into this enum by each adapter.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum AgentEvent {
     /// Emitted once the CLI confirms the conversation has started.
@@ -92,7 +93,7 @@ impl AgentEvent {
 /// A persisted, ordered event in a session's append-only log. The transcript
 /// you render today and the cross-agent thread you render later are both just
 /// projections over this log.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct EventRecord {
     pub id: String,
