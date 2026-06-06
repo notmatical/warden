@@ -323,27 +323,62 @@ pub fn remote_browse_url(repo: &Path) -> Option<String> {
     normalize_remote_url(&raw)
 }
 
-/// Map a git remote URL to an `https` browser URL:
+/// Map a git remote URL to an `https` browser URL. Resolves `~/.ssh/config`
+/// host aliases (so `git@gh-alias:owner/repo` lands on the real host):
 ///   `git@host:owner/repo(.git)`     → `https://host/owner/repo`
 ///   `ssh://git@host/owner/repo.git` → `https://host/owner/repo`
 ///   `https://host/owner/repo.git`   → `https://host/owner/repo`
 fn normalize_remote_url(raw: &str) -> Option<String> {
     let url = raw.trim();
     let strip_git = |s: &str| s.strip_suffix(".git").unwrap_or(s).to_string();
-    // scp-like syntax: git@host:owner/repo
-    if let Some(rest) = url.strip_prefix("git@") {
-        if let Some((host, path)) = rest.split_once(':') {
-            return Some(format!("https://{host}/{}", strip_git(path)));
-        }
-    }
+
     if let Some(rest) = url.strip_prefix("ssh://") {
         let rest = rest.strip_prefix("git@").unwrap_or(rest);
+        if let Some((host, path)) = rest.split_once('/') {
+            let host = host.split(':').next().unwrap_or(host); // drop any :port
+            return Some(format!("https://{}/{}", resolve_ssh_host(host), strip_git(path)));
+        }
         return Some(format!("https://{}", strip_git(rest)));
     }
+
     if url.starts_with("http://") || url.starts_with("https://") {
         return Some(strip_git(url));
     }
+
+    // scp-like syntax: [git@]host:owner/repo — `host` is often an ssh alias.
+    if let Some((before, path)) = url.split_once(':') {
+        if !before.contains('/') && !path.is_empty() {
+            let host = before.strip_prefix("git@").unwrap_or(before);
+            return Some(format!("https://{}/{}", resolve_ssh_host(host), strip_git(path)));
+        }
+    }
     None
+}
+
+/// Resolve an ssh host that may be a `~/.ssh/config` alias to its real hostname
+/// (via `ssh -G`); a host already containing a dot is assumed real. Strips a
+/// leading `ssh.` (GitHub's port-443 alias host) when that leaves a domain.
+fn resolve_ssh_host(host: &str) -> String {
+    let real = if host.contains('.') {
+        host.to_string()
+    } else {
+        let mut cmd = Command::new("ssh");
+        cmd.args(["-G", host]);
+        crate::platform::silent_command(&mut cmd);
+        cmd.output()
+            .ok()
+            .and_then(|out| {
+                String::from_utf8_lossy(&out.stdout)
+                    .lines()
+                    .find_map(|l| l.strip_prefix("hostname ").map(|h| h.trim().to_string()))
+                    .filter(|h| !h.is_empty())
+            })
+            .unwrap_or_else(|| host.to_string())
+    };
+    match real.strip_prefix("ssh.") {
+        Some(rest) if rest.contains('.') => rest.to_string(),
+        _ => real,
+    }
 }
 
 /// Push the worktree's current branch to origin, setting upstream. Surfaces the

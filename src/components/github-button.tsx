@@ -37,8 +37,6 @@ export function GithubButton({ path }: { path: string | null | undefined }) {
 		return null;
 	}
 
-	const label = url.replace(/^https?:\/\/(www\.)?/, "");
-
 	return (
 		<Tooltip>
 			<TooltipTrigger asChild>
@@ -46,13 +44,13 @@ export function GithubButton({ path }: { path: string | null | undefined }) {
 					variant="ghost"
 					size="icon-sm"
 					onClick={() => void openUrl(url)}
-					aria-label="Open repository on GitHub"
+					aria-label="View on GitHub"
 					className="text-muted-foreground hover:text-foreground"
 				>
 					<GitHubIcon className="size-4" />
 				</Button>
 			</TooltipTrigger>
-			<TooltipContent>{label}</TooltipContent>
+			<TooltipContent>View on GitHub</TooltipContent>
 		</Tooltip>
 	);
 }
