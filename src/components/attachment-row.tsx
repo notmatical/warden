@@ -17,7 +17,7 @@ export function AttachmentRow({
 	}
 
 	return (
-		<div className="flex flex-wrap gap-2 px-1 pt-1 pb-2">
+		<div className="flex flex-wrap gap-2 px-2 pt-2">
 			{items.map((att) => (
 				<div key={att.id} className="group relative">
 					{att.isImage ? (
