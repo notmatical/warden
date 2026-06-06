@@ -8,10 +8,13 @@ import {
 	Controls,
 	type Edge,
 	type Node,
+	type OnConnectEnd,
+	type OnConnectStart,
 	ReactFlow,
 	ReactFlowProvider,
 	useEdgesState,
 	useNodesState,
+	useReactFlow,
 } from "@xyflow/react";
 import {
 	Copy,
@@ -23,7 +26,13 @@ import {
 	ShieldQuestion,
 	Trash2,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+	type MouseEvent as ReactMouseEvent,
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
 
 import { EffortMenu } from "@/components/controls/effort-menu";
 import { ModeMenu } from "@/components/controls/mode-menu";
@@ -184,32 +193,84 @@ function Canvas({ workflow }: { workflow: Workflow }) {
 		[setEdges],
 	);
 
-	const addAgent = (intent: Intent) => {
+	// Create a node (optionally at a position, optionally wired from a source).
+	const createNode = (
+		kind: Intent | "gate",
+		position?: { x: number; y: number },
+		connectFrom?: string,
+	) => {
 		const id = crypto.randomUUID();
-		setNodes((ns) => [
-			...ns,
-			{
-				id,
-				type: "agent",
-				position: { x: 160 + ns.length * 24, y: 120 + ns.length * 24 },
-				data: { label: INTENT_META[intent].label, config: defaultConfig(intent) },
-			},
-		]);
+		setNodes((ns) => {
+			const pos = position ?? {
+				x: 160 + ns.length * 24,
+				y: 120 + ns.length * 24,
+			};
+			const node: Node =
+				kind === "gate"
+					? {
+							id,
+							type: "gate",
+							position: pos,
+							data: { label: "Approval", prompt: null },
+						}
+					: {
+							id,
+							type: "agent",
+							position: pos,
+							data: {
+								label: INTENT_META[kind].label,
+								config: defaultConfig(kind),
+							},
+						};
+			return [...ns, node];
+		});
+		if (connectFrom) {
+			setEdges((es) =>
+				addEdge(
+					{
+						source: connectFrom,
+						target: id,
+						sourceHandle: null,
+						targetHandle: null,
+					},
+					es,
+				),
+			);
+		}
 		setSelectedId(id);
 	};
 
-	const addGate = () => {
-		const id = crypto.randomUUID();
-		setNodes((ns) => [
-			...ns,
-			{
-				id,
-				type: "gate",
-				position: { x: 160 + ns.length * 24, y: 120 + ns.length * 24 },
-				data: { label: "Approval", prompt: null },
-			},
-		]);
-		setSelectedId(id);
+	// Drag a connection off into empty canvas → palette + auto-connect. Also
+	// opened by right-clicking the canvas (no source).
+	const { screenToFlowPosition } = useReactFlow();
+	const connectingFrom = useRef<string | null>(null);
+	const [palette, setPalette] = useState<{
+		screen: { x: number; y: number };
+		flow: { x: number; y: number };
+		connectFrom?: string;
+	} | null>(null);
+
+	const openPaletteAt = (clientX: number, clientY: number, from?: string) => {
+		setPalette({
+			screen: { x: clientX, y: clientY },
+			flow: screenToFlowPosition({ x: clientX, y: clientY }),
+			connectFrom: from,
+		});
+	};
+
+	const onConnectStart: OnConnectStart = (_e, params) => {
+		connectingFrom.current = params.nodeId ?? null;
+	};
+	const onConnectEnd: OnConnectEnd = (event, state) => {
+		const from = connectingFrom.current;
+		connectingFrom.current = null;
+		if (state.isValid || !from) return;
+		const point = "clientX" in event ? event : event.changedTouches[0];
+		openPaletteAt(point.clientX, point.clientY, from);
+	};
+	const onPaneContextMenu = (event: ReactMouseEvent | MouseEvent) => {
+		event.preventDefault();
+		openPaletteAt(event.clientX, event.clientY);
 	};
 
 	const selected = nodes.find((n) => n.id === selectedId) ?? null;
@@ -328,7 +389,7 @@ function Canvas({ workflow }: { workflow: Workflow }) {
 								return (
 									<DropdownMenuItem
 										key={intent}
-										onSelect={() => addAgent(intent)}
+										onSelect={() => createNode(intent)}
 										className="gap-2"
 									>
 										<Icon className={cn("size-4", meta.accent)} />
@@ -342,7 +403,10 @@ function Canvas({ workflow }: { workflow: Workflow }) {
 								);
 							})}
 							<DropdownMenuSeparator />
-							<DropdownMenuItem onSelect={addGate} className="gap-2">
+							<DropdownMenuItem
+								onSelect={() => createNode("gate")}
+								className="gap-2"
+							>
 								<ShieldQuestion className="size-4 text-amber-500" />
 								<span className="flex flex-col">
 									<span className="text-[13px]">Approval gate</span>
@@ -373,6 +437,9 @@ function Canvas({ workflow }: { workflow: Workflow }) {
 						onNodesChange={onNodesChange}
 						onEdgesChange={onEdgesChange}
 						onConnect={onConnect}
+						onConnectStart={onConnectStart}
+						onConnectEnd={onConnectEnd}
+						onPaneContextMenu={onPaneContextMenu}
 						onNodeClick={(_, n) => setSelectedId(n.id)}
 						onNodeDoubleClick={(_, n) =>
 							openNodeSession(
@@ -481,7 +548,80 @@ function Canvas({ workflow }: { workflow: Workflow }) {
 					</aside>
 				) : null}
 			</div>
+
+			{palette ? (
+				<NodePalette
+					screen={palette.screen}
+					onPick={(kind) => {
+						createNode(kind, palette.flow, palette.connectFrom);
+						setPalette(null);
+					}}
+					onClose={() => setPalette(null)}
+				/>
+			) : null}
 		</div>
+	);
+}
+
+/** A floating node palette anchored at a screen point (drag-release / right-click). */
+function NodePalette({
+	screen,
+	onPick,
+	onClose,
+}: {
+	screen: { x: number; y: number };
+	onPick: (kind: Intent | "gate") => void;
+	onClose: () => void;
+}) {
+	const entries: { kind: Intent | "gate" }[] = [
+		...INTENT_ORDER.map((kind) => ({ kind })),
+		{ kind: "gate" as const },
+	];
+	return (
+		<>
+			<button
+				type="button"
+				aria-label="Close"
+				onClick={onClose}
+				className="fixed inset-0 z-40 cursor-default"
+			/>
+			<div
+				className="fixed z-50 w-52 overflow-hidden rounded-lg border border-border bg-popover p-1 shadow-md"
+				style={{
+					left: Math.min(screen.x, window.innerWidth - 220),
+					top: Math.min(screen.y, window.innerHeight - 280),
+				}}
+			>
+				{entries.map(({ kind }) => {
+					const meta =
+						kind === "gate"
+							? {
+									icon: ShieldQuestion,
+									label: "Approval gate",
+									description: "Pause for your sign-off",
+									accent: "text-amber-500",
+								}
+							: INTENT_META[kind];
+					const Icon = meta.icon;
+					return (
+						<button
+							type="button"
+							key={kind}
+							onClick={() => onPick(kind)}
+							className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted"
+						>
+							<Icon className={cn("size-4 shrink-0", meta.accent)} />
+							<span className="flex min-w-0 flex-col">
+								<span className="text-[13px]">{meta.label}</span>
+								<span className="truncate text-[10px] text-muted-foreground">
+									{meta.description}
+								</span>
+							</span>
+						</button>
+					);
+				})}
+			</div>
+		</>
 	);
 }
 
