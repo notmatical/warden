@@ -6,8 +6,8 @@ use std::sync::{Arc, Mutex};
 use rusqlite::{Connection, OptionalExtension, Row};
 
 use crate::domain::{
-    AgentEvent, Backend, CheckStatus, EffortLevel, EventRecord, Group, PermissionMode, Project,
-    Session, SessionKind, SessionRole, SessionStatus,
+    AgentEvent, Backend, CheckStatus, ContextSource, EffortLevel, EventRecord, Group,
+    PermissionMode, Project, Session, SessionContextSource, SessionKind, SessionRole, SessionStatus,
 };
 use crate::error::{AppError, Result};
 use crate::util::{now_rfc3339, uuid};
@@ -267,6 +267,66 @@ impl Store {
             )?;
         }
         tx.commit()?;
+        Ok(())
+    }
+
+    // ----- context sources --------------------------------------------------
+
+    /// Append a context source to a session, returning the stored record.
+    pub fn add_context_source(
+        &self,
+        session_id: &str,
+        source: &ContextSource,
+    ) -> Result<SessionContextSource> {
+        let conn = self.lock();
+        let position: i64 = conn.query_row(
+            "SELECT COALESCE(MAX(position), -1) + 1 FROM session_context_sources WHERE session_id = ?1",
+            [session_id],
+            |row| row.get(0),
+        )?;
+        let record = SessionContextSource {
+            id: uuid(),
+            session_id: session_id.to_string(),
+            position,
+            enabled: true,
+            source: source.clone(),
+        };
+        conn.execute(
+            "INSERT INTO session_context_sources (id, session_id, position, enabled, payload, created_at)
+             VALUES (?1, ?2, ?3, 1, ?4, ?5)",
+            (
+                &record.id,
+                session_id,
+                position,
+                serde_json::to_string(source)?,
+                now_rfc3339(),
+            ),
+        )?;
+        Ok(record)
+    }
+
+    pub fn list_context_sources(&self, session_id: &str) -> Result<Vec<SessionContextSource>> {
+        let conn = self.lock();
+        let mut stmt = conn.prepare(
+            "SELECT id, session_id, position, enabled, payload
+             FROM session_context_sources WHERE session_id = ?1 ORDER BY position",
+        )?;
+        let rows = stmt.query_map([session_id], map_context_source)?;
+        rows.map(|r| r.map_err(AppError::from).and_then(|x| x))
+            .collect()
+    }
+
+    pub fn remove_context_source(&self, id: &str) -> Result<()> {
+        self.lock()
+            .execute("DELETE FROM session_context_sources WHERE id = ?1", [id])?;
+        Ok(())
+    }
+
+    pub fn set_context_source_enabled(&self, id: &str, enabled: bool) -> Result<()> {
+        self.lock().execute(
+            "UPDATE session_context_sources SET enabled = ?2 WHERE id = ?1",
+            (id, enabled as i64),
+        )?;
         Ok(())
     }
 
@@ -696,6 +756,26 @@ fn map_project(row: &Row<'_>) -> rusqlite::Result<Project> {
         is_git: row.get::<_, i64>("is_git")? != 0,
         created_at: row.get("created_at")?,
     })
+}
+
+fn map_context_source(
+    row: &Row<'_>,
+) -> rusqlite::Result<Result<SessionContextSource>> {
+    let id: String = row.get("id")?;
+    let session_id: String = row.get("session_id")?;
+    let position: i64 = row.get("position")?;
+    let enabled: bool = row.get("enabled")?;
+    let payload: String = row.get("payload")?;
+    Ok((|| {
+        let source: ContextSource = serde_json::from_str(&payload)?;
+        Ok(SessionContextSource {
+            id,
+            session_id,
+            position,
+            enabled,
+            source,
+        })
+    })())
 }
 
 fn map_group(row: &Row<'_>) -> rusqlite::Result<Group> {

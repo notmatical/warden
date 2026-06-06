@@ -4,6 +4,7 @@
 
 pub mod claude;
 pub mod codex;
+pub mod context;
 
 use std::time::Duration;
 

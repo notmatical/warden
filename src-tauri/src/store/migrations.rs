@@ -93,6 +93,18 @@ const MIGRATIONS: &[&str] = &[
     );
     CREATE INDEX idx_events_session ON events(session_id, seq);
 
+    -- Per-session context sources injected into the agent's system prompt
+    -- (files, dirs, saved text). `payload` is a JSON ContextSource.
+    CREATE TABLE session_context_sources (
+        id          TEXT PRIMARY KEY,
+        session_id  TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+        position    INTEGER NOT NULL,
+        enabled     INTEGER NOT NULL DEFAULT 1,
+        payload     TEXT NOT NULL,
+        created_at  TEXT NOT NULL
+    );
+    CREATE INDEX idx_ctx_sources_session ON session_context_sources(session_id);
+
     -- App-wide key/value settings (e.g. each provider's CLI source preference).
     CREATE TABLE settings (
         key    TEXT PRIMARY KEY,
