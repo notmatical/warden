@@ -1,10 +1,6 @@
 import { type CSSProperties, useEffect, useMemo, useState } from "react";
 
-import {
-	type Highlighted,
-	highlightTokens,
-	langFromPath,
-} from "@/lib/shiki";
+import { type Highlighted, highlightTokens, langFromPath } from "@/lib/shiki";
 import { cn } from "@/lib/utils";
 
 type RowKind = "add" | "del" | "ctx" | "hunk";
@@ -76,16 +72,8 @@ function useHighlighted(code: string[], lang: string): Highlighted | null {
 	return hl;
 }
 
-const SIGN = { add: "+", del: "−", ctx: "" } as const;
-const SIGN_CLASS = {
-	add: "text-emerald-400",
-	del: "text-rose-400",
-	ctx: "",
-} as const;
+const SIGN = { add: "+", del: "−", ctx: " " } as const;
 
-/** The highlighted diff surface — colored rows with a sign + line-number gutter
- *  on the app's `muted` surface. Owns no scrolling/border; a wrapper
- *  provides those. */
 export function DiffLines({
 	patch,
 	path,
@@ -99,42 +87,55 @@ export function DiffLines({
 	const hl = useHighlighted(code, lang ?? langFromPath(path));
 
 	return (
-		<div className="w-max min-w-full bg-muted/40 font-mono text-[12px] leading-[1.6] text-foreground">
+		<div className="w-max min-w-full bg-card font-mono text-sm leading-[1.55] text-foreground">
 			{rows.map((row, i) => {
 				if (row.kind === "hunk") {
 					return (
 						<div
 							// biome-ignore lint/suspicious/noArrayIndexKey: diff rows are positional
 							key={i}
-							className="px-3 py-0.5 whitespace-pre text-muted-foreground/70 select-none"
+							className="border-y border-border/40 bg-muted/40 px-3 py-1 text-[11px] whitespace-pre text-muted-foreground/70 select-none"
 						>
 							{row.text}
 						</div>
 					);
 				}
 				const tokens = hl?.lines[row.codeIndex];
+				const isAdd = row.kind === "add";
+				const isDel = row.kind === "del";
+
 				return (
 					<div
 						// biome-ignore lint/suspicious/noArrayIndexKey: diff rows are positional
 						key={i}
 						className={cn(
 							"flex",
-							row.kind === "add" && "bg-emerald-500/[0.1]",
-							row.kind === "del" && "bg-rose-500/[0.1]",
+							isAdd && "bg-positive/8",
+							isDel && "bg-destructive/10",
 						)}
 					>
 						<span
 							className={cn(
+								"w-11 shrink-0 pr-2 text-right text-[12px] tabular-nums select-none",
+								isAdd
+									? "text-positive/70"
+									: isDel
+										? "text-destructive/70"
+										: "text-muted-foreground/45",
+							)}
+						>
+							{row.num ?? ""}
+						</span>
+						<span
+							className={cn(
 								"w-4 shrink-0 text-center select-none",
-								SIGN_CLASS[row.kind],
+								isAdd && "text-positive",
+								isDel && "text-destructive",
 							)}
 						>
 							{SIGN[row.kind]}
 						</span>
-						<span className="w-9 shrink-0 pr-3 text-right text-[11px] text-muted-foreground/40 tabular-nums select-none">
-							{row.num ?? ""}
-						</span>
-						<code className="flex-1 pr-4 whitespace-pre">
+						<code className="flex-1 pr-4 pl-1 whitespace-pre">
 							{tokens
 								? tokens.map((t, ti) => (
 										<span
@@ -156,33 +157,37 @@ export function DiffLines({
 }
 
 /** A self-contained diff panel: a file-path header over a scrollable,
- *  height-capped syntax-highlighted patch. */
+ *  height-capped syntax-highlighted patch. `path` is the displayed string;
+ *  `pathTitle` overrides the tooltip (use the absolute path there when `path`
+ *  is shown relative). */
 export function DiffView({
 	path,
+	pathTitle,
 	patch,
 	className,
 }: {
 	path?: string;
+	pathTitle?: string;
 	patch: string;
 	className?: string;
 }) {
 	return (
 		<div
 			className={cn(
-				"overflow-hidden rounded-lg border border-border/60",
+				"overflow-hidden rounded-md border border-border/60 bg-card",
 				className,
 			)}
 		>
 			{path ? (
 				<div
-					className="truncate border-b border-border/60 bg-muted/40 px-3 py-1.5 font-mono text-[11px] text-muted-foreground"
-					title={path}
+					className="truncate border-b border-border/60 bg-muted/30 px-3 py-1.5 font-mono text-sm text-muted-foreground/80"
+					title={pathTitle ?? path}
 				>
 					{path}
 				</div>
 			) : null}
 			<div className="max-h-72 overflow-auto">
-				<DiffLines patch={patch} path={path} />
+				<DiffLines patch={patch} path={pathTitle ?? path} />
 			</div>
 		</div>
 	);

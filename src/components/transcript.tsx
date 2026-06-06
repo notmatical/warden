@@ -209,6 +209,7 @@ function renderTimeline(
 	events: EventRecord[],
 	sessionId: string,
 	autoAcceptPlan: boolean,
+	workingDir?: string,
 ): ReactNode[] {
 	const nodes: ReactNode[] = [];
 	const droppedResults = new Set<string>();
@@ -218,7 +219,13 @@ function renderTimeline(
 
 	const flushTools = () => {
 		if (toolRun.length === 0) return;
-		nodes.push(<ToolActivity key={`tools-${toolRun[0].id}`} items={toolRun} />);
+		nodes.push(
+			<ToolActivity
+				key={`tools-${toolRun[0].id}`}
+				items={toolRun}
+				workingDir={workingDir}
+			/>,
+		);
 		toolRun = [];
 	};
 
@@ -306,12 +313,16 @@ export function Transcript({
 	const isWorkflowSession = useAppStore(
 		(s) => s.sessions[sessionId]?.workflowId != null,
 	);
+	const workingDir = useAppStore((s) => s.sessions[sessionId]?.workingDir);
 
 	// Memoized so streaming deltas (which only touch `streaming`) don't re-walk
 	// the whole event log every tick.
 	const timeline = useMemo(
-		() => (events ? renderTimeline(events, sessionId, isWorkflowSession) : null),
-		[events, sessionId, isWorkflowSession],
+		() =>
+			events
+				? renderTimeline(events, sessionId, isWorkflowSession, workingDir)
+				: null,
+		[events, sessionId, isWorkflowSession, workingDir],
 	);
 
 	// An AskUserQuestion is awaiting a reply: the agent sometimes keeps narrating

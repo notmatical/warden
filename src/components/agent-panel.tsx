@@ -77,7 +77,13 @@ function MetaLine({ sub, className }: { sub: Subagent; className?: string }) {
 
 /** The drill-in view for one subagent: its prompt, the activity it produced, and
  *  its final report. */
-function SubagentDetail({ sub }: { sub: Subagent }) {
+function SubagentDetail({
+	sub,
+	workingDir,
+}: {
+	sub: Subagent;
+	workingDir?: string;
+}) {
 	return (
 		<>
 			<SheetHeader className="gap-2 border-b border-border/60">
@@ -111,7 +117,7 @@ function SubagentDetail({ sub }: { sub: Subagent }) {
 						<div className="mb-1 text-[11px] font-medium tracking-wide text-muted-foreground/80 uppercase">
 							Activity
 						</div>
-						<ToolActivity items={sub.activity} />
+						<ToolActivity items={sub.activity} workingDir={workingDir} />
 					</div>
 				) : null}
 
@@ -135,6 +141,7 @@ function SubagentDetail({ sub }: { sub: Subagent }) {
  *  opens a side sheet replaying its activity. Hidden when none were spawned. */
 export function AgentToolbar({ sessionId }: { sessionId: string }) {
 	const events = useAppStore((s) => s.eventsBySession[sessionId]);
+	const workingDir = useAppStore((s) => s.sessions[sessionId]?.workingDir);
 	const subagents = useMemo(
 		() => (events ? collectSubagents(events) : []),
 		[events],
@@ -216,7 +223,9 @@ export function AgentToolbar({ sessionId }: { sessionId: string }) {
 				}}
 			>
 				<SheetContent className="w-full gap-0 p-0 data-[side=right]:sm:max-w-2xl">
-					{active ? <SubagentDetail sub={active} /> : null}
+					{active ? (
+						<SubagentDetail sub={active} workingDir={workingDir} />
+					) : null}
 				</SheetContent>
 			</Sheet>
 		</>

@@ -48,6 +48,30 @@ function shortenPath(path: string | undefined): string | undefined {
 	return segments.slice(-2).join("/");
 }
 
+/** Drop the working-directory prefix from `path` for display. Case-insensitive
+ *  on the prefix (Windows), tolerant of mixed `/` and `\` separators; restores
+ *  the original separator style. Falls back to the absolute path when `path`
+ *  doesn't live under `base`. */
+export function pathRelativeTo(
+	path: string | undefined,
+	base: string | undefined,
+): string | undefined {
+	if (!path) return path;
+	if (!base) return path;
+	const norm = (s: string) => s.replace(/\\/g, "/").replace(/\/+$/, "");
+	const p = norm(path);
+	const b = norm(base);
+	if (!b) return path;
+	const lp = p.toLowerCase();
+	const lb = b.toLowerCase();
+	if (lp === lb) return "";
+	if (lp.startsWith(`${lb}/`)) {
+		const rel = p.slice(b.length + 1);
+		return path.includes("\\") ? rel.replace(/\//g, "\\") : rel;
+	}
+	return path;
+}
+
 /** A file view: full path in `target` (tooltip), tail in `label` (display). */
 function fileView(
 	verb: string,

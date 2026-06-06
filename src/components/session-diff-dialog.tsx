@@ -112,8 +112,8 @@ export function SessionDiffButton({ sessionId }: { sessionId: string }) {
 											{f.path.split("/").pop()}
 										</span>
 										<span className="shrink-0 tabular-nums text-[10px]">
-											<span className="text-emerald-500">+{f.added}</span>{" "}
-											<span className="text-red-500">−{f.removed}</span>
+											<span className="text-positive">+{f.added}</span>{" "}
+											<span className="text-destructive">−{f.removed}</span>
 										</span>
 									</button>
 								))}

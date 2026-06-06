@@ -1,10 +1,23 @@
 import { AlertTriangle, Check, ChevronRight, Circle } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, createContext, useContext, useState } from "react";
 
 import { DiffView } from "@/components/ui/diff-view";
-import { describeTool, type ToolDetail } from "@/lib/tool-format";
+import {
+	describeTool,
+	pathRelativeTo,
+	type ToolDetail,
+} from "@/lib/tool-format";
 import { cn } from "@/lib/utils";
 import type { EventRecord } from "@/types";
+
+/** Session working directory, used to display tool-target paths relative to it
+ *  in the diff/code panel headers. Set by `ToolActivity`. */
+const WorkingDirContext = createContext<string | undefined>(undefined);
+
+function useDisplayPath(path: string | undefined): string | undefined {
+	const cwd = useContext(WorkingDirContext);
+	return pathRelativeTo(path, cwd);
+}
 
 interface ToolStepData {
 	kind: "tool";
@@ -79,7 +92,7 @@ const VERBOSE_TOOLS = new Set([
 
 /** Warm code surface (theme token) shared by code/terminal/text panels, matching
  *  the diff viewer so the activity log reads as one piece. */
-const CODE_SURFACE = "bg-muted/40 text-foreground";
+const CODE_SURFACE = "bg-card text-foreground";
 
 /** A Task/Agent call's short description, for the header. */
 function agentDescription(input: unknown): string | undefined {
@@ -91,13 +104,21 @@ function agentDescription(input: unknown): string | undefined {
 }
 
 /** Shared bordered, height-capped, scrollable dark panel for code/text bodies. */
-function Panel({ header, children }: { header?: string; children: ReactNode }) {
+function Panel({
+	header,
+	headerTitle,
+	children,
+}: {
+	header?: string;
+	headerTitle?: string;
+	children: ReactNode;
+}) {
 	return (
 		<div className="overflow-hidden rounded-lg border border-border/60">
 			{header ? (
 				<div
-					className="truncate border-b border-border/60 bg-muted/40 px-3 py-1.5 font-mono text-[11px] text-muted-foreground"
-					title={header}
+					className="truncate border-b border-border/60 bg-muted/30 px-3 py-1.5 font-mono text-sm text-muted-foreground/80"
+					title={headerTitle ?? header}
 				>
 					{header}
 				</div>
@@ -108,9 +129,10 @@ function Panel({ header, children }: { header?: string; children: ReactNode }) {
 }
 
 function CodePanel({ path, text }: { path?: string; text: string }) {
+	const display = useDisplayPath(path);
 	return (
-		<Panel header={path}>
-			<pre className="m-0 px-3 py-1.5 font-mono text-[12px] leading-[1.6] whitespace-pre">
+		<Panel header={display} headerTitle={path}>
+			<pre className="m-0 px-3 py-1.5 font-mono text-sm leading-[1.55] whitespace-pre">
 				{text}
 			</pre>
 		</Panel>
@@ -120,7 +142,7 @@ function CodePanel({ path, text }: { path?: string; text: string }) {
 function TextPanel({ text }: { text: string }) {
 	return (
 		<Panel>
-			<pre className="m-0 px-3 py-1.5 font-mono text-[12px] leading-[1.6] whitespace-pre-wrap">
+			<pre className="m-0 px-3 py-1.5 font-mono text-sm leading-[1.55] whitespace-pre-wrap">
 				{text}
 			</pre>
 		</Panel>
@@ -140,24 +162,24 @@ function TerminalPanel({
 		<div className="overflow-hidden rounded-lg border border-border/60">
 			<div
 				className={cn(
-					"px-3 py-1.5 font-mono text-[12px] whitespace-pre-wrap",
+					"px-3 py-1.5 font-mono text-[14px] whitespace-pre-wrap",
 					CODE_SURFACE,
 				)}
 			>
-				<span className="select-none text-emerald-400">$ </span>
+				<span className="select-none text-positive">$ </span>
 				{command}
 			</div>
 			{output ? (
 				<div
 					className={cn(
-						"max-h-72 overflow-auto border-t border-white/10",
+						"max-h-72 overflow-auto border-t border-border/60",
 						CODE_SURFACE,
 					)}
 				>
 					<pre
 						className={cn(
-							"m-0 px-3 py-1.5 font-mono text-[12px] leading-[1.6] whitespace-pre-wrap",
-							isError && "text-red-400",
+							"m-0 px-3 py-1.5 font-mono text-sm leading-[1.55] whitespace-pre-wrap",
+							isError && "text-destructive",
 						)}
 					>
 						{output}
@@ -182,7 +204,7 @@ function TodoPanel({
 					className="flex items-center gap-2 text-[12px]"
 				>
 					{t.status === "completed" ? (
-						<Check className="size-3 shrink-0 text-emerald-500" />
+						<Check className="size-3 shrink-0 text-positive" />
 					) : t.status === "in_progress" ? (
 						<Circle className="size-3 shrink-0 fill-primary/20 text-primary" />
 					) : (
@@ -205,10 +227,21 @@ function TodoPanel({
 	);
 }
 
+function DiffDetail({
+	path,
+	patch,
+}: {
+	path?: string;
+	patch: string;
+}) {
+	const display = useDisplayPath(path);
+	return <DiffView path={display} pathTitle={path} patch={patch} />;
+}
+
 function DetailPanel({ detail }: { detail: ToolDetail }) {
 	switch (detail.kind) {
 		case "diff":
-			return <DiffView path={detail.path} patch={detail.patch} />;
+			return <DiffDetail path={detail.path} patch={detail.patch} />;
 		case "code":
 			return <CodePanel path={detail.path} text={detail.text} />;
 		case "terminal":
@@ -280,7 +313,7 @@ function ToolRow({ step }: { step: ToolStepData }) {
 	const expandable = !!view.detail;
 	const hasCounts = !!(view.added || view.removed);
 	// A new file reads as a creation — tint the verb green like its all-add diff.
-	const verbClass = step.name === "Write" ? "text-emerald-400" : "text-foreground/90";
+	const verbClass = step.name === "Write" ? "text-positive" : "text-foreground/90";
 
 	return (
 		<Row
@@ -306,11 +339,11 @@ function ToolRow({ step }: { step: ToolStepData }) {
 			{hasCounts ? (
 				<span className="shrink-0 text-[12px] tabular-nums">
 					{view.added ? (
-						<span className="text-emerald-500">+{view.added}</span>
+						<span className="text-positive">+{view.added}</span>
 					) : null}
 					{view.added && view.removed ? " " : null}
 					{view.removed ? (
-						<span className="text-red-500">−{view.removed}</span>
+						<span className="text-destructive">−{view.removed}</span>
 					) : null}
 				</span>
 			) : null}
@@ -388,16 +421,26 @@ function StepNode({ step }: { step: Step }) {
 
 /** A contiguous block of agent tool use and thinking, rendered as Claude-style
  *  text-forward summary lines that each expand into a single detail card (diff,
- *  code, terminal output, …). Subagent (Task) calls nest their own rows. */
-export function ToolActivity({ items }: { items: EventRecord[] }) {
+ *  code, terminal output, …). Subagent (Task) calls nest their own rows.
+ *  `workingDir` lets path headers in the body render relative to the session's
+ *  working directory instead of as long absolute paths. */
+export function ToolActivity({
+	items,
+	workingDir,
+}: {
+	items: EventRecord[];
+	workingDir?: string;
+}) {
 	const steps = buildSteps(items);
 	if (steps.length === 0) return null;
 
 	return (
-		<div className="flex min-w-0 flex-col gap-1">
-			{steps.map((step) => (
-				<StepNode key={step.id} step={step} />
-			))}
-		</div>
+		<WorkingDirContext.Provider value={workingDir}>
+			<div className="flex min-w-0 flex-col gap-1">
+				{steps.map((step) => (
+					<StepNode key={step.id} step={step} />
+				))}
+			</div>
+		</WorkingDirContext.Provider>
 	);
 }
