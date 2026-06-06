@@ -1,5 +1,17 @@
-import { Handle, type NodeProps, Position } from "@xyflow/react";
+import {
+	Handle,
+	type NodeProps,
+	Position,
+	useReactFlow,
+} from "@xyflow/react";
+import { Trash2 } from "lucide-react";
 
+import {
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { PROVIDER_ICON } from "@/lib/provider-icons";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app-store";
@@ -35,6 +47,7 @@ const STATUS_DOT: Record<NodeRunStatus, string> = {
 
 export function AgentNode({ id, data, selected }: NodeProps) {
 	const node = data as AgentNodeData;
+	const { deleteElements } = useReactFlow();
 	const status = useAppStore(
 		(s) => s.workflowRun?.nodes.find((n) => n.nodeId === id)?.status,
 	);
@@ -42,48 +55,62 @@ export function AgentNode({ id, data, selected }: NodeProps) {
 	const Icon = PROVIDER_ICON[backendOf(cfg.model)];
 
 	return (
-		<div
-			className={cn(
-				"w-52 rounded-xl border-2 bg-card px-3 py-2.5 shadow-sm transition",
-				status ? STATUS_RING[status] : "border-border/60",
-				selected && "ring-2 ring-primary ring-offset-1 ring-offset-background",
-			)}
-		>
-			<Handle
-				type="target"
-				position={Position.Top}
-				className="!size-2 !border-border !bg-muted-foreground"
-			/>
-			<div className="flex items-center gap-2">
-				<Icon className="size-4 shrink-0" />
-				<span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
-					{node.label || "Agent"}
-				</span>
-				<span
+		<ContextMenu>
+			<ContextMenuTrigger asChild>
+				<div
 					className={cn(
-						"size-2 shrink-0 rounded-full",
-						status ? STATUS_DOT[status] : "bg-muted-foreground/30",
+						"w-52 rounded-xl border-2 bg-card px-3 py-2.5 shadow-sm transition",
+						status ? STATUS_RING[status] : "border-border/60",
+						selected &&
+							"ring-2 ring-primary ring-offset-1 ring-offset-background",
 					)}
-				/>
-			</div>
-			<div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-				<span className="truncate font-mono">{cfg.model}</span>
-			</div>
-			<div className="mt-1 flex flex-wrap gap-1">
-				<span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-					{cfg.permissionMode}
-				</span>
-				{cfg.writesCode ? (
-					<span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-						{cfg.branchHint || "feature branch"}
-					</span>
-				) : null}
-			</div>
-			<Handle
-				type="source"
-				position={Position.Bottom}
-				className="!size-2 !border-border !bg-muted-foreground"
-			/>
-		</div>
+				>
+					<Handle
+						type="target"
+						position={Position.Top}
+						className="!size-2 !border-border !bg-muted-foreground"
+					/>
+					<div className="flex items-center gap-2">
+						<Icon className="size-4 shrink-0" />
+						<span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
+							{node.label || "Agent"}
+						</span>
+						<span
+							className={cn(
+								"size-2 shrink-0 rounded-full",
+								status ? STATUS_DOT[status] : "bg-muted-foreground/30",
+							)}
+						/>
+					</div>
+					<div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+						<span className="truncate font-mono">{cfg.model}</span>
+					</div>
+					<div className="mt-1 flex flex-wrap gap-1">
+						<span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+							{cfg.permissionMode}
+						</span>
+						{cfg.writesCode ? (
+							<span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+								{cfg.branchHint || "feature branch"}
+							</span>
+						) : null}
+					</div>
+					<Handle
+						type="source"
+						position={Position.Bottom}
+						className="!size-2 !border-border !bg-muted-foreground"
+					/>
+				</div>
+			</ContextMenuTrigger>
+			<ContextMenuContent className="w-40">
+				<ContextMenuItem
+					variant="destructive"
+					onSelect={() => void deleteElements({ nodes: [{ id }] })}
+				>
+					<Trash2 className="size-3.5" />
+					Delete node
+				</ContextMenuItem>
+			</ContextMenuContent>
+		</ContextMenu>
 	);
 }

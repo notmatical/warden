@@ -1,4 +1,5 @@
 import "@xyflow/react/dist/style.css";
+import "@/styles/workflow.css";
 
 import {
 	addEdge,
@@ -200,10 +201,11 @@ function Canvas({ workflow }: { workflow: Workflow }) {
 						onPaneClick={() => setSelectedId(null)}
 						nodeTypes={nodeTypes}
 						fitView
+						className="warden-flow"
 						proOptions={{ hideAttribution: true }}
 					>
 						<Background />
-						<Controls />
+						<Controls showInteractive={false} />
 					</ReactFlow>
 				</div>
 
