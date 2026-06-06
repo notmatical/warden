@@ -227,6 +227,7 @@ export interface Attachment {
   /** The path the agent reads (in place, or a staged copy). */
   path: string
   isImage: boolean
+  isDir: boolean
 }
 
 /** Token accounting for a turn; the input side + cache approximates context fill. */
