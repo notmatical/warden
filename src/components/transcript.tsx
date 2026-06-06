@@ -1,4 +1,10 @@
-import { AlertTriangle, Check, Copy, Info } from "lucide-react";
+import {
+	AlertTriangle,
+	Check,
+	Copy,
+	Info,
+	MessageSquarePlus,
+} from "lucide-react";
 import {
 	type ReactNode,
 	useEffect,
@@ -351,11 +357,24 @@ export function Transcript({
 				className="mx-auto flex w-full max-w-6xl flex-col gap-2.5 px-4 pt-8"
 				style={{ paddingBottom: bottomInset }}
 			>
-				{isEmpty && (
-					<p className="py-8 text-center text-sm text-muted-foreground">
-						{loading ? "Loading transcript…" : "No messages yet."}
-					</p>
-				)}
+				{isEmpty &&
+					(loading ? (
+						<p className="py-16 text-center text-sm text-muted-foreground">
+							Loading transcript…
+						</p>
+					) : (
+						<div className="flex flex-col items-center gap-4 py-16 text-center">
+							<div className="flex size-14 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+								<MessageSquarePlus className="size-6" />
+							</div>
+							<div className="space-y-1">
+								<h2 className="text-base font-medium">No messages yet</h2>
+								<p className="max-w-sm text-sm text-muted-foreground">
+									Send a message below to start the conversation.
+								</p>
+							</div>
+						</div>
+					))}
 				{timeline}
 				{streaming && !pendingQuestion && (
 					<AssistantMessage text={streaming} />

@@ -1,5 +1,5 @@
 import { listen } from "@tauri-apps/api/event";
-import { ArrowUpCircle, Download, Loader2 } from "lucide-react";
+import { Download, Loader2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -57,23 +57,25 @@ function UpdateRow({ status }: { status: ProviderStatus }) {
 	};
 
 	return (
-		<div className="flex flex-col gap-1.5 px-3 py-2.5">
-			<div className="flex items-center gap-2">
+		<div className="flex flex-col gap-2 px-3 py-2.5">
+			<div className="flex items-center gap-2.5">
 				<Icon className="size-4 shrink-0" />
-				<span className="text-[13px] font-medium text-foreground">
-					{status.name}
-				</span>
-				<span className="truncate font-mono text-[11px] text-muted-foreground">
-					{needsInstall
-						? "not installed"
-						: `${current ?? "?"} → ${status.latestVersion ?? "latest"}`}
-				</span>
+				<div className="flex min-w-0 flex-1 flex-col leading-tight">
+					<span className="truncate text-[13px] font-medium text-foreground">
+						{status.name}
+					</span>
+					<span className="truncate font-mono text-[11px] text-muted-foreground tabular-nums">
+						{needsInstall
+							? "Not installed"
+							: `${current ?? "?"} → ${status.latestVersion ?? "latest"}`}
+					</span>
+				</div>
 				{!progress ? (
 					<Button
 						size="xs"
 						onClick={() => void run()}
 						disabled={busy}
-						className="ml-auto bg-foreground px-2.5 text-background hover:bg-foreground/90"
+						className="h-6 shrink-0 bg-foreground px-2.5 text-background hover:bg-foreground/90"
 					>
 						{busy ? (
 							<Loader2 className="size-3 animate-spin" />
@@ -87,9 +89,9 @@ function UpdateRow({ status }: { status: ProviderStatus }) {
 			</div>
 			{progress ? (
 				<div className="flex flex-col gap-1">
-					<div className="h-0.5 overflow-hidden rounded-full bg-border">
+					<div className="h-1 overflow-hidden rounded-full bg-muted">
 						<div
-							className="h-full bg-foreground/80 transition-[width] duration-300"
+							className="h-full rounded-full bg-foreground/80 transition-[width] duration-300"
 							style={{ width: `${progress.percent}%` }}
 						/>
 					</div>
@@ -145,10 +147,10 @@ export function CliUpdates() {
 				</TooltipContent>
 			</Tooltip>
 			<PopoverContent align="end" className="w-80 p-0">
-				<div className="flex items-center gap-2 border-b border-border/60 px-3 py-2.5">
-					<ArrowUpCircle className="size-3.5 text-muted-foreground" />
-					<span className="text-sm font-medium text-foreground">
-						CLI updates
+				<div className="flex items-center justify-between border-b border-border/60 px-3 py-2.5">
+					<span className="text-sm font-medium text-foreground">Agent CLIs</span>
+					<span className="text-[11px] text-muted-foreground tabular-nums">
+						{pending.length} pending
 					</span>
 				</div>
 				<div className="divide-y divide-border/50">
