@@ -331,6 +331,28 @@ impl Store {
         Ok(())
     }
 
+    /// Concatenate a session's assistant text across its turns — used to hand one
+    /// workflow node's output to the next. Skips transient deltas and tool
+    /// chatter; joins `AssistantText` blocks in order.
+    pub fn get_session_assistant_text(&self, session_id: &str) -> Result<String> {
+        let conn = self.lock();
+        let mut stmt =
+            conn.prepare("SELECT payload FROM events WHERE session_id = ?1 ORDER BY seq")?;
+        let rows = stmt.query_map([session_id], |row| row.get::<_, String>("payload"))?;
+        let mut out = String::new();
+        for payload in rows {
+            if let Ok(AgentEvent::AssistantText { text, .. }) =
+                serde_json::from_str::<AgentEvent>(&payload?)
+            {
+                if !out.is_empty() {
+                    out.push_str("\n\n");
+                }
+                out.push_str(&text);
+            }
+        }
+        Ok(out)
+    }
+
     // ----- sessions ---------------------------------------------------------
 
     pub fn create_session(&self, new: NewSession) -> Result<Session> {

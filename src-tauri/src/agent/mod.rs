@@ -12,7 +12,7 @@ pub use naming::generate_session_title;
 use tauri::AppHandle;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
 
-use crate::domain::{AgentEvent, Backend, Session, SessionStatus};
+use crate::domain::{AgentEvent, Backend, ContextSource, Session, SessionStatus};
 use crate::error::{AppError, Result};
 use crate::events::{emit_delta, emit_event, emit_session};
 use crate::store::Store;
@@ -208,8 +208,18 @@ impl AgentManager {
         self.begin_turn(&store, &app, &session, &prompt)?;
 
         // Assemble the session's context sources (system-prompt text + extra
-        // dirs), injected per turn so live changes take effect.
-        let sources = store.list_context_sources(&session.id).unwrap_or_default();
+        // dirs), injected per turn so live changes take effect. Resolve any
+        // node-output links to the upstream session's text first.
+        let mut sources = store.list_context_sources(&session.id).unwrap_or_default();
+        for entry in &mut sources {
+            if let ContextSource::NodeOutput { session_id, label } = &entry.source {
+                let body = store.get_session_assistant_text(session_id).unwrap_or_default();
+                let label = label
+                    .clone()
+                    .unwrap_or_else(|| "Linked agent output".to_string());
+                entry.source = ContextSource::Text { label, body };
+            }
+        }
         let context = crate::providers::context::assemble(&sources);
 
         if session.backend == Backend::Codex {

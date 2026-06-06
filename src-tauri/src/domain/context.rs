@@ -12,6 +12,12 @@ pub enum ContextSource {
     Dir { path: String },
     /// A saved text snippet inlined into the prompt.
     Text { label: String, body: String },
+    /// The latest assistant output of another session (e.g. an upstream
+    /// workflow node), resolved to text at turn time and injected as context.
+    NodeOutput {
+        session_id: String,
+        label: Option<String>,
+    },
 }
 
 /// A persisted, ordered, toggleable context source on a session.
