@@ -251,9 +251,22 @@ export const createSessionsSlice: StateCreator<
 				startedAtBySession = { ...startedAtBySession };
 				delete startedAtBySession[session.id];
 			}
+			// Keep the sidebar's per-workflow list in sync as the executor spawns
+			// new node sessions and emits session-updated for them.
+			let sessionsByWorkflow = state.sessionsByWorkflow;
+			if (session.workflowId) {
+				const existing = sessionsByWorkflow[session.workflowId];
+				if (existing && !existing.includes(session.id)) {
+					sessionsByWorkflow = {
+						...sessionsByWorkflow,
+						[session.workflowId]: [...existing, session.id],
+					};
+				}
+			}
 			return {
 				sessions: { ...state.sessions, [session.id]: session },
 				startedAtBySession,
+				sessionsByWorkflow,
 			};
 		});
 		// Nudge with a native notification when a turn finishes while you're away.

@@ -1,3 +1,4 @@
+import { useDraggable } from "@dnd-kit/core";
 import {
 	ChevronRight,
 	Copy,
@@ -12,17 +13,11 @@ import {
 	Trash2,
 	Workflow as WorkflowIcon,
 } from "lucide-react";
-import { useDraggable } from "@dnd-kit/core";
 import { type KeyboardEvent, type ReactNode, useEffect, useState } from "react";
 
 import { AgentProvidersIcon } from "@/components/agent-providers-icon";
-import {
-	ClaudeIcon,
-	CodexIcon,
-	GitHubIcon,
-} from "@/components/icons/brand";
 import { useConfirm } from "@/components/confirm-dialog";
-import { UpdateBanner } from "@/components/update-banner";
+import { ClaudeIcon, CodexIcon, GitHubIcon } from "@/components/icons/brand";
 import { ReviewPrDialog } from "@/components/review-pr-dialog";
 import { SessionFavicon } from "@/components/session-favicon";
 import { Button } from "@/components/ui/button";
@@ -59,11 +54,12 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { UpdateBanner } from "@/components/update-banner";
 import { DEFAULT_CHAT_MODEL } from "@/lib/models";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app-store";
 import type { Group, Project, SessionKind } from "@/types";
-import type { Workflow } from "@/types/workflow";
+import type { RunStatus, Workflow } from "@/types/workflow";
 
 // Keep shadcn's left connector line + indent, but drop the right margin/padding
 // (default `mx-3.5 px-2.5`) so sub-rows reach the same right edge as the group
@@ -364,8 +360,32 @@ function RootRow({
 const WF_SUB_BUTTON =
 	"w-full cursor-default text-left text-sidebar-foreground/70 hover:bg-transparent hover:text-sidebar-foreground active:bg-transparent active:text-sidebar-foreground";
 
-/** A workflow in the sidebar: the row toggles its child node-sessions; the hover
- *  action (and double-click) opens the workflow editor tab. */
+/** Status visuals for a workflow row. Only states the user cares to *see* light
+ *  up; pending/completed/canceled stay quiet so the strip doesn't strobe.
+ *  `tint` is a soft row background (visible from afar, no clipping);
+ *  `dot` is a precise trailing indicator with the same color language. */
+const WF_STATUS_VIS: Partial<
+	Record<RunStatus, { tint: string; dot: string; pulse?: boolean }>
+> = {
+	running: {
+		tint: "bg-blue-500/[0.07] hover:bg-blue-500/[0.12]",
+		dot: "bg-blue-500",
+		pulse: true,
+	},
+	paused: {
+		tint: "bg-amber-500/[0.08] hover:bg-amber-500/[0.14]",
+		dot: "bg-amber-500",
+		pulse: true,
+	},
+	failed: {
+		tint: "bg-red-500/[0.07] hover:bg-red-500/[0.12]",
+		dot: "bg-red-500",
+	},
+};
+
+/** A workflow row: click toggles its children, double-click opens the editor.
+ *  Live run state shows as a left accent bar (`bg-{color}-500`). No per-row
+ *  hover icon — Open is on the context menu (or just double-click). */
 function WorkflowRow({
 	workflow,
 	expanded,
@@ -376,6 +396,7 @@ function WorkflowRow({
 	onToggle: () => void;
 }) {
 	const sessionIds = useAppStore((s) => s.sessionsByWorkflow[workflow.id]);
+	const status = useAppStore((s) => s.workflowRunStatusById[workflow.id]);
 	const loadWorkflowSessions = useAppStore((s) => s.loadWorkflowSessions);
 	const openWorkflow = useAppStore((s) => s.openWorkflow);
 	const renameWorkflow = useAppStore((s) => s.renameWorkflow);
@@ -386,10 +407,15 @@ function WorkflowRow({
 	const [editing, setEditing] = useState(false);
 	const [draft, setDraft] = useState("");
 
+	// load on expand if we haven't yet, or refresh an empty cache.
 	useEffect(() => {
-		if (expanded && sessionIds === undefined)
+		if (!expanded) return;
+		if (sessionIds === undefined || sessionIds.length === 0) {
 			void loadWorkflowSessions(workflow.id);
-	}, [expanded, sessionIds, workflow.id, loadWorkflowSessions]);
+		}
+		// re-run when the row opens, not on every cache change (would loop).
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [expanded, workflow.id]);
 
 	const commitRename = () => {
 		setEditing(false);
@@ -398,6 +424,7 @@ function WorkflowRow({
 	};
 
 	const ids = sessionIds ?? [];
+	const vis = status ? WF_STATUS_VIS[status] : null;
 
 	return (
 		<SidebarMenuSubItem>
@@ -426,7 +453,10 @@ function WorkflowRow({
 							/>
 						</div>
 					) : (
-						<SidebarMenuSubButton asChild className={WF_SUB_BUTTON}>
+						<SidebarMenuSubButton
+							asChild
+							className={cn(WF_SUB_BUTTON, vis?.tint)}
+						>
 							<button
 								type="button"
 								onClick={onToggle}
@@ -441,6 +471,16 @@ function WorkflowRow({
 								/>
 								<WorkflowIcon className="opacity-70" />
 								<span className="min-w-0 flex-1 truncate">{workflow.name}</span>
+								{vis ? (
+									<span
+										aria-label={status}
+										className={cn(
+											"ml-1 size-1.5 shrink-0 rounded-full",
+											vis.dot,
+											vis.pulse && "animate-pulse",
+										)}
+									/>
+								) : null}
 							</button>
 						</SidebarMenuSubButton>
 					)}
@@ -490,23 +530,6 @@ function WorkflowRow({
 					</ContextMenuItem>
 				</ContextMenuContent>
 			</ContextMenu>
-			{editing ? null : (
-				<RowAction scope="sub-item">
-					<Tooltip>
-						<TooltipTrigger asChild>
-							<button
-								type="button"
-								aria-label={`Open ${workflow.name}`}
-								onClick={() => openWorkflow(workflow.id)}
-								className={ROW_ICON}
-							>
-								<ExternalLink />
-							</button>
-						</TooltipTrigger>
-						<TooltipContent side="right">Open workflow</TooltipContent>
-					</Tooltip>
-				</RowAction>
-			)}
 
 			{expanded ? (
 				<SidebarMenuSub className={SUB_CLASS}>
@@ -523,19 +546,43 @@ function WorkflowRow({
 	);
 }
 
-/** The group's "Workflows" collapsible — peer to the repo folders. */
+/** How many workflows show before "Show all" — active ones (running/paused)
+ *  are always visible on top of this. */
+const WORKFLOW_VISIBLE_LIMIT = 5;
+const ACTIVE_STATUSES: RunStatus[] = ["running", "paused"];
+
+/** Workflows for a group — a quiet section under the repo folders (hairline +
+ *  uppercase label). The whole section collapses via the header chevron. When
+ *  there are many, the list truncates to a small cap with a "Show all" toggle;
+ *  active runs (running/paused) are always visible regardless of the cap. */
 function WorkflowsSection({ projectIds }: { projectIds: string[] }) {
 	const workflowsMap = useAppStore((s) => s.workflows);
+	const statuses = useAppStore((s) => s.workflowRunStatusById);
 	const createWorkflow = useAppStore((s) => s.createWorkflow);
 	const openWorkflow = useAppStore((s) => s.openWorkflow);
-	const [open, setOpen] = useState(true);
+	const [collapsed, setCollapsed] = useState(false);
+	const [showAll, setShowAll] = useState(false);
 	const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
 	if (projectIds.length === 0) return null;
 
-	const list = Object.values(workflowsMap)
-		.filter((w) => projectIds.includes(w.projectId))
-		.sort((a, b) => a.name.localeCompare(b.name));
+	const all = Object.values(workflowsMap).filter((w) =>
+		projectIds.includes(w.projectId),
+	);
+
+	// Active workflows always sort first; ties + inactives sort by recency.
+	const byRecency = (a: Workflow, b: Workflow) =>
+		b.updatedAt.localeCompare(a.updatedAt);
+	const isActive = (w: Workflow) => {
+		const s = statuses[w.id];
+		return !!s && ACTIVE_STATUSES.includes(s);
+	};
+	const active = all.filter(isActive).sort(byRecency);
+	const inactive = all.filter((w) => !isActive(w)).sort(byRecency);
+	const inactiveCap = Math.max(0, WORKFLOW_VISIBLE_LIMIT - active.length);
+	const inactiveVisible = showAll ? inactive : inactive.slice(0, inactiveCap);
+	const visible = [...active, ...inactiveVisible];
+	const hiddenCount = inactive.length - inactiveVisible.length;
 
 	const toggle = (id: string) =>
 		setExpanded((prev) => {
@@ -551,55 +598,74 @@ function WorkflowsSection({ projectIds }: { projectIds: string[] }) {
 	};
 
 	return (
-		<SidebarMenuSubItem>
-			<SidebarMenuSubButton asChild className={WF_SUB_BUTTON}>
-				<button type="button" onClick={() => setOpen((o) => !o)}>
+		<>
+			<SidebarMenuSubItem className="mt-2 border-border/40 border-t pt-2">
+				<button
+					type="button"
+					onClick={() => setCollapsed((c) => !c)}
+					className="flex w-full items-center gap-1 rounded-md px-2 pt-0.5 pb-1 text-left font-medium text-[10px] uppercase tracking-[0.08em] text-sidebar-foreground/45 transition-colors hover:text-sidebar-foreground/70"
+				>
 					<ChevronRight
-						className={cn("transition-transform", open && "rotate-90")}
+						className={cn(
+							"size-3 transition-transform",
+							!collapsed && "rotate-90",
+						)}
 					/>
-					<WorkflowIcon className="opacity-70" />
-					<span className="min-w-0 flex-1 truncate">Workflows</span>
+					<span>Workflows</span>
+					{all.length > 0 ? (
+						<span className="ml-1 flex items-center gap-1.5 normal-case tracking-normal text-sidebar-foreground/35">
+							<span className="leading-none">{all.length}</span>
+							{active.length > 0 ? (
+								<span
+									className="inline-block size-1.5 animate-pulse rounded-full bg-blue-500 align-middle"
+									aria-label={`${active.length} active`}
+								/>
+							) : null}
+						</span>
+					) : null}
 				</button>
-			</SidebarMenuSubButton>
-			<RowAction scope="sub-item">
-				<Tooltip>
-					<TooltipTrigger asChild>
-						<button
-							type="button"
-							aria-label="New workflow"
-							onClick={() => void createNew()}
-							className={ROW_ICON}
-						>
-							<Plus />
-						</button>
-					</TooltipTrigger>
-					<TooltipContent side="right">New workflow</TooltipContent>
-				</Tooltip>
-			</RowAction>
-			{open ? (
-				<SidebarMenuSub className={SUB_CLASS}>
-					{list.length > 0 ? (
-						list.map((w) => (
-							<WorkflowRow
-								key={w.id}
-								workflow={w}
-								expanded={expanded.has(w.id)}
-								onToggle={() => toggle(w.id)}
-							/>
-						))
-					) : (
-						<button
-							type="button"
-							onClick={() => void createNew()}
-							className="flex items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground/70 transition-colors hover:text-foreground"
-						>
-							<Plus className="size-3.5" />
-							New workflow
-						</button>
-					)}
-				</SidebarMenuSub>
-			) : null}
-		</SidebarMenuSubItem>
+			</SidebarMenuSubItem>
+			{collapsed ? null : (
+				<>
+					{visible.map((w) => (
+						<WorkflowRow
+							key={w.id}
+							workflow={w}
+							expanded={expanded.has(w.id)}
+							onToggle={() => toggle(w.id)}
+						/>
+					))}
+					{hiddenCount > 0 || showAll ? (
+						<SidebarMenuSubItem>
+							<SidebarMenuSubButton asChild className={WF_SUB_BUTTON}>
+								<button
+									type="button"
+									onClick={() => setShowAll((v) => !v)}
+									className="text-sidebar-foreground/55"
+								>
+									<span className="size-4 shrink-0" aria-hidden />
+									<span>
+										{showAll ? "Show fewer" : `Show all (${hiddenCount} more)`}
+									</span>
+								</button>
+							</SidebarMenuSubButton>
+						</SidebarMenuSubItem>
+					) : null}
+					<SidebarMenuSubItem>
+						<SidebarMenuSubButton asChild className={WF_SUB_BUTTON}>
+							<button
+								type="button"
+								onClick={() => void createNew()}
+								className="text-sidebar-foreground/55"
+							>
+								<Plus className="opacity-70" />
+								<span>New workflow</span>
+							</button>
+						</SidebarMenuSubButton>
+					</SidebarMenuSubItem>
+				</>
+			)}
+		</>
 	);
 }
 
@@ -687,6 +753,16 @@ function GroupRow({
 							>
 								{group.name}
 							</span>
+							{roots && roots.length > 0 ? (
+								// Quiet folder count; fades out as the hover action takes the
+								// row's right side, so the two don't overlap.
+								<span
+									className="shrink-0 font-normal text-[11px] text-sidebar-foreground/40 tabular-nums transition-opacity group-hover/menu-item:opacity-0 group-focus-within/menu-item:opacity-0"
+									aria-label={`${roots.length} folder${roots.length === 1 ? "" : "s"}`}
+								>
+									{roots.length}
+								</span>
+							) : null}
 						</SidebarMenuButton>
 					)}
 				</ContextMenuTrigger>
