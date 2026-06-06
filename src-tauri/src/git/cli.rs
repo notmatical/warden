@@ -312,6 +312,40 @@ pub fn has_remote(repo: &Path) -> bool {
         .unwrap_or(false)
 }
 
+/// The repo's `origin` remote as a browsable `https` URL (SSH forms and a `.git`
+/// suffix normalized away), or `None` if there's no origin or it isn't a URL we
+/// recognize.
+pub fn remote_browse_url(repo: &Path) -> Option<String> {
+    let raw = run(repo, &["remote", "get-url", "origin"])
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())?;
+    normalize_remote_url(&raw)
+}
+
+/// Map a git remote URL to an `https` browser URL:
+///   `git@host:owner/repo(.git)`     → `https://host/owner/repo`
+///   `ssh://git@host/owner/repo.git` → `https://host/owner/repo`
+///   `https://host/owner/repo.git`   → `https://host/owner/repo`
+fn normalize_remote_url(raw: &str) -> Option<String> {
+    let url = raw.trim();
+    let strip_git = |s: &str| s.strip_suffix(".git").unwrap_or(s).to_string();
+    // scp-like syntax: git@host:owner/repo
+    if let Some(rest) = url.strip_prefix("git@") {
+        if let Some((host, path)) = rest.split_once(':') {
+            return Some(format!("https://{host}/{}", strip_git(path)));
+        }
+    }
+    if let Some(rest) = url.strip_prefix("ssh://") {
+        let rest = rest.strip_prefix("git@").unwrap_or(rest);
+        return Some(format!("https://{}", strip_git(rest)));
+    }
+    if url.starts_with("http://") || url.starts_with("https://") {
+        return Some(strip_git(url));
+    }
+    None
+}
+
 /// Push the worktree's current branch to origin, setting upstream. Surfaces the
 /// remote's own error (auth, missing remote) on failure.
 pub fn push_branch(worktree: &Path) -> Result<()> {

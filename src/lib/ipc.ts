@@ -135,6 +135,11 @@ export function sessionGitStatus(sessionId: string): Promise<RepoStatus[]> {
   return invoke("session_git_status", { sessionId })
 }
 
+/** The browsable https URL for a repo path's origin remote, or null. */
+export function repoBrowseUrl(path: string): Promise<string | null> {
+  return invoke("repo_browse_url", { path })
+}
+
 export function getSessionDiff(sessionId: string): Promise<DiffFile[]> {
   return invoke("get_session_diff", { sessionId })
 }
