@@ -60,7 +60,7 @@ pub async fn create_session(
             .store
             .ensure_group_for_project(&project_id, &project.name)?,
     };
-    let dir = provision_working_dir(&app, &project, isolate.unwrap_or(false))?;
+    let dir = provision_working_dir(&app, &project, isolate.unwrap_or(false), None)?;
 
     let permission_mode = permission_mode
         .as_deref()
@@ -212,7 +212,7 @@ pub async fn set_session_isolation(
         }
     }
 
-    let dir = provision_working_dir(&app, &project, isolate)?;
+    let dir = provision_working_dir(&app, &project, isolate, None)?;
     state.store.update_session_workdir(
         &session_id,
         &dir.working_dir,

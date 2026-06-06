@@ -89,6 +89,7 @@ pub fn provision_working_dir(
     app: &AppHandle,
     ws: &Project,
     isolate: bool,
+    branch_hint: Option<&str>,
 ) -> Result<ProvisionedDir> {
     let repo = Path::new(&ws.path);
 
@@ -116,8 +117,17 @@ pub fn provision_working_dir(
     }
 
     let short = short_id(&uuid(), 8);
-    let branch = format!("warden/{short}");
-    let dest = worktrees_root(app)?.join(sanitize(&ws.name)).join(&short);
+    // A caller-named branch (e.g. `feat/x`) wins; otherwise `warden/<short>`.
+    // The directory segment is always sanitized + uniquified with `short`.
+    let hint = branch_hint.map(str::trim).filter(|b| !b.is_empty());
+    let branch = hint
+        .map(str::to_string)
+        .unwrap_or_else(|| format!("warden/{short}"));
+    let dir_seg = match hint {
+        Some(b) => format!("{}-{short}", sanitize(b)),
+        None => short.clone(),
+    };
+    let dest = worktrees_root(app)?.join(sanitize(&ws.name)).join(&dir_seg);
     if let Some(parent) = dest.parent() {
         fs::create_dir_all(parent)?;
     }

@@ -78,7 +78,7 @@ pub async fn run_plan_to_code(
     let group_id = store.ensure_group_for_project(&project_id, &project.name)?;
     // The handoff runs two agents against one shared checkout, so it always
     // isolates in a worktree.
-    let dir = provision_working_dir(&app, &project, true)?;
+    let dir = provision_working_dir(&app, &project, true, None)?;
 
     let planner = store.create_session(session_in_dir(
         &group_id,
