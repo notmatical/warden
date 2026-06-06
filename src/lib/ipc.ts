@@ -158,6 +158,16 @@ export function syncWorktree(
   return invoke("sync_worktree", { sessionId, mode: mode ?? null })
 }
 
+/** Push the session's worktree branch to its origin remote. */
+export function pushSession(sessionId: string): Promise<void> {
+  return invoke("push_session", { sessionId })
+}
+
+/** Pull the latest upstream commits onto the session's branch (fetch + merge). */
+export function pullSession(sessionId: string): Promise<SyncOutcome> {
+  return invoke("pull_session", { sessionId })
+}
+
 export function integrateSession(
   sessionId: string,
   message: string,
