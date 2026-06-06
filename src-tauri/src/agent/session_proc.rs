@@ -48,6 +48,7 @@ pub async fn ensure(
     store: &Store,
     session: &Session,
     add_dirs: &[String],
+    context_file: Option<&str>,
 ) -> Result<()> {
     if is_alive(&session.id) {
         return Ok(());
@@ -65,7 +66,7 @@ pub async fn ensure(
         })
         .unwrap_or(false);
 
-    let mut child = claude::session_command(session, add_dirs, resume)?.spawn()?;
+    let mut child = claude::session_command(session, add_dirs, context_file, resume)?.spawn()?;
     let pid = child.id();
     let stdin = child
         .stdin

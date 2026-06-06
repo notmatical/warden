@@ -206,27 +206,50 @@ impl AgentManager {
     ) -> Result<()> {
         self.begin_turn(&store, &app, &session, &prompt)?;
 
+        // Assemble the session's context sources (system-prompt text + extra
+        // dirs), injected per turn so live changes take effect.
+        let sources = store.list_context_sources(&session.id).unwrap_or_default();
+        let context = crate::providers::context::assemble(&sources);
+
         if session.backend == Backend::Codex {
             // Codex runs the turn to completion in its adapter, settling the
             // session to Idle on the terminating `turn/completed`. A failure to
             // start the turn is surfaced as an error event here.
-            if let Err(err) = codex::run_turn(&app, &store, &session, &prompt).await {
+            if let Err(err) =
+                codex::run_turn(&app, &store, &session, &prompt, &context.system_text).await
+            {
                 let failed: Result<TurnOutput> = Err(err);
                 self.finalize(&app, &store, &session.id, &failed);
             }
             return Ok(());
         }
 
-        // Hand every non-primary root to the CLI as an extra directory.
-        let add_dirs: Vec<String> = store
+        // Hand every non-primary root, plus any context dirs, to the CLI.
+        let mut add_dirs: Vec<String> = store
             .list_session_root_projects(&session.id)
             .unwrap_or_default()
             .into_iter()
             .filter(|p| p.id != session.project_id)
             .map(|p| p.path)
             .collect();
+        for dir in context.add_dirs {
+            if !add_dirs.contains(&dir) {
+                add_dirs.push(dir);
+            }
+        }
 
-        if let Err(err) = session_proc::ensure(&app, &store, &session, &add_dirs).await {
+        let context_file = match write_context_file(&app, &session.id, &context.system_text) {
+            Ok(file) => file,
+            Err(err) => {
+                let failed: Result<TurnOutput> = Err(err);
+                self.finalize(&app, &store, &session.id, &failed);
+                return Ok(());
+            }
+        };
+
+        if let Err(err) =
+            session_proc::ensure(&app, &store, &session, &add_dirs, context_file.as_deref()).await
+        {
             let failed: Result<TurnOutput> = Err(err);
             self.finalize(&app, &store, &session.id, &failed);
             return Ok(());
@@ -300,6 +323,32 @@ impl AgentManager {
         }
         was_running
     }
+}
+
+/// Drop a session's warm Claude process so the next turn respawns it with fresh
+/// args — used after its context sources change. A no-op for Codex (whose
+/// instructions are rebuilt each turn) and for idle sessions.
+pub fn refresh_session(session_id: &str) {
+    session_proc::kill(session_id);
+}
+
+/// Write a session's assembled context to a file under the app data dir for
+/// Claude's `--append-system-prompt-file`, returning its path — or `None` when
+/// there's no context to inject.
+fn write_context_file(app: &AppHandle, session_id: &str, text: &str) -> Result<Option<String>> {
+    use tauri::Manager;
+    if text.is_empty() {
+        return Ok(None);
+    }
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| AppError::Agent(format!("no app data dir: {e}")))?
+        .join("context");
+    std::fs::create_dir_all(&dir).map_err(|e| AppError::Agent(e.to_string()))?;
+    let path = dir.join(format!("{session_id}.md"));
+    std::fs::write(&path, text).map_err(|e| AppError::Agent(e.to_string()))?;
+    Ok(Some(path.to_string_lossy().into_owned()))
 }
 
 pub mod commands;

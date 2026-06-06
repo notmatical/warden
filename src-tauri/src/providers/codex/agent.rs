@@ -443,7 +443,7 @@ fn codex_usage(turn: Option<&Value>) -> Option<TokenUsage> {
 
 /// Build `thread/start` params for an autonomous (3a) Codex thread. The session's
 /// model selects the engine; the `-fast` suffix maps to the priority service tier.
-fn thread_params(session: &Session) -> Value {
+fn thread_params(session: &Session, base_instructions: &str) -> Value {
     let (model, is_fast) = split_fast_model(&session.model);
     let mut params = json!({
         "cwd": session.working_dir,
@@ -453,6 +453,10 @@ fn thread_params(session: &Session) -> Value {
     });
     if is_fast {
         params["serviceTier"] = json!("fast");
+    }
+    // The session's assembled context sources, prepended to Codex's instructions.
+    if !base_instructions.is_empty() {
+        params["baseInstructions"] = json!(base_instructions);
     }
     params
 }
@@ -491,9 +495,13 @@ fn sandbox_policy(session: &Session, add_dirs: &[String]) -> Value {
 
 /// Start a new Codex thread (or resume the session's existing one), returning
 /// the thread id. The id is persisted so later turns resume the conversation.
-async fn start_or_resume(store: &Store, session: &Session) -> Result<String> {
+async fn start_or_resume(
+    store: &Store,
+    session: &Session,
+    base_instructions: &str,
+) -> Result<String> {
     if session.turns > 0 && !session.agent_session_id.is_empty() {
-        let mut params = thread_params(session);
+        let mut params = thread_params(session, base_instructions);
         params["threadId"] = json!(session.agent_session_id);
         match send_request("thread/resume", params).await {
             Ok(_) => return Ok(session.agent_session_id.clone()),
@@ -504,7 +512,8 @@ async fn start_or_resume(store: &Store, session: &Session) -> Result<String> {
         }
     }
 
-    let response = send_request("thread/start", thread_params(session)).await?;
+    let response =
+        send_request("thread/start", thread_params(session, base_instructions)).await?;
     let thread_id = response
         .get("thread")
         .and_then(|t| t.get("id"))
@@ -525,9 +534,10 @@ pub async fn run_turn(
     store: &Store,
     session: &Session,
     prompt: &str,
+    base_instructions: &str,
 ) -> Result<()> {
     ensure_running().await?;
-    let thread_id = start_or_resume(store, session).await?;
+    let thread_id = start_or_resume(store, session, base_instructions).await?;
 
     let (tx, mut rx) = mpsc::unbounded_channel::<Notification>();
     register_thread(&thread_id, tx);

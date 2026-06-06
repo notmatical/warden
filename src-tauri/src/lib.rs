@@ -113,6 +113,10 @@ pub fn run() {
             session::commands::cancel_session,
             session::commands::approve_tools,
             session::commands::approve_plan,
+            session::commands::list_context_sources,
+            session::commands::add_context_source,
+            session::commands::remove_context_source,
+            session::commands::set_context_source_enabled,
             // git
             git::commands::session_git_status,
             git::commands::repo_browse_url,

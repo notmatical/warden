@@ -1,0 +1,64 @@
+//! Assembles a session's context sources into a single system-prompt document
+//! plus the extra directories the agent should be able to read. Shared by the
+//! Claude and Codex adapters.
+
+use std::path::Path;
+
+use crate::domain::{ContextSource, SessionContextSource};
+
+/// The assembled context for a turn.
+pub struct AssembledContext {
+    /// Markdown appended to the agent's system prompt (empty when no sources).
+    pub system_text: String,
+    /// Extra directories to grant the agent read access to, deduped.
+    pub add_dirs: Vec<String>,
+}
+
+fn push_dir(dirs: &mut Vec<String>, dir: String) {
+    if !dir.is_empty() && !dirs.contains(&dir) {
+        dirs.push(dir);
+    }
+}
+
+/// Render a session's enabled context sources into one system-prompt doc + the
+/// directories they reference.
+pub fn assemble(sources: &[SessionContextSource]) -> AssembledContext {
+    let mut add_dirs: Vec<String> = Vec::new();
+    let mut blocks: Vec<String> = Vec::new();
+
+    for entry in sources.iter().filter(|s| s.enabled) {
+        match &entry.source {
+            ContextSource::Text { label, body } => {
+                blocks.push(format!("## {label}\n\n{body}"));
+            }
+            ContextSource::File { path } => {
+                if let Some(parent) = Path::new(path).parent() {
+                    push_dir(&mut add_dirs, parent.to_string_lossy().into_owned());
+                }
+                blocks.push(format!(
+                    "## File: `{path}`\n\nRead this file for relevant context."
+                ));
+            }
+            ContextSource::Dir { path } => {
+                push_dir(&mut add_dirs, path.clone());
+                blocks.push(format!(
+                    "## Directory: `{path}`\n\nThis directory is available; read files in it as needed."
+                ));
+            }
+        }
+    }
+
+    let system_text = if blocks.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "# Loaded context\n\nThe user attached the following context to this session.\n\n{}",
+            blocks.join("\n\n---\n\n")
+        )
+    };
+
+    AssembledContext {
+        system_text,
+        add_dirs,
+    }
+}

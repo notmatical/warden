@@ -127,7 +127,12 @@ pub async fn run_oneshot(mut cmd: Command, prompt: &str) -> std::io::Result<Outp
 /// cancelled never records a turn, but Claude already created the session id, so
 /// re-running `--session-id` would fail with "already in use". The caller passes
 /// `true` once the session has been initialized.
-pub fn session_args(session: &Session, add_dirs: &[String], resume: bool) -> Vec<String> {
+pub fn session_args(
+    session: &Session,
+    add_dirs: &[String],
+    context_file: Option<&str>,
+    resume: bool,
+) -> Vec<String> {
     let (model, fast) = match session.model.strip_suffix("-fast") {
         Some(base) => (base.to_string(), true),
         None => (session.model.clone(), false),
@@ -162,6 +167,12 @@ pub fn session_args(session: &Session, add_dirs: &[String], resume: bool) -> Vec
         args.push(dir.clone());
     }
 
+    // The session's assembled context sources, appended to the system prompt.
+    if let Some(path) = context_file {
+        args.push("--append-system-prompt-file".to_string());
+        args.push(path.to_string());
+    }
+
     // User-approved tool patterns. `--allowedTools` is variadic; the following
     // `--session-id`/`--resume` flag terminates it.
     if !session.allowed_tools.is_empty() {
@@ -183,10 +194,15 @@ pub fn session_args(session: &Session, add_dirs: &[String], resume: bool) -> Vec
 }
 
 /// Build the persistent session command: stdin/stdout/stderr all piped.
-pub fn session_command(session: &Session, add_dirs: &[String], resume: bool) -> Result<Command> {
+pub fn session_command(
+    session: &Session,
+    add_dirs: &[String],
+    context_file: Option<&str>,
+    resume: bool,
+) -> Result<Command> {
     let bin = resolve_claude();
     let mut cmd = Command::new(bin);
-    cmd.args(session_args(session, add_dirs, resume))
+    cmd.args(session_args(session, add_dirs, context_file, resume))
         .current_dir(&session.working_dir)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

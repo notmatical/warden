@@ -4,7 +4,8 @@
 use tauri::{AppHandle, State};
 
 use crate::domain::{
-    Backend, EffortLevel, EventRecord, PermissionMode, Session, SessionKind, SessionRole,
+    Backend, ContextSource, EffortLevel, EventRecord, PermissionMode, Session, SessionContextSource,
+    SessionKind, SessionRole,
 };
 use crate::error::{AppError, Result};
 use crate::events::emit_session;
@@ -324,4 +325,53 @@ pub async fn approve_plan(
             "The plan is approved. Please implement it now.".to_string(),
         )
         .await
+}
+
+// ----- context sources -------------------------------------------------------
+
+/// List a session's context sources (files, dirs, saved text), in order.
+#[tauri::command]
+pub async fn list_context_sources(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Result<Vec<SessionContextSource>> {
+    state.store.list_context_sources(&session_id)
+}
+
+/// Append a context source to a session and drop its warm process so the next
+/// turn picks up the new context.
+#[tauri::command]
+pub async fn add_context_source(
+    state: State<'_, AppState>,
+    session_id: String,
+    source: ContextSource,
+) -> Result<SessionContextSource> {
+    let record = state.store.add_context_source(&session_id, &source)?;
+    crate::agent::refresh_session(&session_id);
+    Ok(record)
+}
+
+/// Remove a context source from a session.
+#[tauri::command]
+pub async fn remove_context_source(
+    state: State<'_, AppState>,
+    session_id: String,
+    id: String,
+) -> Result<()> {
+    state.store.remove_context_source(&id)?;
+    crate::agent::refresh_session(&session_id);
+    Ok(())
+}
+
+/// Enable or disable a context source without removing it.
+#[tauri::command]
+pub async fn set_context_source_enabled(
+    state: State<'_, AppState>,
+    session_id: String,
+    id: String,
+    enabled: bool,
+) -> Result<()> {
+    state.store.set_context_source_enabled(&id, enabled)?;
+    crate::agent::refresh_session(&session_id);
+    Ok(())
 }
