@@ -28,6 +28,9 @@ function Tab({ sessionId }: { sessionId: string }) {
   const role = useAppStore((s) => s.sessions[sessionId]?.role)
   const backend = useAppStore((s) => s.sessions[sessionId]?.backend)
   const kind = useAppStore((s) => s.sessions[sessionId]?.kind)
+  const terminalCommand = useAppStore(
+    (s) => s.sessions[sessionId]?.terminalCommand
+  )
   const active = useAppStore((s) => s.activeSessionId === sessionId)
   const hasOthers = useAppStore((s) => s.openTabs.length > 1)
   // With a global tab strip, tabs from different workspaces sit side by side;
@@ -70,6 +73,7 @@ function Tab({ sessionId }: { sessionId: string }) {
       kind={kind}
       backend={backend}
       status={status}
+      terminalCommand={terminalCommand}
       className="size-[18px]"
     />
   )

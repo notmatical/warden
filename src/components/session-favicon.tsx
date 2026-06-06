@@ -1,4 +1,4 @@
-import { Loader2 } from "lucide-react"
+import { Loader2, SquareTerminal } from "lucide-react"
 import {
   AnthropicIcon,
   ClaudeIcon,
@@ -10,19 +10,24 @@ import type { Backend, SessionKind, SessionStatus } from "@/types"
 
 /**
  * The per-session glyph shared by the tab strip, sidebar, and drag preview.
- * Native terminals show the product logo (Claude/Codex); agent sessions show
- * the model's provider mark (Anthropic/OpenAI). When a status is given, a
- * running session swaps the logo for a spinner and an error tints it red.
+ * Native CLI terminals (a `terminalCommand` is set) show the product logo
+ * (Claude/Codex); plain shell terminals show a generic terminal glyph; agent
+ * sessions show the model's provider mark (Anthropic/OpenAI). When a status is
+ * given, a running session swaps the glyph for a spinner and an error tints it
+ * red.
  */
 export function SessionFavicon({
   kind,
   backend,
   status,
+  terminalCommand,
   className,
 }: {
   kind: SessionKind
   backend: Backend
   status?: SessionStatus
+  /** The native CLI a terminal launches; null/undefined for a plain shell. */
+  terminalCommand?: string | null
   className?: string
 }) {
   if (status === "running") {
@@ -30,6 +35,20 @@ export function SessionFavicon({
       <Loader2
         className={cn(
           "size-3.5 shrink-0 animate-spin text-amber-500",
+          className
+        )}
+      />
+    )
+  }
+
+  // A plain shell terminal isn't tied to a provider — show a neutral terminal
+  // glyph rather than falling through to the Claude/Codex product logo.
+  if (kind === "terminal" && !terminalCommand) {
+    return (
+      <SquareTerminal
+        className={cn(
+          "size-3.5 shrink-0",
+          status === "error" ? "text-red-500" : "opacity-70",
           className
         )}
       />

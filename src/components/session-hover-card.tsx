@@ -82,6 +82,7 @@ export function SessionHoverCard({
             kind={session.kind}
             backend={session.backend}
             status={session.status}
+            terminalCommand={session.terminalCommand}
           />
           <span className="min-w-0 flex-1 truncate font-medium text-sm">
             {session.title}

@@ -153,6 +153,7 @@ function SessionRow({ sessionId }: { sessionId: string }) {
                 kind={session.kind}
                 backend={session.backend}
                 status={session.status}
+                terminalCommand={session.terminalCommand}
               />
               <Input
                 autoFocus
@@ -185,6 +186,7 @@ function SessionRow({ sessionId }: { sessionId: string }) {
                     kind={session.kind}
                     backend={session.backend}
                     status={session.status}
+                    terminalCommand={session.terminalCommand}
                   />
                   <span className="min-w-0 flex-1 truncate">
                     {session.title}

@@ -9,7 +9,11 @@ export function DragPreview({ sessionId }: { sessionId: string }) {
 
   return (
     <div className="flex max-w-52 items-center gap-2 rounded-md border border-border/70 bg-card px-2.5 py-1.5 text-[13px] text-foreground shadow-lg">
-      <SessionFavicon kind={session.kind} backend={session.backend} />
+      <SessionFavicon
+        kind={session.kind}
+        backend={session.backend}
+        terminalCommand={session.terminalCommand}
+      />
       <span className="truncate">{session.title}</span>
     </div>
   )

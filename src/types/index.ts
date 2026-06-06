@@ -126,6 +126,9 @@ export interface Session {
   role: SessionRole
   autoNamed: boolean
   agentSessionId: string | null
+  /** For a native CLI terminal, the provider program launched instead of the
+   *  shell (`claude`/`codex`); null for plain shell terminals and agents. */
+  terminalCommand: string | null
   workingDir: string
   branch: string | null
   baseSha: string | null
