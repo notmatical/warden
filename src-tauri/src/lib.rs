@@ -9,6 +9,7 @@ mod providers;
 mod session;
 mod store;
 mod terminal;
+mod workflow;
 mod workspace;
 
 // Keep the foundation modules reachable at their familiar crate-root paths
@@ -129,6 +130,14 @@ pub fn run() {
             git::commands::sync_worktree,
             // agent recipes
             agent::commands::run_plan_to_code,
+            // workflows
+            workflow::commands::create_workflow,
+            workflow::commands::get_workflow,
+            workflow::commands::list_workflows,
+            workflow::commands::update_workflow,
+            workflow::commands::delete_workflow,
+            workflow::commands::run_workflow,
+            workflow::commands::get_workflow_run,
             // mentions
             mentions::commands::list_files,
             mentions::commands::list_commands,

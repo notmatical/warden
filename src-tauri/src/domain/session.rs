@@ -24,6 +24,17 @@ impl Backend {
             _ => None,
         }
     }
+
+    /// The backend that runs a given model id: Codex for `gpt*`/`codex*`,
+    /// Claude otherwise.
+    pub fn for_model(model: &str) -> Self {
+        let id = model.to_ascii_lowercase();
+        if id.starts_with("gpt") || id.starts_with("codex") {
+            Backend::Codex
+        } else {
+            Backend::Claude
+        }
+    }
 }
 
 /// Permission posture handed to the agent CLI. Sessions are worktree-isolated,
