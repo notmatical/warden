@@ -418,7 +418,7 @@ function WorkflowRow({
   }, [
     expanded,
     workflow.id,
-    sessionIds.length,
+    sessionIds?.length,
     sessionIds,
     loadWorkflowSessions,
   ])
