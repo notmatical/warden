@@ -1,4 +1,5 @@
 use serde::Serialize;
+use specta::Type;
 
 /// Application-wide error type. Implements `Serialize` so it can cross the
 /// Tauri command boundary and surface as a string on the frontend.
@@ -42,3 +43,18 @@ impl Serialize for AppError {
 }
 
 pub type Result<T> = std::result::Result<T, AppError>;
+
+/// Serializable error for the Tauri IPC boundary. Commands return this so
+/// specta can generate the TypeScript type; internally we use AppError.
+#[derive(Debug, Serialize, Type)]
+pub struct IpcError(String);
+
+impl From<AppError> for IpcError {
+    fn from(e: AppError) -> Self {
+        IpcError(e.to_string())
+    }
+}
+
+/// Result type for `#[tauri::command]` functions. The error crosses the IPC
+/// boundary as a plain string; use `Result<T>` (= AppError) for internal fns.
+pub type CommandResult<T> = std::result::Result<T, IpcError>;
