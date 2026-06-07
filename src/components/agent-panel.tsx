@@ -1,13 +1,8 @@
-import {
-  Bot,
-  ChevronRight,
-  CircleAlert,
-  CircleCheck,
-  Loader2,
-} from "lucide-react"
+import { Bot, ChevronRight, CircleAlert, CircleCheck } from "lucide-react"
 import { type ComponentType, useMemo, useState } from "react"
 
 import { ToolActivity } from "@/components/tool-activity"
+import { BrailleSpinner } from "@/components/ui/braille-spinner"
 import { Button } from "@/components/ui/button"
 import { Markdown } from "@/components/ui/markdown"
 import {
@@ -35,7 +30,7 @@ const STATUS_ICON: Record<
   SubagentStatus,
   { icon: ComponentType<{ className?: string }>; className: string }
 > = {
-  running: { icon: Loader2, className: "animate-spin text-primary" },
+  running: { icon: BrailleSpinner, className: "text-primary" },
   done: { icon: CircleCheck, className: "text-emerald-500" },
   error: { icon: CircleAlert, className: "text-destructive" },
 }
@@ -172,7 +167,7 @@ export function AgentToolbar({ sessionId }: { sessionId: string }) {
             )}
           >
             {running > 0 ? (
-              <Loader2 className="size-3.5 animate-spin" />
+              <BrailleSpinner className="size-3.5 text-primary" />
             ) : (
               <Bot className="size-3.5" />
             )}

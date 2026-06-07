@@ -1,10 +1,11 @@
-import { Loader2, SquareTerminal } from "lucide-react"
+import { SquareTerminal } from "lucide-react"
 import {
   AnthropicIcon,
   ClaudeIcon,
   CodexIcon,
   OpenAIIcon,
 } from "@/components/icons/brand"
+import { BrailleSpinner } from "@/components/ui/braille-spinner"
 import { cn } from "@/lib/utils"
 import type { Backend, SessionKind, SessionStatus } from "@/types"
 
@@ -31,14 +32,7 @@ export function SessionFavicon({
   className?: string
 }) {
   if (status === "running") {
-    return (
-      <Loader2
-        className={cn(
-          "size-3.5 shrink-0 animate-spin text-amber-500",
-          className
-        )}
-      />
-    )
+    return <BrailleSpinner className={cn("size-3.5 shrink-0", className)} />
   }
 
   // A plain shell terminal isn't tied to a provider — show a neutral terminal
