@@ -3,7 +3,7 @@ import type { StateCreator } from "zustand"
 
 import * as ipc from "@/lib/ipc"
 import { notify, windowFocused } from "@/lib/notify"
-import { workflowTabId } from "@/lib/tab-ref"
+import { workflowTabId } from "@/lib/viewport"
 import type { WorkflowRunView } from "@/types/workflow"
 
 import { reportError } from "../shared"
@@ -16,6 +16,7 @@ type WorkflowsSlice = Pick<
   | "sessionsByWorkflow"
   | "workflowRunStatusById"
   | "loadWorkflows"
+  | "loadAllWorkflows"
   | "loadWorkflowSessions"
   | "ensureWorkflow"
   | "createWorkflow"
@@ -25,6 +26,7 @@ type WorkflowsSlice = Pick<
   | "deleteWorkflow"
   | "openWorkflow"
   | "runWorkflowById"
+  | "cancelWorkflow"
   | "resumeRun"
   | "loadWorkflowRun"
   | "applyWorkflowRun"
@@ -49,6 +51,24 @@ export const createWorkflowsSlice: StateCreator<
         workflows: {
           ...s.workflows,
           ...Object.fromEntries(list.map((w) => [w.id, w])),
+        },
+      }))
+    } catch (error) {
+      reportError("Failed to load workflows", error)
+    }
+  },
+
+  loadAllWorkflows: async () => {
+    try {
+      const projects = await ipc.listProjects()
+      const lists = await Promise.all(
+        projects.map((p) => ipc.listWorkflows(p.id).catch(() => []))
+      )
+      const merged = lists.flat()
+      set((s) => ({
+        workflows: {
+          ...s.workflows,
+          ...Object.fromEntries(merged.map((w) => [w.id, w])),
         },
       }))
     } catch (error) {
@@ -163,7 +183,7 @@ export const createWorkflowsSlice: StateCreator<
 
   // Open a workflow as a real tab (closeable / splittable like a session).
   openWorkflow: (id) => {
-    get().openTabRef(workflowTabId(id))
+    get().openTab(workflowTabId(id))
     set({ workflowRun: null })
     void get().ensureWorkflow(id)
   },
@@ -183,6 +203,22 @@ export const createWorkflowsSlice: StateCreator<
       void get().loadWorkflowSessions(id)
     } catch (error) {
       reportError("Failed to run workflow", error)
+    }
+  },
+
+  cancelWorkflow: async (id) => {
+    try {
+      const view = await ipc.cancelWorkflow(id)
+      set((s) => ({
+        workflowRunStatusById: {
+          ...s.workflowRunStatusById,
+          [id]: view?.run.status ?? "canceled",
+        },
+        workflowRun:
+          view && s.workflowRun?.run.id === view.run.id ? view : s.workflowRun,
+      }))
+    } catch (error) {
+      reportError("Failed to cancel workflow", error)
     }
   },
 

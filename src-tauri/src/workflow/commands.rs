@@ -119,6 +119,7 @@ pub async fn run_workflow(
         graph: wf.graph.clone(),
         branch,
         workflow_id: Some(workflow_id.clone()),
+        cancel: state.workflow_cancels.clone(),
     };
     tauri::async_runtime::spawn(executor::drive(ctx));
 
@@ -200,6 +201,7 @@ pub async fn resume_workflow(
             graph,
             branch: format!("wf/{}", &run_id[..8.min(run_id.len())]),
             workflow_id: run.workflow_id.clone(),
+            cancel: state.workflow_cancels.clone(),
         };
         tauri::async_runtime::spawn(executor::drive(ctx));
     }
@@ -223,4 +225,43 @@ pub async fn get_latest_workflow_run(
         }
         None => Ok(None),
     }
+}
+
+/// Cancel a workflow's latest run: signal the executor, stop the in-flight node
+/// session, and settle the run to `Canceled`. No-op if there's no active run.
+#[tauri::command]
+#[specta::specta]
+pub async fn cancel_workflow(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    workflow_id: String,
+) -> CommandResult<Option<WorkflowRunView>> {
+    let Some(run) = state.store.latest_workflow_run(&workflow_id)? else {
+        return Ok(None);
+    };
+    if matches!(run.status, RunStatus::Running | RunStatus::Paused) {
+        if let Ok(mut set) = state.workflow_cancels.lock() {
+            set.insert(run.id.clone());
+        }
+        // Kill the live node session(s) so their CLI process stops immediately;
+        // the executor then settles the run to Canceled on its next check.
+        for n in state.store.list_node_runs(&run.id)? {
+            if matches!(
+                n.status,
+                NodeRunStatus::Running | NodeRunStatus::AwaitingInput
+            ) {
+                if let Some(sid) = &n.session_id {
+                    state.manager.cancel(&app, &state.store, sid);
+                }
+            }
+        }
+        state
+            .store
+            .set_workflow_run_status(&run.id, RunStatus::Canceled, None)?;
+    }
+    let run = state.store.get_workflow_run(&run.id)?;
+    let nodes = state.store.list_node_runs(&run.id)?;
+    let view = WorkflowRunView { run, nodes };
+    super::events::emit_workflow_run(&app, &view);
+    Ok(Some(view))
 }

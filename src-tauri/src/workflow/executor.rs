@@ -17,6 +17,7 @@ use crate::domain::{
 use crate::error::{AppError, Result};
 use crate::events::emit_session;
 use crate::git::{self, provision_working_dir, ProvisionedDir};
+use crate::state::WorkflowCancels;
 use crate::store::{NewSession, Store};
 use crate::util::uuid;
 
@@ -34,11 +35,22 @@ pub struct RunContext {
     pub branch: String,
     /// The workflow this run belongs to (tags node sessions for the sidebar).
     pub workflow_id: Option<String>,
+    /// Shared set of run ids with a pending cancel request.
+    pub cancel: WorkflowCancels,
 }
 
 enum Outcome {
     Completed,
     Paused,
+    Canceled,
+}
+
+/// Whether this run has a pending cancel request.
+fn canceled(ctx: &RunContext) -> bool {
+    ctx.cancel
+        .lock()
+        .map(|s| s.contains(&ctx.run_id))
+        .unwrap_or(false)
 }
 
 /// Drive a run to completion or a gate, settling its status.
@@ -51,6 +63,11 @@ pub async fn drive(ctx: RunContext) {
         }
         // Paused status is set inside run_steps; leave it.
         Ok(Outcome::Paused) => {}
+        Ok(Outcome::Canceled) => {
+            let _ = ctx
+                .store
+                .set_workflow_run_status(&ctx.run_id, RunStatus::Canceled, None);
+        }
         Err(e) => {
             let _ = ctx.store.set_workflow_run_status(
                 &ctx.run_id,
@@ -58,6 +75,10 @@ pub async fn drive(ctx: RunContext) {
                 Some(&e.to_string()),
             );
         }
+    }
+    // Drop the cancel flag for this run, however it ended.
+    if let Ok(mut set) = ctx.cancel.lock() {
+        set.remove(&ctx.run_id);
     }
     emit_run(&ctx);
 }
@@ -101,6 +122,9 @@ async fn run_steps(ctx: &RunContext) -> Result<Outcome> {
     let mut last_session: Option<String> = None;
 
     for node_id in order {
+        if canceled(ctx) {
+            return Ok(Outcome::Canceled);
+        }
         let already_done = existing
             .get(&node_id)
             .map(|n| matches!(n.status, NodeRunStatus::Done | NodeRunStatus::Skipped))
@@ -238,7 +262,7 @@ async fn run_steps(ctx: &RunContext) -> Result<Outcome> {
             return Err(e);
         }
         match wait_for_node(ctx, &node_id, &session.id).await {
-            Ok(output) => set_node(
+            Ok(Some(output)) => set_node(
                 ctx,
                 &node_id,
                 NodeRunStatus::Done,
@@ -246,6 +270,7 @@ async fn run_steps(ctx: &RunContext) -> Result<Outcome> {
                 Some(&output),
                 None,
             )?,
+            Ok(None) => return Ok(Outcome::Canceled),
             Err(e) => {
                 set_node(
                     ctx,
@@ -265,9 +290,18 @@ async fn run_steps(ctx: &RunContext) -> Result<Outcome> {
 /// Wait for a node's turn to truly complete. A turn that ended on an
 /// `AskUserQuestion` is *not* done — it's blocked on the user; mark the node
 /// `AwaitingInput` and keep waiting until they answer (in the node's session).
-async fn wait_for_node(ctx: &RunContext, node_id: &str, session_id: &str) -> Result<String> {
+async fn wait_for_node(
+    ctx: &RunContext,
+    node_id: &str,
+    session_id: &str,
+) -> Result<Option<String>> {
     let mut current = NodeRunStatus::Running;
     loop {
+        // A cancel request stops the live turn and bails out of the run.
+        if canceled(ctx) {
+            ctx.manager.cancel(&ctx.app, &ctx.store, session_id);
+            return Ok(None);
+        }
         match ctx.store.get_session(session_id)?.status {
             SessionStatus::Error => {
                 return Err(AppError::Agent(format!(
@@ -303,7 +337,7 @@ async fn wait_for_node(ctx: &RunContext, node_id: &str, session_id: &str) -> Res
                     }
                     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                 } else {
-                    return ctx.store.get_session_assistant_text(session_id);
+                    return Ok(Some(ctx.store.get_session_assistant_text(session_id)?));
                 }
             }
         }

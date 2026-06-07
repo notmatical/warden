@@ -453,6 +453,13 @@ export function resumeWorkflow(
   return invoke("resume_workflow", { runId, approve })
 }
 
+/** Cancel a workflow's latest run (stops the executor + live session). */
+export function cancelWorkflow(
+  workflowId: string
+): Promise<WorkflowRunView | null> {
+  return invoke("cancel_workflow", { workflowId })
+}
+
 export function cancelSession(sessionId: string): Promise<void> {
   return invoke("cancel_session", { sessionId })
 }

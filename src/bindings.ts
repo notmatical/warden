@@ -456,6 +456,18 @@ async resumeWorkflow(runId: string, approve: boolean) : Promise<Result<WorkflowR
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * Cancel a workflow's latest run: signal the executor, stop the in-flight node
+ * session, and settle the run to `Canceled`. No-op if there's no active run.
+ */
+async cancelWorkflow(workflowId: string) : Promise<Result<WorkflowRunView | null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cancel_workflow", { workflowId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async getWorkflowRun(runId: string) : Promise<Result<WorkflowRunView, IpcError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_workflow_run", { runId }) };
