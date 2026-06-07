@@ -17,6 +17,8 @@ mod workspace;
 pub use core::{error, events, platform, state, util};
 
 use tauri::Manager;
+#[cfg(target_os = "macos")]
+use tauri_plugin_decorum::WebviewWindowExt;
 use tauri_specta::{collect_commands, Builder};
 
 use agent::AgentManager;
@@ -77,6 +79,7 @@ pub fn run() {
             workflow::commands::delete_workflow,
             workflow::commands::run_workflow,
             workflow::commands::resume_workflow,
+            workflow::commands::cancel_workflow,
             workflow::commands::get_workflow_run,
             workflow::commands::get_latest_workflow_run,
             workflow::commands::list_workflow_sessions,
@@ -129,6 +132,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_window_state::Builder::new().build())
+        .plugin(tauri_plugin_decorum::init())
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -136,6 +140,23 @@ pub fn run() {
                         .level(log::LevelFilter::Info)
                         .build(),
                 )?;
+            }
+
+            // Custom titlebar: the React titlebar (components/titlebar) renders the
+            // window controls + drag region itself. We just drop native
+            // decorations on Windows/Linux; macOS keeps its overlaid native
+            // traffic-lights. The decorum plugin stays registered only for its
+            // Snap Layout overlay command (invoked from the maximize button).
+            let main = app
+                .get_webview_window("main")
+                .expect("main window must exist at setup");
+            #[cfg(any(target_os = "windows", target_os = "linux"))]
+            {
+                let _ = main.set_decorations(false);
+            }
+            #[cfg(target_os = "macos")]
+            {
+                let _ = main.set_traffic_lights_inset(12.0, 18.0);
             }
 
             let data_dir = app.path().app_data_dir()?;
@@ -177,6 +198,7 @@ pub fn run() {
             app.manage(AppState {
                 store,
                 manager: AgentManager::new(),
+                workflow_cancels: Default::default(),
             });
 
             // Keep open PRs' state + CI checks fresh in the background.
