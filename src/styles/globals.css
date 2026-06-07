@@ -133,6 +133,15 @@
   }
 }
 
+/** Fully hides a scroll container's scrollbar (still scrollable via wheel/drag). */
+@utility no-scrollbar {
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 @layer base {
   ::-webkit-scrollbar {
     width: 5px;

@@ -1,11 +1,11 @@
 import { useDraggable } from "@dnd-kit/core"
 import {
   ChevronRight,
-  Copy,
-  ExternalLink,
+  CircleDot,
   FolderGit2,
   FolderPlus,
   Layers,
+  ListTodo,
   Pencil,
   Plus,
   Settings2,
@@ -21,6 +21,7 @@ import { ClaudeIcon, CodexIcon, GitHubIcon } from "@/components/icons/brand"
 import { ReviewPrDialog } from "@/components/review-pr-dialog"
 import { SessionFavicon } from "@/components/session-favicon"
 import { SessionHoverCard } from "@/components/session-hover-card"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   ContextMenu,
@@ -41,7 +42,6 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
-  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -58,9 +58,13 @@ import {
 import { UpdateBanner } from "@/components/update-banner"
 import { DEFAULT_CHAT_MODEL } from "@/lib/models"
 import { cn } from "@/lib/utils"
+import {
+  ISSUES_TAB_ID,
+  TASKS_TAB_ID,
+  WORKFLOWS_TAB_ID,
+} from "@/lib/viewport"
 import { useAppStore } from "@/store/app-store"
 import type { Group, Project, SessionKind } from "@/types"
-import type { RunStatus, Workflow } from "@/types/workflow"
 
 // Keep shadcn's left connector line + indent, but drop the right margin/padding
 // (default `mx-3.5 px-2.5`) so sub-rows reach the same right edge as the group
@@ -104,7 +108,7 @@ function RowAction({
 
 function SessionRow({ sessionId }: { sessionId: string }) {
   const session = useAppStore((s) => s.sessions[sessionId])
-  const active = useAppStore((s) => s.activeSessionId === sessionId)
+  const active = useAppStore((s) => s.activeTabId === sessionId)
   const openSession = useAppStore((s) => s.openSession)
   const renameSession = useAppStore((s) => s.renameSession)
   const deleteSession = useAppStore((s) => s.deleteSession)
@@ -364,324 +368,6 @@ function RootRow({
   )
 }
 
-const WF_SUB_BUTTON =
-  "w-full cursor-default text-left text-sidebar-foreground/70 hover:bg-transparent hover:text-sidebar-foreground active:bg-transparent active:text-sidebar-foreground"
-
-/** Status visuals for a workflow row. Only states the user cares to *see* light
- *  up; pending/completed/canceled stay quiet so the strip doesn't strobe.
- *  `tint` is a soft row background (visible from afar, no clipping);
- *  `dot` is a precise trailing indicator with the same color language. */
-const WF_STATUS_VIS: Partial<
-  Record<RunStatus, { tint: string; dot: string; pulse?: boolean }>
-> = {
-  running: {
-    tint: "bg-blue-500/[0.07] hover:bg-blue-500/[0.12]",
-    dot: "bg-blue-500",
-    pulse: true,
-  },
-  paused: {
-    tint: "bg-amber-500/[0.08] hover:bg-amber-500/[0.14]",
-    dot: "bg-amber-500",
-    pulse: true,
-  },
-  failed: {
-    tint: "bg-red-500/[0.07] hover:bg-red-500/[0.12]",
-    dot: "bg-red-500",
-  },
-}
-
-/** A workflow row: click toggles its children, double-click opens the editor.
- *  Live run state shows as a left accent bar (`bg-{color}-500`). No per-row
- *  hover icon — Open is on the context menu (or just double-click). */
-function WorkflowRow({
-  workflow,
-  expanded,
-  onToggle,
-}: {
-  workflow: Workflow
-  expanded: boolean
-  onToggle: () => void
-}) {
-  const sessionIds = useAppStore((s) => s.sessionsByWorkflow[workflow.id])
-  const status = useAppStore((s) => s.workflowRunStatusById[workflow.id])
-  const loadWorkflowSessions = useAppStore((s) => s.loadWorkflowSessions)
-  const openWorkflow = useAppStore((s) => s.openWorkflow)
-  const renameWorkflow = useAppStore((s) => s.renameWorkflow)
-  const duplicateWorkflow = useAppStore((s) => s.duplicateWorkflow)
-  const deleteWorkflow = useAppStore((s) => s.deleteWorkflow)
-  const confirm = useConfirm()
-
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState("")
-
-  // load on expand if we haven't yet, or refresh an empty cache.
-  useEffect(() => {
-    if (!expanded) return
-    if (sessionIds === undefined || sessionIds.length === 0) {
-      void loadWorkflowSessions(workflow.id)
-    }
-    // re-run when the row opens, not on every cache change (would loop).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    expanded,
-    workflow.id,
-    sessionIds?.length,
-    sessionIds,
-    loadWorkflowSessions,
-  ])
-
-  const commitRename = () => {
-    setEditing(false)
-    const name = draft.trim()
-    if (name && name !== workflow.name) void renameWorkflow(workflow.id, name)
-  }
-
-  const ids = sessionIds ?? []
-  const vis = status ? WF_STATUS_VIS[status] : null
-
-  return (
-    <SidebarMenuSubItem>
-      <ContextMenu>
-        <ContextMenuTrigger asChild>
-          {editing ? (
-            <div className="flex h-7 items-center gap-2 rounded-md bg-sidebar-accent pr-2 pl-2 ring-1 ring-transparent ring-inset focus-within:ring-ring/50">
-              <WorkflowIcon className="size-4 shrink-0 opacity-70" />
-              <Input
-                autoFocus
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  e.stopPropagation()
-                  if (e.key === "Enter") {
-                    e.preventDefault()
-                    commitRename()
-                  } else if (e.key === "Escape") {
-                    e.preventDefault()
-                    setEditing(false)
-                  }
-                }}
-                onBlur={commitRename}
-                onFocus={(e) => e.target.select()}
-                className="h-full min-w-0 flex-1 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:border-0 focus-visible:ring-0"
-              />
-            </div>
-          ) : (
-            <SidebarMenuSubButton
-              asChild
-              className={cn(WF_SUB_BUTTON, vis?.tint)}
-            >
-              <button
-                type="button"
-                onClick={onToggle}
-                onDoubleClick={() => openWorkflow(workflow.id)}
-                title={workflow.name}
-              >
-                <ChevronRight
-                  className={cn(
-                    "transition-transform",
-                    expanded && "rotate-90"
-                  )}
-                />
-                <WorkflowIcon className="opacity-70" />
-                <span className="min-w-0 flex-1 truncate">{workflow.name}</span>
-                {vis ? (
-                  <span
-                    aria-label={status}
-                    className={cn(
-                      "ml-1 size-1.5 shrink-0 rounded-full",
-                      vis.dot,
-                      vis.pulse && "animate-pulse"
-                    )}
-                  />
-                ) : null}
-              </button>
-            </SidebarMenuSubButton>
-          )}
-        </ContextMenuTrigger>
-        <ContextMenuContent className="w-40">
-          <ContextMenuItem onSelect={() => openWorkflow(workflow.id)}>
-            <ExternalLink />
-            Open
-          </ContextMenuItem>
-          <ContextMenuItem
-            onSelect={() => {
-              setDraft(workflow.name)
-              setEditing(true)
-            }}
-          >
-            <Pencil />
-            Rename
-          </ContextMenuItem>
-          <ContextMenuItem
-            onSelect={() =>
-              void duplicateWorkflow(workflow.id).then(
-                (c) => c && openWorkflow(c.id)
-              )
-            }
-          >
-            <Copy />
-            Duplicate
-          </ContextMenuItem>
-          <ContextMenuSeparator />
-          <ContextMenuItem
-            variant="destructive"
-            onSelect={async () => {
-              if (
-                await confirm({
-                  title: "Delete workflow?",
-                  description: `"${workflow.name}" will be permanently deleted.`,
-                  confirmLabel: "Delete",
-                  destructive: true,
-                })
-              ) {
-                void deleteWorkflow(workflow.id)
-              }
-            }}
-          >
-            <Trash2 />
-            Delete
-          </ContextMenuItem>
-        </ContextMenuContent>
-      </ContextMenu>
-
-      {expanded ? (
-        <SidebarMenuSub className={SUB_CLASS}>
-          {ids.length > 0 ? (
-            ids.map((id) => <SessionRow key={id} sessionId={id} />)
-          ) : (
-            <p className="px-2 py-1 text-xs text-muted-foreground/60">
-              No runs yet
-            </p>
-          )}
-        </SidebarMenuSub>
-      ) : null}
-    </SidebarMenuSubItem>
-  )
-}
-
-/** How many workflows show before "Show all" — active ones (running/paused)
- *  are always visible on top of this. */
-const WORKFLOW_VISIBLE_LIMIT = 5
-const ACTIVE_STATUSES: RunStatus[] = ["running", "paused"]
-
-/** Workflows for a group — a quiet section under the repo folders (hairline +
- *  uppercase label). The whole section collapses via the header chevron. When
- *  there are many, the list truncates to a small cap with a "Show all" toggle;
- *  active runs (running/paused) are always visible regardless of the cap. */
-function WorkflowsSection({ projectIds }: { projectIds: string[] }) {
-  const workflowsMap = useAppStore((s) => s.workflows)
-  const statuses = useAppStore((s) => s.workflowRunStatusById)
-  const createWorkflow = useAppStore((s) => s.createWorkflow)
-  const openWorkflow = useAppStore((s) => s.openWorkflow)
-  const [collapsed, setCollapsed] = useState(false)
-  const [showAll, setShowAll] = useState(false)
-  const [expanded, setExpanded] = useState<Set<string>>(new Set())
-
-  if (projectIds.length === 0) return null
-
-  const all = Object.values(workflowsMap).filter((w) =>
-    projectIds.includes(w.projectId)
-  )
-
-  // Active workflows always sort first; ties + inactives sort by recency.
-  const byRecency = (a: Workflow, b: Workflow) =>
-    b.updatedAt.localeCompare(a.updatedAt)
-  const isActive = (w: Workflow) => {
-    const s = statuses[w.id]
-    return !!s && ACTIVE_STATUSES.includes(s)
-  }
-  const active = all.filter(isActive).sort(byRecency)
-  const inactive = all.filter((w) => !isActive(w)).sort(byRecency)
-  const inactiveCap = Math.max(0, WORKFLOW_VISIBLE_LIMIT - active.length)
-  const inactiveVisible = showAll ? inactive : inactive.slice(0, inactiveCap)
-  const visible = [...active, ...inactiveVisible]
-  const hiddenCount = inactive.length - inactiveVisible.length
-
-  const toggle = (id: string) =>
-    setExpanded((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-
-  const createNew = async () => {
-    const wf = await createWorkflow(projectIds[0], "New workflow")
-    if (wf) openWorkflow(wf.id)
-  }
-
-  return (
-    <>
-      <SidebarMenuSubItem className="mt-2 border-border/40 border-t pt-2">
-        <button
-          type="button"
-          onClick={() => setCollapsed((c) => !c)}
-          className="flex w-full items-center gap-1 rounded-md px-2 pt-0.5 pb-1 text-left font-medium text-[10px] uppercase tracking-[0.08em] text-sidebar-foreground/45 transition-colors hover:text-sidebar-foreground/70"
-        >
-          <ChevronRight
-            className={cn(
-              "size-3 transition-transform",
-              !collapsed && "rotate-90"
-            )}
-          />
-          <span>Workflows</span>
-          {all.length > 0 ? (
-            <span className="ml-1 flex items-center gap-1.5 normal-case tracking-normal text-sidebar-foreground/35">
-              <span className="leading-none">{all.length}</span>
-              {active.length > 0 ? (
-                <span
-                  className="inline-block size-1.5 animate-pulse rounded-full bg-blue-500 align-middle"
-                  aria-label={`${active.length} active`}
-                />
-              ) : null}
-            </span>
-          ) : null}
-        </button>
-      </SidebarMenuSubItem>
-      {collapsed ? null : (
-        <>
-          {visible.map((w) => (
-            <WorkflowRow
-              key={w.id}
-              workflow={w}
-              expanded={expanded.has(w.id)}
-              onToggle={() => toggle(w.id)}
-            />
-          ))}
-          {hiddenCount > 0 || showAll ? (
-            <SidebarMenuSubItem>
-              <SidebarMenuSubButton asChild className={WF_SUB_BUTTON}>
-                <button
-                  type="button"
-                  onClick={() => setShowAll((v) => !v)}
-                  className="text-sidebar-foreground/55"
-                >
-                  <span className="size-4 shrink-0" aria-hidden />
-                  <span>
-                    {showAll ? "Show fewer" : `Show all (${hiddenCount} more)`}
-                  </span>
-                </button>
-              </SidebarMenuSubButton>
-            </SidebarMenuSubItem>
-          ) : null}
-          <SidebarMenuSubItem>
-            <SidebarMenuSubButton asChild className={WF_SUB_BUTTON}>
-              <button
-                type="button"
-                onClick={() => void createNew()}
-                className="text-sidebar-foreground/55"
-              >
-                <Plus className="opacity-70" />
-                <span>New workflow</span>
-              </button>
-            </SidebarMenuSubButton>
-          </SidebarMenuSubItem>
-        </>
-      )}
-    </>
-  )
-}
-
 function GroupRow({
   group,
   active,
@@ -846,10 +532,72 @@ function GroupRow({
               Add folder
             </button>
           )}
-          <WorkflowsSection projectIds={(roots ?? []).map((r) => r.id)} />
         </SidebarMenuSub>
       ) : null}
     </SidebarMenuItem>
+  )
+}
+
+const PRIMARY_NAV = [
+  { id: WORKFLOWS_TAB_ID, label: "Workflows", icon: WorkflowIcon },
+  { id: TASKS_TAB_ID, label: "Tasks", icon: ListTodo },
+  { id: ISSUES_TAB_ID, label: "Issues", icon: CircleDot },
+] as const
+
+/** Top-level destinations, each opening a singleton tab. Collapse to icons in
+ *  the rail (with tooltips) and highlight when their tab is focused. */
+function PrimaryNav() {
+  const activeTabId = useAppStore((s) => s.activeTabId)
+  const openTab = useAppStore((s) => s.openTab)
+  const workflowCount = useAppStore((s) => Object.keys(s.workflows).length)
+  const activeRuns = useAppStore(
+    (s) =>
+      Object.values(s.workflowRunStatusById).filter(
+        (st) => st === "running" || st === "paused"
+      ).length
+  )
+  return (
+    <SidebarMenu>
+      {PRIMARY_NAV.map(({ id, label, icon: Icon }) => {
+        const count = id === WORKFLOWS_TAB_ID ? workflowCount : 0
+        const running = id === WORKFLOWS_TAB_ID ? activeRuns : 0
+        return (
+          <SidebarMenuItem key={id}>
+            <SidebarMenuButton
+              isActive={activeTabId === id}
+              onClick={() => openTab(id)}
+              tooltip={label}
+            >
+              <Icon />
+              <span>{label}</span>
+              {count > 0 ? (
+                <span className="ml-auto flex items-center gap-1.5 group-data-[collapsible=icon]:hidden">
+                  {running > 0 ? (
+                    <span
+                      className="relative flex size-1.5"
+                      title={`${running} running`}
+                    >
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-500/70" />
+                      <span className="relative inline-flex size-1.5 rounded-full bg-blue-500" />
+                    </span>
+                  ) : null}
+                  <Badge
+                    variant="secondary"
+                    className="h-[18px] min-w-[18px] justify-center rounded-[5px] border border-border/50 px-1 font-medium font-mono text-[10px] tabular-nums"
+                  >
+                    {count}
+                  </Badge>
+                </span>
+              ) : null}
+            </SidebarMenuButton>
+            {/* Collapsed rail: surface active runs as a corner dot. */}
+            {running > 0 ? (
+              <span className="pointer-events-none absolute top-1 right-1 hidden size-1.5 animate-pulse rounded-full bg-blue-500 group-data-[collapsible=icon]:block" />
+            ) : null}
+          </SidebarMenuItem>
+        )
+      })}
+    </SidebarMenu>
   )
 }
 
@@ -859,9 +607,16 @@ export function Sidebar() {
   const selectGroup = useAppStore((s) => s.selectGroup)
   const createGroup = useAppStore((s) => s.createGroup)
   const openSettings = useAppStore((s) => s.openSettings)
+  const loadAllWorkflows = useAppStore((s) => s.loadAllWorkflows)
   const needsSetup = useAppStore((s) =>
     s.providers.some((p) => !p.installed || !p.authed)
   )
+
+  // Populate the global workflow set once so the count badge + Workflows page
+  // reflect every project, not just the active group's.
+  useEffect(() => {
+    void loadAllWorkflows()
+  }, [loadAllWorkflows])
 
   // Injected at build time (vite define) — no Tauri runtime call to fail.
   const version = __APP_VERSION__
@@ -891,26 +646,30 @@ export function Sidebar() {
   }
 
   return (
-    <SidebarRoot variant="sidebar" collapsible="offcanvas">
-      <SidebarHeader className="p-2">
-        <div className="flex items-center justify-between gap-2 pl-2">
-          <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            Groups
-          </span>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => void createGroup("New group")}
-            title="New group"
-            aria-label="New group"
-          >
-            <Plus />
-          </Button>
-        </div>
-      </SidebarHeader>
-      <SidebarContent>
-        <SidebarGroup className="p-2 pt-0">
-          <SidebarMenu>
+    <SidebarRoot variant="floating" collapsible="icon">
+      <SidebarContent className="gap-0 overflow-hidden">
+        {/* Primary destinations — pinned above the scrolling groups tree. */}
+        <SidebarGroup className="shrink-0 p-2 pb-2">
+          <PrimaryNav />
+        </SidebarGroup>
+        <div className="mx-2 border-sidebar-border border-t group-data-[collapsible=icon]:mx-1.5" />
+        {/* Groups tree — its own scroll panel so the nav above stays put. */}
+        <SidebarGroup className="flex min-h-0 flex-1 flex-col overflow-hidden p-2 pt-2">
+          <div className="flex shrink-0 items-center justify-between gap-2 pb-1 pl-2 group-data-[collapsible=icon]:hidden">
+            <span className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+              Groups
+            </span>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => void createGroup("New group")}
+              title="New group"
+              aria-label="New group"
+            >
+              <Plus />
+            </Button>
+          </div>
+          <SidebarMenu className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
             {groups.length === 0 ? (
               <p className="px-2 py-4 text-xs text-muted-foreground">
                 No groups yet — create one to start.
