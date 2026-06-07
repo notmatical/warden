@@ -14,6 +14,7 @@ import {
   useState,
 } from "react"
 import { AskUserQuestion, parseQuestions } from "@/components/ask-user-question"
+import { JumpToLatest } from "@/components/jump-to-latest"
 import { PlanApproval } from "@/components/plan-approval"
 import { StreamingStatus } from "@/components/streaming-status"
 import { ToolActivity } from "@/components/tool-activity"
@@ -335,6 +336,9 @@ export function Transcript({
 
   const viewportRef = useRef<HTMLDivElement>(null)
   const pinnedRef = useRef(true)
+  // Mirrors `pinnedRef` as state so the "jump to latest" pill can react to it
+  // (the ref alone never re-renders).
+  const [atBottom, setAtBottom] = useState(true)
 
   const eventCount = events?.length ?? 0
   const _streamLength = streaming?.length ?? 0
@@ -343,7 +347,17 @@ export function Transcript({
     const el = viewportRef.current
     if (!el) return
     const distance = el.scrollHeight - el.scrollTop - el.clientHeight
-    pinnedRef.current = distance < 80
+    const pinned = distance < 80
+    pinnedRef.current = pinned
+    setAtBottom((prev) => (prev === pinned ? prev : pinned))
+  }
+
+  const scrollToBottom = () => {
+    const el = viewportRef.current
+    if (!el) return
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" })
+    pinnedRef.current = true
+    setAtBottom(true)
   }
 
   useLayoutEffect(() => {
@@ -386,6 +400,20 @@ export function Transcript({
           <StreamingStatus sessionId={sessionId} />
         </div>
       </ScrollArea>
+
+      {/* Floating pill, centered just above the composer. Pulses while output
+          streams in below the fold. */}
+      <div
+        className="pointer-events-none absolute inset-x-0 flex justify-center"
+        style={{ bottom: bottomInset + 12 }}
+      >
+        <JumpToLatest
+          visible={!atBottom}
+          active={!!streaming}
+          onClick={scrollToBottom}
+          className="pointer-events-auto"
+        />
+      </div>
 
       {/* Centered in the space above the floating composer (so it doesn't
 			    depend on the scroll area's height chain). */}

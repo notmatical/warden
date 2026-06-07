@@ -1,5 +1,5 @@
-import { Loader2 } from "lucide-react"
-
+import { BrailleSpinner } from "@/components/ui/braille-spinner"
+import { Shimmer } from "@/components/ui/shimmer"
 import { useElapsedTime } from "@/hooks/use-elapsed-time"
 import { useAppStore } from "@/store/app-store"
 import type { PermissionMode } from "@/types"
@@ -26,8 +26,8 @@ export function StreamingStatus({ sessionId }: { sessionId: string }) {
 
   return (
     <div className="inline-flex items-center gap-2 text-xs text-muted-foreground select-none">
-      <Loader2 className="size-3.5 animate-spin" />
-      <span>{(mode && WORK_LABEL[mode]) || "Working"}</span>
+      <BrailleSpinner className="text-sm" />
+      <Shimmer>{(mode && WORK_LABEL[mode]) || "Working"}</Shimmer>
       {elapsed && (
         <span className="font-mono tabular-nums text-muted-foreground/60">
           {elapsed}
