@@ -81,12 +81,13 @@ export interface Project {
 }
 
 /** The viewport pane arrangement: a recursive split-tree (VS Code / tmux style).
- *  A leaf shows one session; a split divides space among children along one axis.
- *  The viewport is global (browser-style), not per-group. */
+ *  A leaf shows one piece of content addressed by `ref` (a session id, or a
+ *  non-session destination like `workflow:<id>`/`settings`); a split divides
+ *  space among children along one axis. The viewport is global, not per-group. */
 export interface Leaf {
   type: "leaf"
   id: string
-  sessionId: string | null
+  ref: string | null
 }
 
 export interface Split {

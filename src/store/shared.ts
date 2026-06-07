@@ -1,6 +1,6 @@
 import { toast } from "sonner"
 
-import { findSessionLeaf, firstLeaf, setLeafSession } from "@/lib/pane-tree"
+import { findLeafByRef, firstLeaf, setLeafRef } from "@/lib/viewport"
 import type { PaneTree, Provider } from "@/types"
 
 /** Surface a failed store action as an error toast. */
@@ -9,19 +9,19 @@ export function reportError(scope: string, error: unknown) {
   toast.error(scope, { description: message })
 }
 
-/** Make `sessionId` visible and focused: if it's already in a pane, leave the
- *  tree as-is (the caller focuses it); otherwise drop it into the focused pane
- *  (the leaf showing `currentActive`, else the first leaf). */
-export function showSession(
+/** Make `ref` visible and focused: if it's already in a pane, leave the tree
+ *  as-is (the caller focuses it); otherwise drop it into the focused pane (the
+ *  leaf showing `currentActive`, else the first leaf). */
+export function showRef(
   tree: PaneTree,
   currentActive: string | null,
-  sessionId: string
+  ref: string
 ): PaneTree {
-  if (findSessionLeaf(tree, sessionId)) return tree
+  if (findLeafByRef(tree, ref)) return tree
   const focused =
-    (currentActive ? findSessionLeaf(tree, currentActive) : undefined) ??
+    (currentActive ? findLeafByRef(tree, currentActive) : undefined) ??
     firstLeaf(tree)
-  return setLeafSession(tree, focused.id, sessionId)
+  return setLeafRef(tree, focused.id, ref)
 }
 
 /** The interactive CLI a native terminal session launches, per provider. */

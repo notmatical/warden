@@ -1,11 +1,5 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core"
-import {
-  type LucideIcon,
-  Pencil,
-  Settings2,
-  Workflow as WorkflowIcon,
-  X,
-} from "lucide-react"
+import { Pencil, X } from "lucide-react"
 import { type KeyboardEvent, useState } from "react"
 import { SessionFavicon } from "@/components/session-favicon"
 import { Badge } from "@/components/ui/badge"
@@ -16,8 +10,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
-import { isSettingsTab, isWorkflowTab, workflowIdOf } from "@/lib/tab-ref"
+import { describe } from "@/lib/viewport/content-registry"
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store/app-store"
 
@@ -31,7 +24,7 @@ function Tab({ sessionId }: { sessionId: string }) {
   const terminalCommand = useAppStore(
     (s) => s.sessions[sessionId]?.terminalCommand
   )
-  const active = useAppStore((s) => s.activeSessionId === sessionId)
+  const active = useAppStore((s) => s.activeTabId === sessionId)
   const hasOthers = useAppStore((s) => s.openTabs.length > 1)
   // With a global tab strip, tabs from different workspaces sit side by side;
   // label the workspace (only when more than one exists).
@@ -40,7 +33,7 @@ function Tab({ sessionId }: { sessionId: string }) {
     const groupId = s.sessions[sessionId]?.groupId
     return groupId ? s.groups.find((g) => g.id === groupId)?.name : undefined
   })
-  const selectSession = useAppStore((s) => s.selectSession)
+  const selectTab = useAppStore((s) => s.selectTab)
   const closeTab = useAppStore((s) => s.closeTab)
   const closeOthers = useAppStore((s) => s.closeOthers)
   const renameSession = useAppStore((s) => s.renameSession)
@@ -109,12 +102,12 @@ function Tab({ sessionId }: { sessionId: string }) {
           role="tab"
           aria-selected={active}
           tabIndex={0}
-          onClick={() => selectSession(sessionId)}
+          onClick={() => selectTab(sessionId)}
           onDoubleClick={startRename}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault()
-              selectSession(sessionId)
+              selectTab(sessionId)
             }
           }}
           className={cn(
@@ -196,20 +189,16 @@ function Tab({ sessionId }: { sessionId: string }) {
   )
 }
 
-/** A non-session tab (workflow, settings) — fixed label + icon, no status/role,
- *  same drag/drop + close + context menu as a regular tab. */
-function StaticTab({
-  tabId,
-  label,
-  Icon,
-}: {
-  tabId: string
-  label: string
-  Icon: LucideIcon
-}) {
-  const active = useAppStore((s) => s.activeSessionId === tabId)
+/** A non-session tab (workflow, settings, tasks, issues) — label + icon come
+ *  from the content registry, no status/role, same drag/drop + close + context
+ *  menu as a regular tab. */
+function StaticTab({ tabId }: { tabId: string }) {
+  const d = describe(tabId)
+  const Icon = d.icon
+  const label = useAppStore((s) => d.title(s, tabId)) ?? ""
+  const active = useAppStore((s) => s.activeTabId === tabId)
   const hasOthers = useAppStore((s) => s.openTabs.length > 1)
-  const selectSession = useAppStore((s) => s.selectSession)
+  const selectTab = useAppStore((s) => s.selectTab)
   const closeTab = useAppStore((s) => s.closeTab)
   const closeOthers = useAppStore((s) => s.closeOthers)
 
@@ -238,11 +227,11 @@ function StaticTab({
           role="tab"
           aria-selected={active}
           tabIndex={0}
-          onClick={() => selectSession(tabId)}
+          onClick={() => selectTab(tabId)}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault()
-              selectSession(tabId)
+              selectTab(tabId)
             }
           }}
           className={cn(
@@ -289,17 +278,6 @@ function StaticTab({
   )
 }
 
-function WorkflowTab({ tabId }: { tabId: string }) {
-  const name = useAppStore((s) => s.workflows[workflowIdOf(tabId)]?.name)
-  return (
-    <StaticTab tabId={tabId} label={name ?? "Workflow"} Icon={WorkflowIcon} />
-  )
-}
-
-function SettingsTab({ tabId }: { tabId: string }) {
-  return <StaticTab tabId={tabId} label="Settings" Icon={Settings2} />
-}
-
 export function SessionTabs() {
   const order = useAppStore((s) => s.openTabs)
 
@@ -308,19 +286,23 @@ export function SessionTabs() {
   }
 
   return (
-    <ScrollArea className="w-full">
-      <div className="flex gap-1 px-1.5 pt-1.5 pb-1">
-        {order.map((id) =>
-          isSettingsTab(id) ? (
-            <SettingsTab key={id} tabId={id} />
-          ) : isWorkflowTab(id) ? (
-            <WorkflowTab key={id} tabId={id} />
-          ) : (
-            <Tab key={id} sessionId={id} />
-          )
-        )}
-      </div>
-      <ScrollBar orientation="horizontal" />
-    </ScrollArea>
+    // Hidden scrollbar + wheel-to-horizontal, like a browser/IDE tab strip —
+    // a persistent horizontal scrollbar under the tabs reads as clutter.
+    <div
+      className="no-scrollbar flex gap-1 overflow-x-auto px-1.5 pt-1.5 pb-1"
+      onWheel={(e) => {
+        if (e.deltaY !== 0 && e.deltaX === 0) {
+          e.currentTarget.scrollLeft += e.deltaY
+        }
+      }}
+    >
+      {order.map((id) =>
+        describe(id).kind === "session" ? (
+          <Tab key={id} sessionId={id} />
+        ) : (
+          <StaticTab key={id} tabId={id} />
+        )
+      )}
+    </div>
   )
 }

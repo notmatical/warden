@@ -1,7 +1,7 @@
 import type { StateCreator } from "zustand"
 
 import * as ipc from "@/lib/ipc"
-import { reportError, showSession } from "../shared"
+import { reportError, showRef } from "../shared"
 import type { AppState } from "../types"
 
 type TranscriptSlice = Pick<
@@ -133,10 +133,10 @@ export const createTranscriptSlice: StateCreator<
             [groupId]: groupSessions,
           },
           openTabs: tabs,
-          activeSessionId: result.coder.id,
-          layout: showSession(
+          activeTabId: result.coder.id,
+          layout: showRef(
             state.layout,
-            state.activeSessionId,
+            state.activeTabId,
             result.coder.id
           ),
           eventsBySession: {

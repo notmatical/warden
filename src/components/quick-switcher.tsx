@@ -8,7 +8,7 @@ const EMPTY_IDS: string[] = []
 
 function QuickSwitcherSession({ sessionId }: { sessionId: string }) {
   const session = useAppStore((s) => s.sessions[sessionId])
-  const active = useAppStore((s) => s.activeSessionId === sessionId)
+  const active = useAppStore((s) => s.activeTabId === sessionId)
   const openSession = useAppStore((s) => s.openSession)
 
   if (!session) return null

@@ -63,8 +63,8 @@ export interface AppState {
   sessionsByGroup: Record<string, string[]>
   /** Open tabs across every group, in order — the viewport is global. */
   openTabs: string[]
-  /** The focused tab (must be in `openTabs`), or null. */
-  activeSessionId: string | null
+  /** The focused tab ref (must be in `openTabs`), or null. */
+  activeTabId: string | null
   /** The global pane arrangement (recursive split-tree). */
   layout: PaneTree
   /** Session id currently being dragged (drives drop zones + the drag clone). */
@@ -101,6 +101,9 @@ export interface AppState {
   /** workflowId → its latest run status (powers the sidebar's row accent bar). */
   workflowRunStatusById: Record<string, RunStatus>
   loadWorkflows: (projectId: string) => Promise<void>
+  /** Load workflows across every project — powers the global Workflows view and
+   *  the sidebar's workflow count badge. */
+  loadAllWorkflows: () => Promise<void>
   loadWorkflowSessions: (workflowId: string) => Promise<void>
   ensureWorkflow: (id: string) => Promise<void>
   createWorkflow: (projectId: string, name: string) => Promise<Workflow | null>
@@ -110,6 +113,7 @@ export interface AppState {
   deleteWorkflow: (id: string) => Promise<void>
   openWorkflow: (id: string) => void
   runWorkflowById: (id: string) => Promise<void>
+  cancelWorkflow: (id: string) => Promise<void>
   resumeRun: (approve: boolean, runId?: string) => Promise<void>
   loadWorkflowRun: (id: string) => Promise<void>
   applyWorkflowRun: (view: WorkflowRunView) => void
@@ -172,7 +176,8 @@ export interface AppState {
   /** Create a terminal session that launches a provider's CLI natively. */
   createNativeSession: (projectId: string, provider: Provider) => Promise<void>
   openSession: (id: string) => void
-  openTabRef: (ref: string) => void
+  /** Open any content ref (session, workflow, settings, tasks, issues) as a tab. */
+  openTab: (ref: string) => void
   updateSession: (
     sessionId: string,
     patch: SessionSettingsPatch
@@ -181,7 +186,7 @@ export interface AppState {
   renameSession: (sessionId: string, title: string) => Promise<void>
   deleteSessions: (sessionIds: string[]) => Promise<void>
   deleteSession: (sessionId: string) => Promise<void>
-  selectSession: (id: string) => void
+  selectTab: (id: string) => void
   closeTab: (id: string) => void
   closeOthers: (id: string) => void
   sendMessage: (

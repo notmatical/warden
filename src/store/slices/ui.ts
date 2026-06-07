@@ -1,6 +1,6 @@
 import type { StateCreator } from "zustand"
 
-import { SETTINGS_TAB_ID } from "@/lib/tab-ref"
+import { SETTINGS_TAB_ID } from "@/lib/viewport"
 
 import {
   clampWidth,
@@ -23,7 +23,7 @@ type UiSlice = Pick<
 >
 
 /** Sidebar collapse/width (persisted to localStorage) and the settings tab's
- *  remembered section. Settings opens as a real tab via `openTabRef`. */
+ *  remembered section. Settings opens as a real tab via `openTab`. */
 export const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (
   set,
   get
@@ -53,7 +53,7 @@ export const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (
 
   openSettings: (section) => {
     if (section) set({ settingsSection: section })
-    get().openTabRef(SETTINGS_TAB_ID)
+    get().openTab(SETTINGS_TAB_ID)
   },
 
   setSettingsSection: (section) => set({ settingsSection: section }),

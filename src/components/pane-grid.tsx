@@ -1,51 +1,32 @@
 import { useDroppable } from "@dnd-kit/core"
-import {
-  LayoutGrid,
-  Settings2,
-  Workflow as WorkflowIcon,
-  X,
-} from "lucide-react"
+import { LayoutGrid, X } from "lucide-react"
 import { Fragment, memo, type ReactNode, useEffect, useState } from "react"
 
-import { SessionView } from "@/components/session-view"
 import { StatusDot } from "@/components/status-dot"
 import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable"
-import { leafCount } from "@/lib/pane-tree"
-import { isSettingsTab, isWorkflowTab, workflowIdOf } from "@/lib/tab-ref"
+import { leafCount } from "@/lib/viewport"
+import { describe, PaneContent } from "@/lib/viewport/content-registry"
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store/app-store"
 import type { Leaf, PaneTree, SplitSide } from "@/types"
 
-function PaneHeader({
-  sessionId,
-  active,
-}: {
-  sessionId: string
-  active: boolean
-}) {
-  const workflow = isWorkflowTab(sessionId)
-  const settings = isSettingsTab(sessionId)
-  const isStatic = workflow || settings
-  const title = useAppStore((s) =>
-    isStatic ? undefined : s.sessions[sessionId]?.title
-  )
+function PaneHeader({ refId, active }: { refId: string; active: boolean }) {
+  const d = describe(refId)
+  const isSession = d.kind === "session"
+  const title = useAppStore((s) => d.title(s, refId))
   const status = useAppStore((s) =>
-    isStatic ? undefined : s.sessions[sessionId]?.status
-  )
-  const wfName = useAppStore((s) =>
-    workflow ? s.workflows[workflowIdOf(sessionId)]?.name : undefined
+    isSession ? s.sessions[refId]?.status : undefined
   )
   const closeTab = useAppStore((s) => s.closeTab)
-  if (!isStatic && (title === undefined || status === undefined)) {
+  // A session pane waits for its record before showing chrome.
+  if (isSession && (title === undefined || status === undefined)) {
     return null
   }
-  const staticIcon = settings ? Settings2 : WorkflowIcon
-  const StaticIcon = staticIcon
-  const staticLabel = settings ? "Settings" : (wfName ?? "Workflow")
+  const Icon = d.icon
   return (
     <div
       className={cn(
@@ -53,24 +34,24 @@ function PaneHeader({
         active ? "bg-muted/30" : null
       )}
     >
-      {isStatic ? (
-        <StaticIcon className="size-3.5 shrink-0 text-muted-foreground" />
-      ) : (
+      {isSession ? (
         <StatusDot status={status as NonNullable<typeof status>} />
+      ) : (
+        <Icon className="size-3.5 shrink-0 text-muted-foreground" />
       )}
       <span
         className={cn(
           "min-w-0 flex-1 truncate transition-colors",
           active ? "text-foreground" : "text-muted-foreground/55"
         )}
-        title={isStatic ? staticLabel : title}
+        title={title}
       >
-        {isStatic ? staticLabel : title}
+        {title}
       </span>
       <button
         type="button"
         aria-label="Close tab"
-        onClick={() => closeTab(sessionId)}
+        onClick={() => closeTab(refId)}
         className="flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground/60 opacity-0 transition group-hover/pane:opacity-100 hover:bg-muted hover:text-foreground"
       >
         <X className="size-3.5" />
@@ -173,26 +154,26 @@ function DropZones({
  *  a lone pane is chromeless since the tab strip already labels it), or an empty
  *  drop zone. While dragging, it surfaces edge/center split targets. */
 function Pane({ leaf, chrome }: { leaf: Leaf; chrome: boolean }) {
-  const sessionId = leaf.sessionId
+  const refId = leaf.ref
   const dragging = useAppStore((s) => s.draggingSessionId !== null)
   const active = useAppStore(
-    (s) => sessionId !== null && s.activeSessionId === sessionId
+    (s) => refId !== null && s.activeTabId === refId
   )
-  const selectSession = useAppStore((s) => s.selectSession)
+  const selectTab = useAppStore((s) => s.selectTab)
   const [overSide, setOverSide] = useState<SplitSide | null>(null)
 
   return (
     <div
       onMouseDownCapture={() => {
-        if (sessionId) selectSession(sessionId)
+        if (refId) selectTab(refId)
       }}
       className="group/pane relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-background"
     >
-      {sessionId ? (
+      {refId ? (
         <>
-          {chrome ? <PaneHeader sessionId={sessionId} active={active} /> : null}
+          {chrome ? <PaneHeader refId={refId} active={active} /> : null}
           <div className="relative min-h-0 flex-1">
-            <SessionView key={sessionId} sessionId={sessionId} />
+            <PaneContent key={refId} refId={refId} />
           </div>
         </>
       ) : (
@@ -204,7 +185,7 @@ function Pane({ leaf, chrome }: { leaf: Leaf; chrome: boolean }) {
       {dragging ? (
         <DropZones
           leafId={leaf.id}
-          edges={sessionId !== null}
+          edges={refId !== null}
           onOver={setOverSide}
         />
       ) : null}

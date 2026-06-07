@@ -1,12 +1,9 @@
 import { useEffect, useRef, useState } from "react"
 
 import { Composer } from "@/components/composer"
-import { SettingsPanel } from "@/components/settings/settings-panel"
 import { TerminalView } from "@/components/terminal-view"
 import { Transcript } from "@/components/transcript"
 import { EdgeFade } from "@/components/ui/edge-fade"
-import { WorkflowEditor } from "@/components/workflow/workflow-editor"
-import { isSettingsTab, isWorkflowTab, workflowIdOf } from "@/lib/tab-ref"
 import { useAppStore } from "@/store/app-store"
 
 /** Agent transcript + floating composer. The transcript scrolls *under* the
@@ -42,20 +39,10 @@ function AgentView({ sessionId }: { sessionId: string }) {
   )
 }
 
-export function SessionView({ sessionId }: { sessionId: string }) {
-  const workflow = isWorkflowTab(sessionId)
-  const settings = isSettingsTab(sessionId)
-  const session = useAppStore((s) =>
-    workflow || settings ? undefined : s.sessions[sessionId]
-  )
-
-  if (settings) {
-    return <SettingsPanel />
-  }
-
-  if (workflow) {
-    return <WorkflowEditor workflowId={workflowIdOf(sessionId)} />
-  }
+/** Pane body for a session ref (the `session` content kind). Workflow/settings
+ *  and other destinations are dispatched by the content registry, not here. */
+export function SessionPane({ refId }: { refId: string }) {
+  const session = useAppStore((s) => s.sessions[refId])
 
   if (!session) {
     return null
@@ -64,10 +51,8 @@ export function SessionView({ sessionId }: { sessionId: string }) {
   // Terminal sessions run a PTY — no transcript/composer. The backend decides
   // whether to launch a provider CLI (native) or the shell from the session.
   if (session.kind === "terminal") {
-    return (
-      <TerminalView sessionId={sessionId} workingDir={session.workingDir} />
-    )
+    return <TerminalView sessionId={refId} workingDir={session.workingDir} />
   }
 
-  return <AgentView sessionId={sessionId} />
+  return <AgentView sessionId={refId} />
 }

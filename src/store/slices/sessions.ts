@@ -7,9 +7,9 @@ import {
   DEFAULT_CODEX_MODEL,
 } from "@/lib/models"
 import { notify, windowFocused } from "@/lib/notify"
-import { detachSession, firstLeaf } from "@/lib/pane-tree"
+import { detachRef, firstLeaf } from "@/lib/viewport"
 import * as terminals from "@/lib/terminal-instances"
-import { NATIVE_CLI, NATIVE_TITLE, reportError, showSession } from "../shared"
+import { NATIVE_CLI, NATIVE_TITLE, reportError, showRef } from "../shared"
 import type { AppState } from "../types"
 
 type SessionsSlice = Pick<
@@ -72,10 +72,10 @@ export const createSessionsSlice: StateCreator<
           [groupId]: [...(state.sessionsByGroup[groupId] ?? []), session.id],
         },
         openTabs: [...state.openTabs, session.id],
-        activeSessionId: session.id,
+        activeTabId: session.id,
         // Show the new session in the focused pane (a fresh viewport places it
         // in the lone empty leaf).
-        layout: showSession(state.layout, state.activeSessionId, session.id),
+        layout: showRef(state.layout, state.activeTabId, session.id),
         eventsBySession: { ...state.eventsBySession, [session.id]: [] },
       }))
       get().saveView()
@@ -191,11 +191,11 @@ export const createSessionsSlice: StateCreator<
       const openTabs = prevTabs.filter((sid) => !deleted.has(sid))
 
       let layout = state.layout
-      for (const sid of deleted) layout = detachSession(layout, sid)
+      for (const sid of deleted) layout = detachRef(layout, sid)
 
-      let activeSessionId = state.activeSessionId
-      if (activeSessionId && deleted.has(activeSessionId)) {
-        const idx = prevTabs.indexOf(activeSessionId)
+      let activeTabId = state.activeTabId
+      if (activeTabId && deleted.has(activeTabId)) {
+        const idx = prevTabs.indexOf(activeTabId)
         const surviving = (start: number, step: number) => {
           for (let i = start; i >= 0 && i < prevTabs.length; i += step) {
             const sid = prevTabs[i]
@@ -204,12 +204,12 @@ export const createSessionsSlice: StateCreator<
           return null
         }
         // Prefer a still-visible pane; else the nearest surviving tab.
-        activeSessionId =
-          firstLeaf(layout).sessionId ??
+        activeTabId =
+          firstLeaf(layout).ref ??
           surviving(idx + 1, 1) ??
           surviving(idx - 1, -1)
-        if (activeSessionId) {
-          layout = showSession(layout, activeSessionId, activeSessionId)
+        if (activeTabId) {
+          layout = showRef(layout, activeTabId, activeTabId)
         }
       }
 
@@ -217,7 +217,7 @@ export const createSessionsSlice: StateCreator<
         sessions: omit(state.sessions),
         sessionsByGroup,
         openTabs,
-        activeSessionId,
+        activeTabId,
         layout,
         eventsBySession: omit(state.eventsBySession),
         approvalResolvedBySession: omit(state.approvalResolvedBySession),

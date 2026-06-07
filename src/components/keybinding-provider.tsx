@@ -15,8 +15,8 @@ import { useAppStore } from "@/store/app-store"
  *  invoked by keybindings (and, later, a command palette / menus). */
 export function runCommand(id: CommandId): void {
   const store = useAppStore.getState()
-  const sessionId = store.activeSessionId
-  const session = sessionId ? store.sessions[sessionId] : undefined
+  const activeTabId = store.activeTabId
+  const session = activeTabId ? store.sessions[activeTabId] : undefined
 
   switch (id) {
     case "sidebar.toggle":

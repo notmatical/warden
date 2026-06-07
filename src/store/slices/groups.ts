@@ -2,7 +2,7 @@ import { open } from "@tauri-apps/plugin-dialog"
 import type { StateCreator } from "zustand"
 
 import * as ipc from "@/lib/ipc"
-import { detachSession, firstLeaf } from "@/lib/pane-tree"
+import { detachRef, firstLeaf } from "@/lib/viewport"
 import * as terminals from "@/lib/terminal-instances"
 import { reportError } from "../shared"
 import type { AppState } from "../types"
@@ -131,18 +131,18 @@ export const createGroupsSlice: StateCreator<AppState, [], [], GroupsSlice> = (
       // The deleted group's sessions leave the global viewport too.
       const openTabs = state.openTabs.filter((sid) => !removed.has(sid))
       let layout = state.layout
-      for (const sid of removed) layout = detachSession(layout, sid)
-      const activeSessionId =
-        state.activeSessionId && removed.has(state.activeSessionId)
-          ? (firstLeaf(layout).sessionId ?? openTabs[0] ?? null)
-          : state.activeSessionId
+      for (const sid of removed) layout = detachRef(layout, sid)
+      const activeTabId =
+        state.activeTabId && removed.has(state.activeTabId)
+          ? (firstLeaf(layout).ref ?? openTabs[0] ?? null)
+          : state.activeTabId
       return {
         groups: nextGroups,
         activeGroupId,
         rootsByGroup: omit(state.rootsByGroup),
         sessionsByGroup: omit(state.sessionsByGroup),
         openTabs,
-        activeSessionId,
+        activeTabId,
         layout,
       }
     })

@@ -2,7 +2,7 @@ import type { StateCreator } from "zustand"
 
 import * as ipc from "@/lib/ipc"
 import { DEFAULT_CHAT_MODEL } from "@/lib/models"
-import { reportError, showSession } from "../shared"
+import { reportError, showRef } from "../shared"
 import type { AppState } from "../types"
 
 type GitSlice = Pick<
@@ -86,8 +86,8 @@ export const createGitSlice: StateCreator<AppState, [], [], GitSlice> = (
         openTabs: state.openTabs.includes(session.id)
           ? state.openTabs
           : [...state.openTabs, session.id],
-        activeSessionId: session.id,
-        layout: showSession(state.layout, state.activeSessionId, session.id),
+        activeTabId: session.id,
+        layout: showRef(state.layout, state.activeTabId, session.id),
         eventsBySession: { ...state.eventsBySession, [session.id]: [] },
       }))
       get().saveView()

@@ -1,24 +1,25 @@
 import type { StateCreator } from "zustand"
 
+import * as terminals from "@/lib/terminal-instances"
 import {
-  detachSession,
+  describeKind,
+  detachRef,
   emptyTree,
   firstLeaf,
   leaves,
   makeLeaf,
-  setLeafSession,
+  readView,
+  setLeafRef,
   splitLeaf,
-} from "@/lib/pane-tree"
-import { isSettingsTab, isWorkflowTab } from "@/lib/tab-ref"
-import * as terminals from "@/lib/terminal-instances"
-import { readView, writeView } from "@/lib/view"
-import { showSession } from "../shared"
+  writeView,
+} from "@/lib/viewport"
+import { showRef } from "../shared"
 import type { AppState } from "../types"
 
 type ViewportSlice = Pick<
   AppState,
   | "openTabs"
-  | "activeSessionId"
+  | "activeTabId"
   | "layout"
   | "draggingSessionId"
   | "restoreView"
@@ -29,14 +30,15 @@ type ViewportSlice = Pick<
   | "reorderTab"
   | "saveView"
   | "openSession"
-  | "openTabRef"
-  | "selectSession"
+  | "openTab"
+  | "selectTab"
   | "closeTab"
   | "closeOthers"
 >
 
-/** The browser-global viewport: open tabs, the focused session, and the
- *  recursive split-tree pane layout (persisted via the view store). */
+/** The browser-global viewport: open tabs, the focused tab, and the recursive
+ *  split-tree pane layout (persisted via the view store). Content is generic
+ *  over kind — sessions, workflows, settings, … — via the content registry. */
 export const createViewportSlice: StateCreator<
   AppState,
   [],
@@ -44,35 +46,40 @@ export const createViewportSlice: StateCreator<
   ViewportSlice
 > = (set, get) => ({
   openTabs: [],
-  activeSessionId: null,
+  activeTabId: null,
   layout: emptyTree(),
   draggingSessionId: null,
 
-  // Restore the persisted global view, dropping references to sessions that no
-  // longer exist. Called once after all groups load.
+  // Restore the persisted global view, dropping refs that no longer resolve.
+  // Called once after all groups load.
   restoreView: () => {
     const saved = readView()
     if (!saved) return
     const { sessions } = get()
-    // Keep session tabs that still exist, plus any non-session tab (workflows
-    // self-hydrate). Sessions are loaded by now; workflows may not be.
+    // Keep session tabs that still exist, plus any destination that persists
+    // without a backing record (workflows self-hydrate; settings/tasks/issues
+    // are singletons).
     const exists = (id: string) =>
-      sessions[id] !== undefined || isWorkflowTab(id) || isSettingsTab(id)
+      sessions[id] !== undefined || describeKind(id).persistsWithoutRecord
     const openTabs = saved.openTabs.filter(exists)
-    // Drop panes pointing at sessions that are gone or no longer open.
+    // Drop panes pointing at refs that are gone or no longer open.
     let layout = saved.layout
     for (const leaf of leaves(layout)) {
-      if (leaf.sessionId && !openTabs.includes(leaf.sessionId)) {
-        layout = detachSession(layout, leaf.sessionId)
+      if (leaf.ref && !openTabs.includes(leaf.ref)) {
+        layout = detachRef(layout, leaf.ref)
       }
     }
-    const activeSessionId =
-      saved.activeSessionId && openTabs.includes(saved.activeSessionId)
-        ? saved.activeSessionId
+    const activeTabId =
+      saved.activeTabId && openTabs.includes(saved.activeTabId)
+        ? saved.activeTabId
         : (openTabs[0] ?? null)
-    set({ openTabs, activeSessionId, layout })
-    if (activeSessionId && !get().eventsBySession[activeSessionId]) {
-      void get().loadEvents(activeSessionId)
+    set({ openTabs, activeTabId, layout })
+    if (
+      activeTabId &&
+      describeKind(activeTabId).loadsEvents &&
+      !get().eventsBySession[activeTabId]
+    ) {
+      void get().loadEvents(activeTabId)
     }
   },
 
@@ -81,36 +88,36 @@ export const createViewportSlice: StateCreator<
     get().saveView()
   },
 
-  assignToPane: (leafId, sessionId) => {
+  assignToPane: (leafId, ref) => {
     set((state) => {
-      const openTabs = state.openTabs.includes(sessionId)
+      const openTabs = state.openTabs.includes(ref)
         ? state.openTabs
-        : [...state.openTabs, sessionId]
-      // Move the session out of any pane it already occupies, then into the
-      // drop target (replacing whatever it held). If the target collapsed
-      // during the move, fall back to the focused pane.
-      let layout = detachSession(state.layout, sessionId)
+        : [...state.openTabs, ref]
+      // Move the ref out of any pane it already occupies, then into the drop
+      // target (replacing whatever it held). If the target collapsed during the
+      // move, fall back to the focused pane.
+      let layout = detachRef(state.layout, ref)
       const exists = leaves(layout).some((l) => l.id === leafId)
       layout = exists
-        ? setLeafSession(layout, leafId, sessionId)
-        : showSession(layout, state.activeSessionId, sessionId)
-      return { openTabs, activeSessionId: sessionId, layout }
+        ? setLeafRef(layout, leafId, ref)
+        : showRef(layout, state.activeTabId, ref)
+      return { openTabs, activeTabId: ref, layout }
     })
     get().saveView()
   },
 
-  splitPane: (leafId, side, sessionId) => {
+  splitPane: (leafId, side, ref) => {
     set((state) => {
-      const openTabs = state.openTabs.includes(sessionId)
+      const openTabs = state.openTabs.includes(ref)
         ? state.openTabs
-        : [...state.openTabs, sessionId]
-      // Move out of any current pane first so a session never shows twice.
-      let layout = detachSession(state.layout, sessionId)
+        : [...state.openTabs, ref]
+      // Move out of any current pane first so a ref never shows twice.
+      let layout = detachRef(state.layout, ref)
       const exists = leaves(layout).some((l) => l.id === leafId)
       layout = exists
-        ? splitLeaf(layout, leafId, side, sessionId)
-        : showSession(layout, state.activeSessionId, sessionId)
-      return { openTabs, activeSessionId: sessionId, layout }
+        ? splitLeaf(layout, leafId, side, ref)
+        : showRef(layout, state.activeTabId, ref)
+      return { openTabs, activeTabId: ref, layout }
     })
     get().saveView()
   },
@@ -131,62 +138,51 @@ export const createViewportSlice: StateCreator<
   },
 
   saveView: () => {
-    const { openTabs, activeSessionId, layout } = get()
-    writeView({ openTabs, activeSessionId, layout })
+    const { openTabs, activeTabId, layout } = get()
+    writeView({ openTabs, activeTabId, layout })
   },
 
-  // Open a session into a tab (from the sidebar) and focus it. If it isn't
-  // already shown in a pane, it takes over the focused pane.
+  // Open any content ref into a pane and focus it. If it isn't already shown in
+  // a pane, it takes over the focused pane. Loads events for kinds that need
+  // them (sessions); other destinations self-hydrate.
+  openTab: (ref) => {
+    set((state) => ({
+      openTabs: state.openTabs.includes(ref)
+        ? state.openTabs
+        : [...state.openTabs, ref],
+      activeTabId: ref,
+      layout: showRef(state.layout, state.activeTabId, ref),
+    }))
+    get().saveView()
+    if (describeKind(ref).loadsEvents && !get().eventsBySession[ref]) {
+      void get().loadEvents(ref)
+    }
+  },
+
+  // Open a session from the sidebar: focus its group (new sessions land there),
+  // then open + focus it like any tab.
   openSession: (id) => {
     const session = get().sessions[id]
     if (!session) {
       return
     }
-    set((state) => ({
-      // Focus the session's group in the sidebar (new sessions land there).
-      activeGroupId: session.groupId,
-      openTabs: state.openTabs.includes(id)
-        ? state.openTabs
-        : [...state.openTabs, id],
-      activeSessionId: id,
-      layout: showSession(state.layout, state.activeSessionId, id),
-    }))
-    get().saveView()
-    if (!get().eventsBySession[id]) {
-      void get().loadEvents(id)
-    }
-  },
-
-  // Open any tab content (session or workflow) into a pane and focus it.
-  openTabRef: (ref) => {
-    set((state) => ({
-      openTabs: state.openTabs.includes(ref)
-        ? state.openTabs
-        : [...state.openTabs, ref],
-      activeSessionId: ref,
-      layout: showSession(state.layout, state.activeSessionId, ref),
-    }))
-    get().saveView()
+    set({ activeGroupId: session.groupId })
+    get().openTab(id)
   },
 
   // Focus an open tab. If it's visible in a pane we just focus it; otherwise it
   // swaps into the focused pane.
-  selectSession: (id) => {
-    if (!get().sessions[id] && !isWorkflowTab(id) && !isSettingsTab(id)) {
+  selectTab: (ref) => {
+    if (!get().sessions[ref] && !describeKind(ref).persistsWithoutRecord) {
       return
     }
     set((state) => ({
-      activeSessionId: id,
-      layout: showSession(state.layout, state.activeSessionId, id),
+      activeTabId: ref,
+      layout: showRef(state.layout, state.activeTabId, ref),
     }))
     get().saveView()
-    // Only sessions need events loaded — workflows + settings hydrate themselves.
-    if (
-      !isWorkflowTab(id) &&
-      !isSettingsTab(id) &&
-      !get().eventsBySession[id]
-    ) {
-      void get().loadEvents(id)
+    if (describeKind(ref).loadsEvents && !get().eventsBySession[ref]) {
+      void get().loadEvents(ref)
     }
   },
 
@@ -199,10 +195,10 @@ export const createViewportSlice: StateCreator<
     set((state) => {
       const prevTabs = state.openTabs
       const openTabs = prevTabs.filter((sid) => sid !== id)
-      // Collapse the pane showing the closed session (or clear the sole pane).
-      let layout = detachSession(state.layout, id)
-      let activeSessionId = state.activeSessionId
-      if (activeSessionId === id) {
+      // Collapse the pane showing the closed ref (or clear the sole pane).
+      let layout = detachRef(state.layout, id)
+      let activeTabId = state.activeTabId
+      if (activeTabId === id) {
         const closedIndex = prevTabs.indexOf(id)
         const nextTab =
           openTabs[closedIndex] ??
@@ -210,12 +206,12 @@ export const createViewportSlice: StateCreator<
           openTabs[0] ??
           null
         // Prefer a pane that's still visible; otherwise show the next tab.
-        activeSessionId = firstLeaf(layout).sessionId ?? nextTab
-        if (activeSessionId) {
-          layout = showSession(layout, activeSessionId, activeSessionId)
+        activeTabId = firstLeaf(layout).ref ?? nextTab
+        if (activeTabId) {
+          layout = showRef(layout, activeTabId, activeTabId)
         }
       }
-      return { openTabs, activeSessionId, layout }
+      return { openTabs, activeTabId, layout }
     })
     get().saveView()
   },
@@ -229,7 +225,7 @@ export const createViewportSlice: StateCreator<
       }
     }
     // One tab left → collapse to a single full-screen pane showing it.
-    set({ openTabs: [id], activeSessionId: id, layout: makeLeaf(id) })
+    set({ openTabs: [id], activeTabId: id, layout: makeLeaf(id) })
     get().saveView()
   },
 })
