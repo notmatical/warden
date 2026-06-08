@@ -50,10 +50,10 @@ interface ProviderEntry {
   backend: Backend
 }
 
-const PROVIDER_ENTRIES: ProviderEntry[] = MODEL_PROVIDERS.map((name) => ({
-  name,
-  backend: backendForModel(MODELS.find((m) => m.provider === name)?.id),
-}))
+const PROVIDER_ENTRIES: ProviderEntry[] = MODEL_PROVIDERS.map((name) => {
+  const id = MODELS.find((m) => m.provider === name)?.id
+  return { name, backend: id ? backendForModel(id) : "claude" }
+})
 
 export function ModelMenu({
   value,

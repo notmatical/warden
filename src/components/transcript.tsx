@@ -341,7 +341,6 @@ export function Transcript({
   const [atBottom, setAtBottom] = useState(true)
 
   const eventCount = events?.length ?? 0
-  const _streamLength = streaming?.length ?? 0
 
   const handleScroll = () => {
     const el = viewportRef.current
