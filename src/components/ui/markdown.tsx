@@ -1,3 +1,4 @@
+import type { Element } from "hast"
 import { Check, Copy } from "lucide-react"
 import {
   type CSSProperties,
@@ -27,18 +28,15 @@ function nodeText(node: ReactNode): string {
   return ""
 }
 
-/** Hast element shape we read for task-list state (react-markdown's `node`). */
-interface HastNode {
-  tagName?: string
-  properties?: { checked?: boolean | null }
-  children?: HastNode[]
-}
-
 /** Whether a task-list `<li>` hast node contains a checked checkbox. */
-function taskChecked(node: HastNode | undefined): boolean {
-  if (!node?.children) return false
-  return node.children.some(
-    (child) => child.tagName === "input" && Boolean(child.properties?.checked)
+function taskChecked(node: Element | undefined): boolean {
+  return (
+    node?.children.some(
+      (child) =>
+        child.type === "element" &&
+        child.tagName === "input" &&
+        Boolean(child.properties?.checked)
+    ) ?? false
   )
 }
 
@@ -81,6 +79,7 @@ function CodeBlock({ code, lang }: { code: string; lang?: string }) {
       {html ? (
         <div
           className="overflow-x-auto [&>pre]:!bg-transparent [&>pre]:px-4 [&>pre]:py-3 [&>pre]:leading-[1.55]"
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: Shiki output is sanitized HTML
           dangerouslySetInnerHTML={{ __html: html }}
         />
       ) : (

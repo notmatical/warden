@@ -305,6 +305,12 @@ pub fn rev_parse(repo: &Path, rev: &str) -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
+/// The full textual diff of a worktree against `base` (a sha or branch) —
+/// working-tree changes included — for handing to a review agent.
+pub fn worktree_diff(worktree: &Path, base: &str) -> String {
+    run(worktree, &["diff", base]).unwrap_or_default()
+}
+
 /// Whether the repo has at least one configured remote (a prerequisite for a PR).
 pub fn has_remote(repo: &Path) -> bool {
     run(repo, &["remote"])

@@ -81,12 +81,13 @@ export interface Project {
 }
 
 /** The viewport pane arrangement: a recursive split-tree (VS Code / tmux style).
- *  A leaf shows one session; a split divides space among children along one axis.
- *  The viewport is global (browser-style), not per-group. */
+ *  A leaf shows one piece of content addressed by `ref` (a session id, or a
+ *  non-session destination like `workflow:<id>`/`settings`); a split divides
+ *  space among children along one axis. The viewport is global, not per-group. */
 export interface Leaf {
   type: "leaf"
   id: string
-  sessionId: string | null
+  ref: string | null
 }
 
 export interface Split {
@@ -126,6 +127,9 @@ export interface Session {
   role: SessionRole
   autoNamed: boolean
   agentSessionId: string | null
+  /** For a native CLI terminal, the provider program launched instead of the
+   *  shell (`claude`/`codex`); null for plain shell terminals and agents. */
+  terminalCommand: string | null
   workingDir: string
   branch: string | null
   baseSha: string | null
@@ -135,6 +139,8 @@ export interface Session {
   turns: number
   costUsd: number
   parentId: string | null
+  /** Set when a workflow run spawned this session. */
+  workflowId: string | null
   /** Set once the session's branch has been merged back; the worktree is gone. */
   mergedAt: string | null
   /** The pull request opened for this session's branch, if any. */
@@ -144,8 +150,26 @@ export interface Session {
   /** Aggregate CI-check state for the PR, refreshed by background polling. */
   prCheckStatus: CheckStatus | null
   prCheckedAt: number | null
+  /** Pinned sessions sort to the top of the folder's session list. */
+  pinned: boolean
   createdAt: string
   updatedAt: string
+}
+
+/** A per-project label (GitHub-style) attachable to sessions. */
+export interface Label {
+  id: string
+  projectId: string
+  name: string
+  /** A palette token (see LABEL_COLORS) the UI maps to fill/text/ring classes. */
+  color: string
+  createdAt: string
+}
+
+/** A project's labels + which sessions each is attached to (sessionId → labelIds). */
+export interface ProjectLabels {
+  labels: Label[]
+  assignments: Record<string, string[]>
 }
 
 /** Aggregate CI-check state for a PR. */

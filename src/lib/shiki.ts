@@ -19,10 +19,18 @@ export async function highlightCode(
   const language = lang?.toLowerCase() || "text"
 
   try {
-    return await codeToHtml(code, { lang: language, themes: THEMES, defaultColor: false })
+    return await codeToHtml(code, {
+      lang: language,
+      themes: THEMES,
+      defaultColor: false,
+    })
   } catch {
     try {
-      return await codeToHtml(code, { lang: "text", themes: THEMES, defaultColor: false })
+      return await codeToHtml(code, {
+        lang: "text",
+        themes: THEMES,
+        defaultColor: false,
+      })
     } catch {
       return null
     }
@@ -43,15 +51,55 @@ export interface Highlighted {
 }
 
 const EXT_LANG: Record<string, string> = {
-  ts: "ts", tsx: "tsx", js: "js", jsx: "jsx", mjs: "js", cjs: "js",
-  rs: "rust", py: "python", rb: "ruby", go: "go", java: "java", kt: "kotlin",
-  c: "c", h: "c", cpp: "cpp", cc: "cpp", hpp: "cpp", cs: "csharp",
-  json: "json", jsonc: "json", json5: "json", md: "markdown", mdx: "mdx",
-  css: "css", scss: "scss", less: "less", html: "html", xml: "xml", svg: "xml",
-  sh: "bash", bash: "bash", zsh: "bash", fish: "bash", ps1: "powershell",
-  toml: "toml", yaml: "yaml", yml: "yaml", sql: "sql", graphql: "graphql",
-  php: "php", swift: "swift", scala: "scala", lua: "lua", dart: "dart", r: "r",
-  vue: "vue", svelte: "svelte", astro: "astro", proto: "proto",
+  ts: "ts",
+  tsx: "tsx",
+  js: "js",
+  jsx: "jsx",
+  mjs: "js",
+  cjs: "js",
+  rs: "rust",
+  py: "python",
+  rb: "ruby",
+  go: "go",
+  java: "java",
+  kt: "kotlin",
+  c: "c",
+  h: "c",
+  cpp: "cpp",
+  cc: "cpp",
+  hpp: "cpp",
+  cs: "csharp",
+  json: "json",
+  jsonc: "json",
+  json5: "json",
+  md: "markdown",
+  mdx: "mdx",
+  css: "css",
+  scss: "scss",
+  less: "less",
+  html: "html",
+  xml: "xml",
+  svg: "xml",
+  sh: "bash",
+  bash: "bash",
+  zsh: "bash",
+  fish: "bash",
+  ps1: "powershell",
+  toml: "toml",
+  yaml: "yaml",
+  yml: "yaml",
+  sql: "sql",
+  graphql: "graphql",
+  php: "php",
+  swift: "swift",
+  scala: "scala",
+  lua: "lua",
+  dart: "dart",
+  r: "r",
+  vue: "vue",
+  svelte: "svelte",
+  astro: "astro",
+  proto: "proto",
 }
 
 /** Best-effort shiki language id for a file path, by extension/filename. */
@@ -92,7 +140,11 @@ export async function highlightTokens(
   } catch {
     try {
       return toHighlighted(
-        await codeToTokens(code, { lang: "text", themes: THEMES, defaultColor: false })
+        await codeToTokens(code, {
+          lang: "text",
+          themes: THEMES,
+          defaultColor: false,
+        })
       )
     } catch {
       return null

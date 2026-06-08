@@ -16,6 +16,9 @@ dist-ssr
 .agents
 skills-lock.json
 
+# Reference repos cloned locally for analysis
+Developmentrepos_refs*
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

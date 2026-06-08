@@ -4,12 +4,13 @@
 use std::path::Path;
 
 use serde::Serialize;
+use specta::Type;
 
 use super::cli::run;
 use crate::error::Result;
 
 /// One changed file's stats and unified-diff patch (vs the session's base).
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiffFile {
     pub path: String,
@@ -20,7 +21,7 @@ pub struct DiffFile {
 }
 
 /// A commit made on the session's branch since it forked from base.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Commit {
     pub sha: String,

@@ -1,14 +1,16 @@
 mod migrations;
 
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use rusqlite::{Connection, OptionalExtension, Row};
 
 use crate::domain::{
-    AgentEvent, Backend, CheckStatus, ContextSource, EffortLevel, EventRecord, Group,
-    PermissionMode, Project, Session, SessionContextSource, SessionKind, SessionRole,
-    SessionStatus,
+    AgentEvent, Backend, CheckStatus, ContextSource, EffortLevel, EventRecord, Group, Label,
+    NodeRunStatus, PermissionMode, Project, ProjectLabels, RunStatus, Session,
+    SessionContextSource, SessionKind, SessionRole, SessionStatus, Workflow, WorkflowGraph,
+    WorkflowNodeRun, WorkflowRun,
 };
 use crate::error::{AppError, Result};
 use crate::util::{now_rfc3339, uuid};
@@ -38,6 +40,7 @@ pub struct NewSession {
     pub base_branch: Option<String>,
     pub is_isolated: bool,
     pub parent_id: Option<String>,
+    pub workflow_id: Option<String>,
 }
 
 /// Thread-safe handle to the SQLite database. Cloneable and `Send + Sync` so it
@@ -228,11 +231,24 @@ impl Store {
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
+    /// A group's regular sessions — workflow-spawned sessions are excluded (they
+    /// live under their workflow in the sidebar).
     pub fn list_group_sessions(&self, group_id: &str) -> Result<Vec<Session>> {
         let conn = self.lock();
-        let sql = format!("{SESSION_SELECT_ALL} WHERE group_id = ?1 ORDER BY created_at");
+        let sql = format!(
+            "{SESSION_SELECT_ALL} WHERE group_id = ?1 AND workflow_id IS NULL ORDER BY created_at"
+        );
         let mut stmt = conn.prepare(&sql)?;
         let rows = stmt.query_map([group_id], map_session)?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    /// The sessions a workflow's runs have spawned, newest first.
+    pub fn list_workflow_sessions(&self, workflow_id: &str) -> Result<Vec<Session>> {
+        let conn = self.lock();
+        let sql = format!("{SESSION_SELECT_ALL} WHERE workflow_id = ?1 ORDER BY created_at DESC");
+        let mut stmt = conn.prepare(&sql)?;
+        let rows = stmt.query_map([workflow_id], map_session)?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
@@ -331,6 +347,338 @@ impl Store {
         Ok(())
     }
 
+    /// Concatenate a session's output across its turns — used to hand one
+    /// workflow node's result to the next. Joins `AssistantText` blocks, plus the
+    /// plan from an `ExitPlanMode` call (a plan node delivers its plan there, not
+    /// as assistant text), in order. Skips transient deltas and tool chatter.
+    pub fn get_session_assistant_text(&self, session_id: &str) -> Result<String> {
+        let conn = self.lock();
+        let mut stmt =
+            conn.prepare("SELECT payload FROM events WHERE session_id = ?1 ORDER BY seq")?;
+        let rows = stmt.query_map([session_id], |row| row.get::<_, String>("payload"))?;
+        let mut out = String::new();
+        for payload in rows {
+            let text = match serde_json::from_str::<AgentEvent>(&payload?) {
+                Ok(AgentEvent::AssistantText { text, .. }) => text,
+                Ok(AgentEvent::ToolUse { name, input, .. }) if name == "ExitPlanMode" => input
+                    .get("plan")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default()
+                    .to_string(),
+                _ => continue,
+            };
+            if text.trim().is_empty() {
+                continue;
+            }
+            if !out.is_empty() {
+                out.push_str("\n\n");
+            }
+            out.push_str(&text);
+        }
+        Ok(out)
+    }
+
+    /// Whether a session's most recent turn ended on an unanswered
+    /// `AskUserQuestion` — i.e. the agent is waiting for the user, even though
+    /// its status settled to Idle.
+    pub fn session_has_pending_question(&self, session_id: &str) -> Result<bool> {
+        let conn = self.lock();
+        let mut stmt =
+            conn.prepare("SELECT payload FROM events WHERE session_id = ?1 ORDER BY seq DESC")?;
+        let rows = stmt.query_map([session_id], |r| r.get::<_, String>("payload"))?;
+        for payload in rows {
+            match serde_json::from_str::<AgentEvent>(&payload?) {
+                // A later user message means the question was answered.
+                Ok(AgentEvent::UserMessage { .. }) => return Ok(false),
+                Ok(AgentEvent::ToolUse { name, .. }) if name == "AskUserQuestion" => {
+                    return Ok(true)
+                }
+                _ => {}
+            }
+        }
+        Ok(false)
+    }
+
+    // ----- workflows --------------------------------------------------------
+
+    pub fn create_workflow(
+        &self,
+        project_id: &str,
+        name: &str,
+        graph: &WorkflowGraph,
+    ) -> Result<Workflow> {
+        let now = now_rfc3339();
+        let wf = Workflow {
+            id: uuid(),
+            project_id: project_id.to_string(),
+            name: name.to_string(),
+            graph: graph.clone(),
+            created_at: now.clone(),
+            updated_at: now,
+        };
+        self.lock().execute(
+            "INSERT INTO workflows (id, project_id, name, graph, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            (
+                &wf.id,
+                project_id,
+                name,
+                serde_json::to_string(graph)?,
+                &wf.created_at,
+                &wf.updated_at,
+            ),
+        )?;
+        Ok(wf)
+    }
+
+    pub fn get_workflow(&self, id: &str) -> Result<Workflow> {
+        let conn = self.lock();
+        let (project_id, name, graph_json, created_at, updated_at): (
+            String,
+            String,
+            String,
+            String,
+            String,
+        ) = conn.query_row(
+            "SELECT project_id, name, graph, created_at, updated_at FROM workflows WHERE id = ?1",
+            [id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+        )?;
+        Ok(Workflow {
+            id: id.to_string(),
+            project_id,
+            name,
+            graph: serde_json::from_str(&graph_json)?,
+            created_at,
+            updated_at,
+        })
+    }
+
+    pub fn list_workflows(&self, project_id: &str) -> Result<Vec<Workflow>> {
+        let conn = self.lock();
+        let mut stmt = conn.prepare(
+            "SELECT id, project_id, name, graph, created_at, updated_at
+             FROM workflows WHERE project_id = ?1 ORDER BY updated_at DESC",
+        )?;
+        let rows = stmt.query_map([project_id], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, String>(2)?,
+                r.get::<_, String>(3)?,
+                r.get::<_, String>(4)?,
+                r.get::<_, String>(5)?,
+            ))
+        })?;
+        let mut out = Vec::new();
+        for row in rows {
+            let (id, project_id, name, graph_json, created_at, updated_at) = row?;
+            out.push(Workflow {
+                id,
+                project_id,
+                name,
+                graph: serde_json::from_str(&graph_json)?,
+                created_at,
+                updated_at,
+            });
+        }
+        Ok(out)
+    }
+
+    pub fn update_workflow(
+        &self,
+        id: &str,
+        name: Option<&str>,
+        graph: Option<&WorkflowGraph>,
+    ) -> Result<Workflow> {
+        {
+            let conn = self.lock();
+            if let Some(name) = name {
+                conn.execute(
+                    "UPDATE workflows SET name = ?2, updated_at = ?3 WHERE id = ?1",
+                    (id, name, now_rfc3339()),
+                )?;
+            }
+            if let Some(graph) = graph {
+                conn.execute(
+                    "UPDATE workflows SET graph = ?2, updated_at = ?3 WHERE id = ?1",
+                    (id, serde_json::to_string(graph)?, now_rfc3339()),
+                )?;
+            }
+        }
+        self.get_workflow(id)
+    }
+
+    pub fn delete_workflow(&self, id: &str) -> Result<()> {
+        let conn = self.lock();
+        // Orphan its sessions back to the regular list, then drop the workflow.
+        conn.execute(
+            "UPDATE sessions SET workflow_id = NULL WHERE workflow_id = ?1",
+            [id],
+        )?;
+        conn.execute("DELETE FROM workflows WHERE id = ?1", [id])?;
+        Ok(())
+    }
+
+    pub fn create_workflow_run(
+        &self,
+        workflow_id: Option<&str>,
+        project_id: &str,
+        group_id: &str,
+        graph: &WorkflowGraph,
+    ) -> Result<WorkflowRun> {
+        let now = now_rfc3339();
+        let run = WorkflowRun {
+            id: uuid(),
+            workflow_id: workflow_id.map(str::to_string),
+            project_id: project_id.to_string(),
+            group_id: group_id.to_string(),
+            status: RunStatus::Pending,
+            error: None,
+            created_at: now.clone(),
+            updated_at: now,
+        };
+        self.lock().execute(
+            "INSERT INTO workflow_runs
+             (id, workflow_id, project_id, group_id, graph, status, error, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            (
+                &run.id,
+                &run.workflow_id,
+                project_id,
+                group_id,
+                serde_json::to_string(graph)?,
+                run.status.as_str(),
+                &run.error,
+                &run.created_at,
+                &run.updated_at,
+            ),
+        )?;
+        Ok(run)
+    }
+
+    pub fn set_workflow_run_status(
+        &self,
+        run_id: &str,
+        status: RunStatus,
+        error: Option<&str>,
+    ) -> Result<()> {
+        self.lock().execute(
+            "UPDATE workflow_runs SET status = ?2, error = ?3, updated_at = ?4 WHERE id = ?1",
+            (run_id, status.as_str(), error, now_rfc3339()),
+        )?;
+        Ok(())
+    }
+
+    pub fn get_workflow_run(&self, run_id: &str) -> Result<WorkflowRun> {
+        let conn = self.lock();
+        let (workflow_id, project_id, group_id, status, error, created_at, updated_at): (
+            Option<String>,
+            String,
+            String,
+            String,
+            Option<String>,
+            String,
+            String,
+        ) = conn.query_row(
+            "SELECT workflow_id, project_id, group_id, status, error, created_at, updated_at
+             FROM workflow_runs WHERE id = ?1",
+            [run_id],
+            |r| {
+                Ok((
+                    r.get(0)?,
+                    r.get(1)?,
+                    r.get(2)?,
+                    r.get(3)?,
+                    r.get(4)?,
+                    r.get(5)?,
+                    r.get(6)?,
+                ))
+            },
+        )?;
+        Ok(WorkflowRun {
+            id: run_id.to_string(),
+            workflow_id,
+            project_id,
+            group_id,
+            status: RunStatus::parse(&status).unwrap_or(RunStatus::Failed),
+            error,
+            created_at,
+            updated_at,
+        })
+    }
+
+    /// The frozen graph snapshot a run was launched with (for resume).
+    pub fn get_workflow_run_graph(&self, run_id: &str) -> Result<WorkflowGraph> {
+        let conn = self.lock();
+        let json: String = conn.query_row(
+            "SELECT graph FROM workflow_runs WHERE id = ?1",
+            [run_id],
+            |r| r.get(0),
+        )?;
+        Ok(serde_json::from_str(&json)?)
+    }
+
+    /// The most recent run of a workflow, if any (for restoring run state when
+    /// the editor reopens).
+    pub fn latest_workflow_run(&self, workflow_id: &str) -> Result<Option<WorkflowRun>> {
+        let id: Option<String> = {
+            let conn = self.lock();
+            match conn.query_row(
+                "SELECT id FROM workflow_runs WHERE workflow_id = ?1
+                 ORDER BY created_at DESC LIMIT 1",
+                [workflow_id],
+                |r| r.get::<_, String>(0),
+            ) {
+                Ok(id) => Some(id),
+                Err(rusqlite::Error::QueryReturnedNoRows) => None,
+                Err(e) => return Err(e.into()),
+            }
+        };
+        match id {
+            Some(id) => Ok(Some(self.get_workflow_run(&id)?)),
+            None => Ok(None),
+        }
+    }
+
+    pub fn upsert_node_run(&self, run: &WorkflowNodeRun) -> Result<()> {
+        self.lock().execute(
+            "INSERT INTO workflow_node_runs (run_id, node_id, status, session_id, output, error)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(run_id, node_id) DO UPDATE SET
+               status = ?3, session_id = ?4, output = ?5, error = ?6",
+            (
+                &run.run_id,
+                &run.node_id,
+                run.status.as_str(),
+                &run.session_id,
+                &run.output,
+                &run.error,
+            ),
+        )?;
+        Ok(())
+    }
+
+    pub fn list_node_runs(&self, run_id: &str) -> Result<Vec<WorkflowNodeRun>> {
+        let conn = self.lock();
+        let mut stmt = conn.prepare(
+            "SELECT run_id, node_id, status, session_id, output, error
+             FROM workflow_node_runs WHERE run_id = ?1",
+        )?;
+        let rows = stmt.query_map([run_id], |r| {
+            let status: String = r.get(2)?;
+            Ok(WorkflowNodeRun {
+                run_id: r.get(0)?,
+                node_id: r.get(1)?,
+                status: NodeRunStatus::parse(&status).unwrap_or(NodeRunStatus::Pending),
+                session_id: r.get(3)?,
+                output: r.get(4)?,
+                error: r.get(5)?,
+            })
+        })?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
     // ----- sessions ---------------------------------------------------------
 
     pub fn create_session(&self, new: NewSession) -> Result<Session> {
@@ -361,12 +709,14 @@ impl Store {
             turns: 0,
             cost_usd: 0.0,
             parent_id: new.parent_id,
+            workflow_id: new.workflow_id,
             merged_at: None,
             pr_number: None,
             pr_url: None,
             pr_state: None,
             pr_check_status: None,
             pr_checked_at: None,
+            pinned: false,
             created_at: now.clone(),
             updated_at: now,
         };
@@ -377,9 +727,9 @@ impl Store {
                 id, group_id, project_id, title, backend, model, permission_mode, status, role,
                 agent_session_id, working_dir, branch, base_sha, is_isolated, allowed_tools, turns,
                 cost_usd, parent_id, created_at, updated_at, effort, auto_named, kind,
-                terminal_command, base_branch
+                terminal_command, base_branch, workflow_id
              ) VALUES (
-                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25
+                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26
              )",
             rusqlite::params![
                 session.id,
@@ -407,6 +757,7 @@ impl Store {
                 session.kind.as_str(),
                 session.terminal_command,
                 session.base_branch,
+                session.workflow_id,
             ],
         )?;
         // Seed the primary root. Additional roots are added via set_session_roots.
@@ -439,6 +790,107 @@ impl Store {
             "UPDATE sessions SET status = ?2, updated_at = ?3 WHERE id = ?1",
             (id, status.as_str(), now_rfc3339()),
         )?;
+        Ok(())
+    }
+
+    /// Pin/unpin a session. Deliberately does *not* touch `updated_at` — pinning
+    /// shouldn't re-sort the session as if it were just active.
+    pub fn set_session_pinned(&self, id: &str, pinned: bool) -> Result<()> {
+        let conn = self.lock();
+        conn.execute(
+            "UPDATE sessions SET pinned = ?2 WHERE id = ?1",
+            (id, pinned as i64),
+        )?;
+        Ok(())
+    }
+
+    // ----- labels (per-project) -----
+
+    pub fn list_labels(&self, project_id: &str) -> Result<Vec<Label>> {
+        let conn = self.lock();
+        let mut stmt = conn.prepare(
+            "SELECT id, project_id, name, color, created_at FROM labels \
+             WHERE project_id = ?1 ORDER BY name COLLATE NOCASE",
+        )?;
+        let rows = stmt.query_map([project_id], map_label)?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    pub fn create_label(&self, project_id: &str, name: &str, color: &str) -> Result<Label> {
+        let label = Label {
+            id: uuid(),
+            project_id: project_id.to_string(),
+            name: name.to_string(),
+            color: color.to_string(),
+            created_at: now_rfc3339(),
+        };
+        let conn = self.lock();
+        conn.execute(
+            "INSERT INTO labels (id, project_id, name, color, created_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            (
+                &label.id,
+                &label.project_id,
+                &label.name,
+                &label.color,
+                &label.created_at,
+            ),
+        )?;
+        Ok(label)
+    }
+
+    pub fn update_label(&self, id: &str, name: &str, color: &str) -> Result<()> {
+        let conn = self.lock();
+        conn.execute(
+            "UPDATE labels SET name = ?2, color = ?3 WHERE id = ?1",
+            (id, name, color),
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_label(&self, id: &str) -> Result<()> {
+        let conn = self.lock();
+        conn.execute("DELETE FROM labels WHERE id = ?1", [id])?;
+        Ok(())
+    }
+
+    /// A project's labels + each session's label ids, in one round-trip.
+    pub fn project_labels(&self, project_id: &str) -> Result<ProjectLabels> {
+        let labels = self.list_labels(project_id)?;
+        let conn = self.lock();
+        let mut stmt = conn.prepare(
+            "SELECT sl.session_id, sl.label_id FROM session_labels sl \
+             JOIN sessions s ON s.id = sl.session_id WHERE s.project_id = ?1",
+        )?;
+        let rows = stmt.query_map([project_id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?;
+        let mut assignments: HashMap<String, Vec<String>> = HashMap::new();
+        for row in rows {
+            let (session_id, label_id) = row?;
+            assignments.entry(session_id).or_default().push(label_id);
+        }
+        Ok(ProjectLabels {
+            labels,
+            assignments,
+        })
+    }
+
+    /// Replace a session's labels with `label_ids`.
+    pub fn set_session_labels(&self, session_id: &str, label_ids: &[String]) -> Result<()> {
+        let mut conn = self.lock();
+        let tx = conn.transaction()?;
+        tx.execute(
+            "DELETE FROM session_labels WHERE session_id = ?1",
+            [session_id],
+        )?;
+        for label_id in label_ids {
+            tx.execute(
+                "INSERT OR IGNORE INTO session_labels (session_id, label_id) VALUES (?1, ?2)",
+                (session_id, label_id),
+            )?;
+        }
+        tx.commit()?;
         Ok(())
     }
 
@@ -738,16 +1190,16 @@ impl Store {
 const SESSION_SELECT: &str =
     "SELECT id, group_id, project_id, title, backend, model, permission_mode, status, role, \
     agent_session_id, working_dir, branch, base_sha, is_isolated, allowed_tools, turns, cost_usd, \
-    parent_id, created_at, updated_at, effort, auto_named, kind, terminal_command, terminal_started, \
+    parent_id, workflow_id, created_at, updated_at, effort, auto_named, kind, terminal_command, terminal_started, \
     terminal_resume_id, base_branch, merged_at, pr_number, pr_url, pr_state, pr_check_status, \
-    pr_checked_at FROM sessions WHERE id = ?1";
+    pr_checked_at, pinned FROM sessions WHERE id = ?1";
 
 const SESSION_SELECT_ALL: &str =
     "SELECT id, group_id, project_id, title, backend, model, permission_mode, status, role, \
     agent_session_id, working_dir, branch, base_sha, is_isolated, allowed_tools, turns, cost_usd, \
-    parent_id, created_at, updated_at, effort, auto_named, kind, terminal_command, terminal_started, \
+    parent_id, workflow_id, created_at, updated_at, effort, auto_named, kind, terminal_command, terminal_started, \
     terminal_resume_id, base_branch, merged_at, pr_number, pr_url, pr_state, pr_check_status, \
-    pr_checked_at FROM sessions";
+    pr_checked_at, pinned FROM sessions";
 
 fn map_project(row: &Row<'_>) -> rusqlite::Result<Project> {
     Ok(Project {
@@ -820,6 +1272,7 @@ fn map_session(row: &Row<'_>) -> rusqlite::Result<Session> {
         turns: row.get("turns")?,
         cost_usd: row.get("cost_usd")?,
         parent_id: row.get("parent_id")?,
+        workflow_id: row.get("workflow_id")?,
         merged_at: row.get("merged_at")?,
         pr_number: row.get("pr_number")?,
         pr_url: row.get("pr_url")?,
@@ -828,8 +1281,19 @@ fn map_session(row: &Row<'_>) -> rusqlite::Result<Session> {
             .get::<_, Option<String>>("pr_check_status")?
             .and_then(|s| CheckStatus::parse(&s)),
         pr_checked_at: row.get("pr_checked_at")?,
+        pinned: row.get::<_, i64>("pinned")? != 0,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
+    })
+}
+
+fn map_label(row: &Row<'_>) -> rusqlite::Result<Label> {
+    Ok(Label {
+        id: row.get("id")?,
+        project_id: row.get("project_id")?,
+        name: row.get("name")?,
+        color: row.get("color")?,
+        created_at: row.get("created_at")?,
     })
 }
 

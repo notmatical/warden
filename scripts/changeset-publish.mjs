@@ -3,16 +3,16 @@
 // release is needed (the `New tag:` line it scans for), but only once per
 // version: if the tag already exists, stay silent so unrelated pushes to main
 // don't re-trigger a release.
-import { execSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { execSync } from "node:child_process"
+import { readFileSync } from "node:fs"
 
-const { name, version } = JSON.parse(readFileSync("package.json", "utf8"));
-const tag = `${name}-v${version}`;
+const { name, version } = JSON.parse(readFileSync("package.json", "utf8"))
+const tag = `${name}-v${version}`
 
 try {
-	execSync(`git rev-parse -q --verify "refs/tags/${tag}"`, { stdio: "ignore" });
-	console.log(`Tag ${tag} already exists — nothing to release.`);
+  execSync(`git rev-parse -q --verify "refs/tags/${tag}"`, { stdio: "ignore" })
+  console.log(`Tag ${tag} already exists — nothing to release.`)
 } catch {
-	// No tag yet → signal the action (and thus the build job) to cut a release.
-	console.log(`New tag: ${name}@${version}`);
+  // No tag yet → signal the action (and thus the build job) to cut a release.
+  console.log(`New tag: ${name}@${version}`)
 }

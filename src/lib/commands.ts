@@ -87,7 +87,9 @@ type Listener = (payload: unknown) => void
 const listeners = new Map<CommandId, Set<Listener>>()
 
 export function emitUiCommand<T>(id: CommandId, payload: T): void {
-  listeners.get(id)?.forEach((fn) => fn(payload))
+  listeners.get(id)?.forEach((fn) => {
+    fn(payload)
+  })
 }
 
 export function subscribeUiCommand<T>(

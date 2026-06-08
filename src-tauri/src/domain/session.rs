@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
+use specta::Type;
 
 /// Which agent backend powers a session. Only Claude is implemented today, but
 /// the enum is the seam where future providers (codex, cursor, ...) plug in.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum Backend {
     Claude,
@@ -24,11 +25,22 @@ impl Backend {
             _ => None,
         }
     }
+
+    /// The backend that runs a given model id: Codex for `gpt*`/`codex*`,
+    /// Claude otherwise.
+    pub fn for_model(model: &str) -> Self {
+        let id = model.to_ascii_lowercase();
+        if id.starts_with("gpt") || id.starts_with("codex") {
+            Backend::Codex
+        } else {
+            Backend::Claude
+        }
+    }
 }
 
 /// Permission posture handed to the agent CLI. Sessions are worktree-isolated,
 /// so `BypassPermissions` is the default for autonomous, prompt-free turns.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub enum PermissionMode {
     AcceptEdits,
@@ -64,7 +76,7 @@ impl PermissionMode {
 }
 
 /// Reasoning effort handed to the agent CLI (`claude --effort`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum EffortLevel {
     Low,
@@ -103,7 +115,7 @@ impl EffortLevel {
 }
 
 /// Lifecycle state of a session.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionStatus {
     Idle,
@@ -132,7 +144,7 @@ impl SessionStatus {
 
 /// Aggregate CI-check state for a session's pull request, distilled from `gh`'s
 /// `statusCheckRollup`. Absent when the PR has no checks.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum CheckStatus {
     Success,
@@ -161,7 +173,7 @@ impl CheckStatus {
 
 /// Whether a session is a headless agent (stream-json adapter) or an
 /// interactive terminal running the native `claude` TUI in a PTY.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionKind {
     Agent,
@@ -187,7 +199,7 @@ impl SessionKind {
 
 /// The role a session plays inside a recipe. Plain sessions are `Chat`; the
 /// plan→code handoff produces a `Planner` and a `Coder`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionRole {
     Chat,
@@ -216,7 +228,7 @@ impl SessionRole {
 
 /// A single agent session — one tab in the browser. Carries everything needed
 /// to resume the underlying CLI conversation and to render its state.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Session {
     pub id: String,
@@ -261,6 +273,9 @@ pub struct Session {
     pub cost_usd: f64,
     /// Set when this session was produced by a handoff from another session.
     pub parent_id: Option<String>,
+    /// Set when a workflow run spawned this session (groups it under the
+    /// workflow in the sidebar).
+    pub workflow_id: Option<String>,
     /// When the session's branch was merged back into its base — `None` until
     /// then. A merged session's worktree is gone, so it becomes read-only.
     pub merged_at: Option<String>,
@@ -272,6 +287,8 @@ pub struct Session {
     /// Aggregate CI-check state for the PR, and when it was last polled (epoch s).
     pub pr_check_status: Option<CheckStatus>,
     pub pr_checked_at: Option<i64>,
+    /// Pinned sessions sort to the top of the folder's session list.
+    pub pinned: bool,
     pub created_at: String,
     pub updated_at: String,
 }

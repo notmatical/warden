@@ -19,14 +19,21 @@ export interface ActiveMention {
  * sits at line start or after whitespace, with no whitespace in between. One
  * pass handles opening, continuing, and editing an existing mention.
  */
-export function detectMention(value: string, cursor: number): ActiveMention | null {
+export function detectMention(
+  value: string,
+  cursor: number
+): ActiveMention | null {
   for (let i = cursor - 1; i >= 0; i--) {
     const ch = value[i]
     if (WHITESPACE.has(ch)) return null
     if (TRIGGERS.includes(ch as MentionChar)) {
       const before = value[i - 1]
       if (i === 0 || WHITESPACE.has(before)) {
-        return { char: ch as MentionChar, index: i, query: value.slice(i + 1, cursor) }
+        return {
+          char: ch as MentionChar,
+          index: i,
+          query: value.slice(i + 1, cursor),
+        }
       }
       return null
     }
@@ -132,7 +139,10 @@ export const MENTION_PROVIDERS: Record<MentionChar, MentionProvider> = {
 }
 
 /** Case-insensitive substring filter over an item's label and detail. */
-export function filterMentions(items: MentionItem[], query: string): MentionItem[] {
+export function filterMentions(
+  items: MentionItem[],
+  query: string
+): MentionItem[] {
   const q = query.trim().toLowerCase()
   if (!q) return items.slice(0, 50)
   return items

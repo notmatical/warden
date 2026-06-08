@@ -19,3 +19,41 @@
 @utility zap-pop {
   animation: zap-pop 0.4s ease-out;
 }
+
+/* Bright band sweeping across dim text — a subtle "working/thinking" cue. Base
+ * text is muted; a foreground-colored gradient sweeps right-to-left over it.
+ * `--shimmer-spread` (set per instance, scaled by text length) widens the band
+ * so it reads consistently across short and long labels. */
+@keyframes text-shimmer {
+  from {
+    background-position: 100% center;
+  }
+  to {
+    background-position: 0% center;
+  }
+}
+
+@utility text-shimmer {
+  --shimmer-spread: 8px;
+  background-image: linear-gradient(
+      90deg,
+      transparent calc(50% - var(--shimmer-spread)),
+      var(--color-foreground),
+      transparent calc(50% + var(--shimmer-spread))
+    ),
+    linear-gradient(var(--color-muted-foreground), var(--color-muted-foreground));
+  background-repeat: no-repeat, padding-box;
+  background-size: 250% 100%, auto;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  animation: text-shimmer 2s linear infinite;
+}
+
+/* Unlayered, so it overrides the utility's animation under reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  .text-shimmer {
+    animation: none;
+    color: var(--color-muted-foreground);
+  }
+}

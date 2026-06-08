@@ -3,15 +3,15 @@
    (defaultColor: false); resolve them to `color` by theme so highlighted code
    sits on the app's own surface. */
 @layer base {
-	.shiki,
-	.shiki span,
-	[data-tok] {
-		color: var(--shiki-light);
-	}
+  .shiki,
+  .shiki span,
+  [data-tok] {
+    color: var(--shiki-light);
+  }
 
-	.dark .shiki,
-	.dark .shiki span,
-	.dark [data-tok] {
-		color: var(--shiki-dark);
-	}
+  .dark .shiki,
+  .dark .shiki span,
+  .dark [data-tok] {
+    color: var(--shiki-dark);
+  }
 }
