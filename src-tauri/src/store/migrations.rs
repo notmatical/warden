@@ -62,17 +62,23 @@ const MIGRATIONS: &[&str] = &[
         turns             INTEGER NOT NULL DEFAULT 0,
         cost_usd          REAL NOT NULL DEFAULT 0,
         parent_id         TEXT REFERENCES sessions(id) ON DELETE SET NULL,
+        -- Set on sessions a workflow run spawns, so the sidebar groups them under
+        -- the workflow instead of the flat session list. Cleared if the workflow
+        -- is deleted (see delete_workflow).
+        workflow_id       TEXT,
         merged_at         TEXT,
         pr_number         INTEGER,
         pr_url            TEXT,
         pr_state          TEXT,
         pr_check_status   TEXT,
         pr_checked_at     INTEGER,
+        pinned            INTEGER NOT NULL DEFAULT 0,
         created_at        TEXT NOT NULL,
         updated_at        TEXT NOT NULL
     );
     CREATE INDEX idx_sessions_group ON sessions(group_id);
     CREATE INDEX idx_sessions_project ON sessions(project_id);
+    CREATE INDEX idx_sessions_workflow ON sessions(workflow_id);
 
     CREATE TABLE session_roots (
         session_id  TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
@@ -105,11 +111,67 @@ const MIGRATIONS: &[&str] = &[
     );
     CREATE INDEX idx_ctx_sources_session ON session_context_sources(session_id);
 
+    -- Authored workflow graphs (cross-provider agent DAGs). `graph` is the JSON
+    -- document the React Flow editor round-trips.
+    CREATE TABLE workflows (
+        id          TEXT PRIMARY KEY,
+        project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        name        TEXT NOT NULL,
+        graph       TEXT NOT NULL,
+        created_at  TEXT NOT NULL,
+        updated_at  TEXT NOT NULL
+    );
+    CREATE INDEX idx_workflows_project ON workflows(project_id);
+
+    -- A single execution of a workflow. `graph` is a frozen snapshot taken at
+    -- launch, so the definition can be edited mid-run.
+    CREATE TABLE workflow_runs (
+        id           TEXT PRIMARY KEY,
+        workflow_id  TEXT REFERENCES workflows(id) ON DELETE SET NULL,
+        project_id   TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        group_id     TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+        graph        TEXT NOT NULL,
+        status       TEXT NOT NULL,
+        error        TEXT,
+        created_at   TEXT NOT NULL,
+        updated_at   TEXT NOT NULL
+    );
+    CREATE INDEX idx_workflow_runs_workflow ON workflow_runs(workflow_id);
+
+    -- Per-node execution state; the node's session row carries its transcript.
+    CREATE TABLE workflow_node_runs (
+        run_id      TEXT NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE,
+        node_id     TEXT NOT NULL,
+        status      TEXT NOT NULL,
+        session_id  TEXT REFERENCES sessions(id) ON DELETE SET NULL,
+        output      TEXT,
+        error       TEXT,
+        PRIMARY KEY (run_id, node_id)
+    );
+
     -- App-wide key/value settings (e.g. each provider's CLI source preference).
     CREATE TABLE settings (
         key    TEXT PRIMARY KEY,
         value  TEXT NOT NULL
     );
+
+    -- Per-project labels (GitHub-style), attachable to sessions.
+    CREATE TABLE labels (
+        id          TEXT PRIMARY KEY,
+        project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        name        TEXT NOT NULL,
+        color       TEXT NOT NULL,
+        created_at  TEXT NOT NULL
+    );
+    CREATE INDEX idx_labels_project ON labels(project_id);
+
+    CREATE TABLE session_labels (
+        session_id  TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+        label_id    TEXT NOT NULL REFERENCES labels(id) ON DELETE CASCADE,
+        PRIMARY KEY (session_id, label_id)
+    );
+    CREATE INDEX idx_session_labels_session ON session_labels(session_id);
+    CREATE INDEX idx_session_labels_label ON session_labels(label_id);
     "#,
 ];
 

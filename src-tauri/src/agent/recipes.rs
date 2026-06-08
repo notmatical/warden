@@ -2,6 +2,7 @@
 //! implementation plan and a coder session executes it in the same worktree.
 
 use serde::{Deserialize, Serialize};
+use specta::Type;
 use tauri::AppHandle;
 
 use crate::agent::AgentManager;
@@ -15,7 +16,7 @@ use crate::store::{NewSession, Store};
 use crate::util::uuid;
 
 /// The pair of sessions a plan → code handoff produces.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PlanToCodeResult {
     pub planner: Session,
@@ -55,6 +56,7 @@ fn session_in_dir(
         base_branch: dir.base_branch.clone(),
         is_isolated: dir.is_isolated,
         parent_id,
+        workflow_id: None,
     }
 }
 
@@ -78,7 +80,7 @@ pub async fn run_plan_to_code(
     let group_id = store.ensure_group_for_project(&project_id, &project.name)?;
     // The handoff runs two agents against one shared checkout, so it always
     // isolates in a worktree.
-    let dir = provision_working_dir(&app, &project, true)?;
+    let dir = provision_working_dir(&app, &project, true, None)?;
 
     let planner = store.create_session(session_in_dir(
         &group_id,

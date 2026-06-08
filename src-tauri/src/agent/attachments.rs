@@ -8,6 +8,7 @@
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
+use specta::Type;
 use tauri::{AppHandle, Manager};
 
 use crate::error::{AppError, Result};
@@ -16,7 +17,7 @@ use crate::util::uuid;
 const IMAGE_EXTS: &[&str] = &["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "avif"];
 
 /// A staged attachment ready to reference in a message.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Attachment {
     pub id: String,

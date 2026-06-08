@@ -45,6 +45,14 @@ pub fn assemble(sources: &[SessionContextSource]) -> AssembledContext {
                     "## Directory: `{path}`\n\nThis directory is available; read files in it as needed."
                 ));
             }
+            ContextSource::NodeOutput { label, .. } => {
+                // Resolved to `Text` before assembly (see run_turn); rendered
+                // defensively in case an unresolved source slips through.
+                let label = label
+                    .clone()
+                    .unwrap_or_else(|| "Linked agent output".to_string());
+                blocks.push(format!("## {label}\n\n_(linked output unavailable)_"));
+            }
         }
     }
 

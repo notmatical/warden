@@ -1,6 +1,4 @@
-import { Channel, invoke } from "@tauri-apps/api/core"
-
-import type { DiffFile, GitCommit } from "@/types/git-diff"
+import { type Channel, invoke } from "@tauri-apps/api/core"
 import type {
   Attachment,
   Backend,
@@ -10,26 +8,30 @@ import type {
   FileEntry,
   Group,
   IntegrateOutcome,
+  Label,
   MergeMode,
-  PrContent,
-  PrInfo,
-  PrSummary,
   PermissionMode,
   PlanToCodeResult,
+  PrContent,
+  PrInfo,
+  Project,
+  ProjectLabels,
   Provider,
   ProviderSource,
   ProviderStatus,
+  PrSummary,
   RepoRef,
-  RepoStatus,
   RepoRefBody,
+  RepoStatus,
   Session,
   SessionContextSource,
-  SyncOutcome,
   SessionKind,
   SessionRole,
   SlashCommand,
-  Project,
+  SyncOutcome,
 } from "@/types"
+import type { DiffFile, GitCommit } from "@/types/git-diff"
+import type { Workflow, WorkflowGraph, WorkflowRunView } from "@/types/workflow"
 
 export function listProjects(): Promise<Project[]> {
   return invoke("list_projects")
@@ -273,16 +275,18 @@ export interface CreateSessionInput {
 export function createSession(input: CreateSessionInput): Promise<Session> {
   return invoke("create_session", {
     projectId: input.projectId,
-    groupId: input.groupId ?? null,
     title: input.title,
     model: input.model,
-    permissionMode: input.permissionMode,
-    effort: input.effort ?? null,
-    role: input.role ?? null,
-    kind: input.kind ?? null,
-    backend: input.backend ?? null,
-    isolate: input.isolate ?? false,
-    nativeCommand: input.nativeCommand ?? null,
+    options: {
+      groupId: input.groupId ?? null,
+      permissionMode: input.permissionMode,
+      effort: input.effort ?? null,
+      role: input.role ?? null,
+      kind: input.kind ?? null,
+      backend: input.backend ?? null,
+      isolate: input.isolate ?? false,
+      nativeCommand: input.nativeCommand ?? null,
+    },
   })
 }
 
@@ -355,6 +359,44 @@ export function deleteSession(sessionId: string): Promise<void> {
   return invoke("delete_session", { sessionId })
 }
 
+export function setSessionPinned(
+  sessionId: string,
+  pinned: boolean
+): Promise<Session> {
+  return invoke("set_session_pinned", { sessionId, pinned })
+}
+
+export function loadProjectLabels(projectId: string): Promise<ProjectLabels> {
+  return invoke("load_project_labels", { projectId })
+}
+
+export function createLabel(
+  projectId: string,
+  name: string,
+  color: string
+): Promise<Label> {
+  return invoke("create_label", { projectId, name, color })
+}
+
+export function updateLabel(
+  id: string,
+  name: string,
+  color: string
+): Promise<void> {
+  return invoke("update_label", { id, name, color })
+}
+
+export function deleteLabel(id: string): Promise<void> {
+  return invoke("delete_label", { id })
+}
+
+export function setSessionLabels(
+  sessionId: string,
+  labelIds: string[]
+): Promise<void> {
+  return invoke("set_session_labels", { sessionId, labelIds })
+}
+
 export function setSessionIsolation(
   sessionId: string,
   isolate: boolean
@@ -386,6 +428,76 @@ export function attachToSession(
   paths: string[]
 ): Promise<Attachment[]> {
   return invoke("attach_to_session", { sessionId, paths })
+}
+
+// ----- workflows -----
+
+export function listWorkflows(projectId: string): Promise<Workflow[]> {
+  return invoke("list_workflows", { projectId })
+}
+
+export function listWorkflowSessions(workflowId: string): Promise<Session[]> {
+  return invoke("list_workflow_sessions", { workflowId })
+}
+
+export function getWorkflow(id: string): Promise<Workflow> {
+  return invoke("get_workflow", { id })
+}
+
+export function createWorkflow(
+  projectId: string,
+  name: string,
+  graph: WorkflowGraph
+): Promise<Workflow> {
+  return invoke("create_workflow", { projectId, name, graph })
+}
+
+export function updateWorkflow(
+  id: string,
+  name?: string,
+  graph?: WorkflowGraph
+): Promise<Workflow> {
+  return invoke("update_workflow", {
+    id,
+    name: name ?? null,
+    graph: graph ?? null,
+  })
+}
+
+export function deleteWorkflow(id: string): Promise<void> {
+  return invoke("delete_workflow", { id })
+}
+
+export function runWorkflow(
+  workflowId: string,
+  groupId?: string
+): Promise<WorkflowRunView> {
+  return invoke("run_workflow", { workflowId, groupId: groupId ?? null })
+}
+
+export function getWorkflowRun(runId: string): Promise<WorkflowRunView> {
+  return invoke("get_workflow_run", { runId })
+}
+
+export function getLatestWorkflowRun(
+  workflowId: string
+): Promise<WorkflowRunView | null> {
+  return invoke("get_latest_workflow_run", { workflowId })
+}
+
+/** Resume a run paused at a gate: approve to continue, reject to cancel. */
+export function resumeWorkflow(
+  runId: string,
+  approve: boolean
+): Promise<WorkflowRunView> {
+  return invoke("resume_workflow", { runId, approve })
+}
+
+/** Cancel a workflow's latest run (stops the executor + live session). */
+export function cancelWorkflow(
+  workflowId: string
+): Promise<WorkflowRunView | null> {
+  return invoke("cancel_workflow", { workflowId })
 }
 
 export function cancelSession(sessionId: string): Promise<void> {

@@ -7,14 +7,15 @@ use std::process::Command;
 
 use ignore::WalkBuilder;
 use serde::Serialize;
+use specta::Type;
 use tauri::{AppHandle, Manager};
 
-use crate::error::{AppError, Result};
+use crate::error::{AppError, CommandResult};
 
 const MAX_FILES: usize = 5000;
 const GH_LIMIT: &str = "50";
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct FileEntry {
     /// Path relative to the working directory, using forward slashes.
@@ -22,7 +23,7 @@ pub struct FileEntry {
     pub name: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SlashCommand {
     pub name: String,
@@ -31,7 +32,7 @@ pub struct SlashCommand {
     pub scope: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct RepoRef {
     pub number: u64,
@@ -40,14 +41,14 @@ pub struct RepoRef {
     pub kind: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct RepoComment {
     pub author: String,
     pub body: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct RepoRefBody {
     pub title: String,
@@ -75,11 +76,12 @@ fn gh_cmd(working_dir: &str, args: &[&str]) -> Command {
 /// List files in the working directory, honoring .gitignore. Runs on a blocking
 /// thread since the walk touches the filesystem.
 #[tauri::command]
-pub async fn list_files(working_dir: String, max: Option<usize>) -> Result<Vec<FileEntry>> {
+#[specta::specta]
+pub async fn list_files(working_dir: String, max: Option<usize>) -> CommandResult<Vec<FileEntry>> {
     let limit = max.unwrap_or(MAX_FILES);
     tauri::async_runtime::spawn_blocking(move || walk_files(&working_dir, limit))
         .await
-        .map_err(|e| AppError::Invalid(format!("file walk failed: {e}")))
+        .map_err(|e| AppError::Invalid(format!("file walk failed: {e}")).into())
 }
 
 fn walk_files(working_dir: &str, max: usize) -> Vec<FileEntry> {
@@ -122,7 +124,11 @@ fn walk_files(working_dir: &str, max: usize) -> Vec<FileEntry> {
 /// from `.claude/skills`, both project- and user-level. Names are deduped, with
 /// project entries winning over user entries.
 #[tauri::command]
-pub async fn list_commands(app: AppHandle, working_dir: String) -> Result<Vec<SlashCommand>> {
+#[specta::specta]
+pub async fn list_commands(
+    app: AppHandle,
+    working_dir: String,
+) -> CommandResult<Vec<SlashCommand>> {
     let project = Path::new(&working_dir).join(".claude");
     let home_claude = app.path().home_dir().ok().map(|h| h.join(".claude"));
 
@@ -232,7 +238,8 @@ fn skill_description(skill_md: &Path) -> Option<String> {
 /// List open issues and PRs for the repo via the `gh` CLI. Returns an empty
 /// list (never an error) when gh is unavailable or the dir isn't a gh repo.
 #[tauri::command]
-pub async fn list_repo_refs(working_dir: String) -> Result<Vec<RepoRef>> {
+#[specta::specta]
+pub async fn list_repo_refs(working_dir: String) -> CommandResult<Vec<RepoRef>> {
     let mut out = gh_list(&working_dir, "issue");
     out.extend(gh_list(&working_dir, "pr"));
     Ok(out)
@@ -273,7 +280,12 @@ fn gh_list(working_dir: &str, kind: &str) -> Vec<RepoRef> {
 
 /// Fetch the title and body of a single issue or PR via the `gh` CLI.
 #[tauri::command]
-pub async fn fetch_repo_ref(working_dir: String, kind: String, number: u64) -> Result<RepoRefBody> {
+#[specta::specta]
+pub async fn fetch_repo_ref(
+    working_dir: String,
+    kind: String,
+    number: u64,
+) -> CommandResult<RepoRefBody> {
     let sub = if kind == "pr" { "pr" } else { "issue" };
     let output = gh_cmd(
         &working_dir,
@@ -285,15 +297,16 @@ pub async fn fetch_repo_ref(working_dir: String, kind: String, number: u64) -> R
             "title,body,comments",
         ],
     )
-    .output()?;
+    .output()
+    .map_err(AppError::from)?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(AppError::Invalid(format!(
-            "gh {sub} view {number} failed: {}",
-            stderr.trim()
-        )));
+        return Err(
+            AppError::Invalid(format!("gh {sub} view {number} failed: {}", stderr.trim())).into(),
+        );
     }
-    let parsed: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+    let parsed: serde_json::Value =
+        serde_json::from_slice(&output.stdout).map_err(AppError::from)?;
     let str_field = |key: &str| {
         parsed
             .get(key)

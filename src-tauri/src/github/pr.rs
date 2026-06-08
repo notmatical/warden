@@ -6,6 +6,7 @@ use std::process::Command;
 
 use serde::Serialize;
 use serde_json::Value;
+use specta::Type;
 
 use crate::cli::{self, Tool};
 use crate::domain::CheckStatus;
@@ -13,7 +14,7 @@ use crate::error::{AppError, Result};
 use crate::git::MergeMode;
 
 /// A pull request's identity and state, as surfaced to the UI.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PrInfo {
     pub number: i64,
@@ -26,7 +27,7 @@ pub struct PrInfo {
 }
 
 /// An open PR in a repo, for the review-checkout picker.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PrSummary {
     pub number: i64,

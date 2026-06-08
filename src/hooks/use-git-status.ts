@@ -58,7 +58,12 @@ function subscribe(
 ): () => void {
   let entry = entries.get(sessionId)
   if (!entry) {
-    entry = { statuses: [], subscribers: new Set(), timer: null, inFlight: false }
+    entry = {
+      statuses: [],
+      subscribers: new Set(),
+      timer: null,
+      inFlight: false,
+    }
     entries.set(sessionId, entry)
   }
   entry.subscribers.add(fn)

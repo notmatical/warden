@@ -13,6 +13,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use serde::Serialize;
+use specta::Type;
 
 pub use install::{current_version, emit_progress, install, is_newer, latest_version};
 pub use paths::{managed_installed, resolve, system_binary};
@@ -79,7 +80,7 @@ pub fn set_sources(sources: HashMap<Tool, Source>) {
 /// A tool's install/version/auth snapshot, surfaced to the UI. `authed` and the
 /// latest-version fields are filled by the owning domain (see [`base_status`] and
 /// [`fill_latest`]).
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolStatus {
     pub id: String,

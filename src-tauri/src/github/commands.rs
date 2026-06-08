@@ -8,7 +8,7 @@ use tauri::{AppHandle, State};
 
 use crate::cli::{self, Source, Tool, ToolStatus};
 use crate::domain::{Backend, EffortLevel, PermissionMode, Session, SessionKind, SessionRole};
-use crate::error::{AppError, Result};
+use crate::error::{AppError, CommandResult};
 use crate::events::emit_session;
 use crate::github::pr::{self, PrInfo};
 use crate::state::AppState;
@@ -16,27 +16,31 @@ use crate::store::NewSession;
 use crate::util::uuid;
 
 #[tauri::command]
-pub async fn github_status() -> Result<ToolStatus> {
+#[specta::specta]
+pub async fn github_status() -> CommandResult<ToolStatus> {
     Ok(crate::github::status().await)
 }
 
 /// Install warden's managed copy of the GitHub CLI (latest version).
 #[tauri::command]
-pub async fn install_github_cli(app: AppHandle) -> Result<()> {
+#[specta::specta]
+pub async fn install_github_cli(app: AppHandle) -> CommandResult<()> {
     cli::install(&app, Tool::Gh, None)
         .await
-        .map_err(AppError::Agent)
+        .map_err(|e| AppError::Agent(e).into())
 }
 
 /// Reinstall the managed GitHub CLI at the latest published version.
 #[tauri::command]
-pub async fn update_github_cli(app: AppHandle) -> Result<()> {
+#[specta::specta]
+pub async fn update_github_cli(app: AppHandle) -> CommandResult<()> {
     install_github_cli(app).await
 }
 
 /// Choose where the GitHub CLI comes from (`auto` | `managed` | `system`).
 #[tauri::command]
-pub async fn set_github_source(state: State<'_, AppState>, source: String) -> Result<()> {
+#[specta::specta]
+pub async fn set_github_source(state: State<'_, AppState>, source: String) -> CommandResult<()> {
     let source = Source::parse(&source)
         .ok_or_else(|| AppError::Invalid(format!("unknown CLI source: {source}")))?;
     state
@@ -49,6 +53,7 @@ pub async fn set_github_source(state: State<'_, AppState>, source: String) -> Re
 /// Commit the session's work, push its branch, and open a pull request against
 /// the session's base branch.
 #[tauri::command]
+#[specta::specta]
 pub async fn open_pull_request(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -56,15 +61,15 @@ pub async fn open_pull_request(
     title: String,
     body: String,
     draft: Option<bool>,
-) -> Result<PrInfo> {
+) -> CommandResult<PrInfo> {
     let session = state.store.get_session(&session_id)?;
     if session.merged_at.is_some() {
-        return Err(AppError::Invalid("session is already merged".to_string()));
+        return Err(AppError::Invalid("session is already merged".to_string()).into());
     }
     if !session.is_isolated {
-        return Err(AppError::Invalid(
-            "only isolated worktree sessions can open a PR".to_string(),
-        ));
+        return Err(
+            AppError::Invalid("only isolated worktree sessions can open a PR".to_string()).into(),
+        );
     }
     let base = session
         .base_branch
@@ -75,9 +80,9 @@ pub async fn open_pull_request(
     let repo = Path::new(&project.path);
     let worktree = Path::new(&session.working_dir);
     if !crate::git::has_remote(repo) {
-        return Err(AppError::Invalid(
-            "this repository has no git remote to push to".to_string(),
-        ));
+        return Err(
+            AppError::Invalid("this repository has no git remote to push to".to_string()).into(),
+        );
     }
 
     // Stop any in-flight work so the worktree isn't mutated mid-push.
@@ -108,11 +113,12 @@ pub async fn open_pull_request(
 
 /// Re-read the session branch's pull request state from GitHub.
 #[tauri::command]
+#[specta::specta]
 pub async fn refresh_pr_status(
     app: AppHandle,
     state: State<'_, AppState>,
     session_id: String,
-) -> Result<Option<PrInfo>> {
+) -> CommandResult<Option<PrInfo>> {
     let session = state.store.get_session(&session_id)?;
     let info = pr::status(Path::new(&session.working_dir))?;
     if let Some(ref info) = info {
@@ -133,20 +139,19 @@ pub async fn refresh_pr_status(
 /// Merge the session's open PR from the app, then clean up the worktree and
 /// branch and mark the session merged — mirroring local integrate cleanup.
 #[tauri::command]
+#[specta::specta]
 pub async fn merge_pull_request(
     app: AppHandle,
     state: State<'_, AppState>,
     session_id: String,
     strategy: String,
-) -> Result<()> {
+) -> CommandResult<()> {
     let session = state.store.get_session(&session_id)?;
     if session.merged_at.is_some() {
-        return Err(AppError::Invalid("session is already merged".to_string()));
+        return Err(AppError::Invalid("session is already merged".to_string()).into());
     }
     if session.pr_number.is_none() {
-        return Err(AppError::Invalid(
-            "session has no open pull request".to_string(),
-        ));
+        return Err(AppError::Invalid("session has no open pull request".to_string()).into());
     }
     let branch = session
         .branch
@@ -177,10 +182,11 @@ pub async fn merge_pull_request(
 /// Generate a suggested PR title and body from the session branch's changes,
 /// for the user to review before opening. Falls back to the session title.
 #[tauri::command]
+#[specta::specta]
 pub async fn generate_pr_content(
     state: State<'_, AppState>,
     session_id: String,
-) -> Result<crate::github::pr_content::PrContent> {
+) -> CommandResult<crate::github::pr_content::PrContent> {
     let session = state.store.get_session(&session_id)?;
     let base = session
         .base_sha
@@ -192,14 +198,16 @@ pub async fn generate_pr_content(
         &session.title,
     )
     .await
+    .map_err(Into::into)
 }
 
 /// Open PRs in a project's repo, for the review-checkout picker.
 #[tauri::command]
+#[specta::specta]
 pub async fn list_open_prs(
     state: State<'_, AppState>,
     project_id: String,
-) -> Result<Vec<pr::PrSummary>> {
+) -> CommandResult<Vec<pr::PrSummary>> {
     let project = state.store.get_project(&project_id)?;
     Ok(pr::list_prs(Path::new(&project.path)))
 }
@@ -207,19 +215,18 @@ pub async fn list_open_prs(
 /// Check out an existing PR into a fresh isolated worktree and open a session on
 /// it, for reviewing/running the PR locally.
 #[tauri::command]
+#[specta::specta]
 pub async fn checkout_pr(
     app: AppHandle,
     state: State<'_, AppState>,
     project_id: String,
     number: i64,
     model: String,
-) -> Result<Session> {
+) -> CommandResult<Session> {
     let project = state.store.get_project(&project_id)?;
     let repo = Path::new(&project.path);
     if !crate::git::has_remote(repo) {
-        return Err(AppError::Invalid(
-            "this repository has no git remote".to_string(),
-        ));
+        return Err(AppError::Invalid("this repository has no git remote".to_string()).into());
     }
     let base = pr::pr_base_ref(repo, number).unwrap_or_else(|| "main".to_string());
     let dir = crate::git::provision_pr_worktree(&app, &project, number, &base)?;
@@ -253,6 +260,7 @@ pub async fn checkout_pr(
         base_branch: dir.base_branch,
         is_isolated: dir.is_isolated,
         parent_id: None,
+        workflow_id: None,
     })?;
 
     // Light up the PR chip + merge controls for the reviewed PR.

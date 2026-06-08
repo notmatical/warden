@@ -7,25 +7,26 @@ use std::process::Command;
 use tauri::AppHandle;
 use tauri_plugin_opener::OpenerExt;
 
-use crate::error::{AppError, Result};
+use crate::error::{AppError, CommandResult, Result};
 
 /// Open `path` in an external app selected by `target`:
 /// `"folder"`, `"terminal"`, `"zed"`, or `"vscode"`.
 #[tauri::command]
-pub async fn open_in(app: AppHandle, target: String, path: String) -> Result<()> {
+#[specta::specta]
+pub async fn open_in(app: AppHandle, target: String, path: String) -> CommandResult<()> {
     if !Path::new(&path).exists() {
-        return Err(AppError::NotFound(format!("path does not exist: {path}")));
+        return Err(AppError::NotFound(format!("path does not exist: {path}")).into());
     }
 
     match target.as_str() {
         "folder" => app
             .opener()
             .open_path(path, None::<&str>)
-            .map_err(|e| AppError::Agent(format!("failed to open folder: {e}"))),
-        "terminal" => open_terminal(&path),
-        "zed" => open_editor("zed", &path),
-        "vscode" => open_editor("code", &path),
-        other => Err(AppError::Invalid(format!("unknown open target: {other}"))),
+            .map_err(|e| AppError::Agent(format!("failed to open folder: {e}")).into()),
+        "terminal" => open_terminal(&path).map_err(Into::into),
+        "zed" => open_editor("zed", &path).map_err(Into::into),
+        "vscode" => open_editor("code", &path).map_err(Into::into),
+        other => Err(AppError::Invalid(format!("unknown open target: {other}")).into()),
     }
 }
 

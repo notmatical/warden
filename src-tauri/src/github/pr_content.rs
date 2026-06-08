@@ -5,6 +5,7 @@ use std::path::Path;
 use std::process::Stdio;
 
 use serde::Serialize;
+use specta::Type;
 use tokio::process::Command;
 
 use crate::error::{AppError, Result};
@@ -17,7 +18,7 @@ const MODEL: &str = "haiku";
 const MAX_STAT_CHARS: usize = 6000;
 
 /// A generated PR title and body, for the user to review before opening.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PrContent {
     pub title: String,
