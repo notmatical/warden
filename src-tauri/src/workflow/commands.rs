@@ -17,7 +17,10 @@ pub async fn create_workflow(
     name: String,
     graph: WorkflowGraph,
 ) -> CommandResult<Workflow> {
-    state.store.create_workflow(&project_id, &name, &graph).map_err(Into::into)
+    state
+        .store
+        .create_workflow(&project_id, &name, &graph)
+        .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -134,7 +137,10 @@ pub async fn list_workflow_sessions(
     state: State<'_, AppState>,
     workflow_id: String,
 ) -> CommandResult<Vec<crate::domain::Session>> {
-    state.store.list_workflow_sessions(&workflow_id).map_err(Into::into)
+    state
+        .store
+        .list_workflow_sessions(&workflow_id)
+        .map_err(Into::into)
 }
 
 #[tauri::command]

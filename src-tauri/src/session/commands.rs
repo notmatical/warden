@@ -283,7 +283,8 @@ pub async fn set_session_isolation(
     if session.turns != 0 {
         return Err(AppError::Invalid(
             "isolation can only change before the session's first turn".to_string(),
-        ).into());
+        )
+        .into());
     }
     if session.is_isolated == isolate {
         return Ok(session);
@@ -461,7 +462,10 @@ pub async fn list_context_sources(
     state: State<'_, AppState>,
     session_id: String,
 ) -> CommandResult<Vec<SessionContextSource>> {
-    state.store.list_context_sources(&session_id).map_err(Into::into)
+    state
+        .store
+        .list_context_sources(&session_id)
+        .map_err(Into::into)
 }
 
 /// Append a context source to a session and drop its warm process so the next

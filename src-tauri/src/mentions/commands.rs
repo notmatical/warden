@@ -125,7 +125,10 @@ fn walk_files(working_dir: &str, max: usize) -> Vec<FileEntry> {
 /// project entries winning over user entries.
 #[tauri::command]
 #[specta::specta]
-pub async fn list_commands(app: AppHandle, working_dir: String) -> CommandResult<Vec<SlashCommand>> {
+pub async fn list_commands(
+    app: AppHandle,
+    working_dir: String,
+) -> CommandResult<Vec<SlashCommand>> {
     let project = Path::new(&working_dir).join(".claude");
     let home_claude = app.path().home_dir().ok().map(|h| h.join(".claude"));
 
@@ -278,7 +281,11 @@ fn gh_list(working_dir: &str, kind: &str) -> Vec<RepoRef> {
 /// Fetch the title and body of a single issue or PR via the `gh` CLI.
 #[tauri::command]
 #[specta::specta]
-pub async fn fetch_repo_ref(working_dir: String, kind: String, number: u64) -> CommandResult<RepoRefBody> {
+pub async fn fetch_repo_ref(
+    working_dir: String,
+    kind: String,
+    number: u64,
+) -> CommandResult<RepoRefBody> {
     let sub = if kind == "pr" { "pr" } else { "issue" };
     let output = gh_cmd(
         &working_dir,
@@ -294,10 +301,9 @@ pub async fn fetch_repo_ref(working_dir: String, kind: String, number: u64) -> C
     .map_err(AppError::from)?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(AppError::Invalid(format!(
-            "gh {sub} view {number} failed: {}",
-            stderr.trim()
-        )).into());
+        return Err(
+            AppError::Invalid(format!("gh {sub} view {number} failed: {}", stderr.trim())).into(),
+        );
     }
     let parsed: serde_json::Value =
         serde_json::from_slice(&output.stdout).map_err(AppError::from)?;

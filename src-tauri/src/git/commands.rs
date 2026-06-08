@@ -112,9 +112,9 @@ pub async fn integrate_session(
         return Err(AppError::Invalid("session is already merged".to_string()).into());
     }
     if !session.is_isolated {
-        return Err(AppError::Invalid(
-            "only isolated worktree sessions can be merged".to_string(),
-        ).into());
+        return Err(
+            AppError::Invalid("only isolated worktree sessions can be merged".to_string()).into(),
+        );
     }
     let branch = session
         .branch
@@ -148,7 +148,8 @@ pub async fn integrate_session(
     if !git::has_changes_to_integrate(repo, &branch, &base) {
         return Err(AppError::Invalid(
             "nothing to merge — the session has no changes over its base".to_string(),
-        ).into());
+        )
+        .into());
     }
 
     match git::merge_into_base(repo, worktree, &branch, &base, mode, &message)? {
@@ -192,7 +193,8 @@ pub async fn get_session_commits(
     let Some(base) = session.base_sha.as_deref() else {
         return Ok(Vec::new());
     };
-    git::diff::commits_since(Path::new(&session.working_dir), base, limit.unwrap_or(100)).map_err(Into::into)
+    git::diff::commits_since(Path::new(&session.working_dir), base, limit.unwrap_or(100))
+        .map_err(Into::into)
 }
 
 /// Result of syncing a worktree with its base branch.
@@ -217,9 +219,9 @@ pub async fn sync_worktree(
         return Err(AppError::Invalid("session is already merged".to_string()).into());
     }
     if !session.is_isolated {
-        return Err(AppError::Invalid(
-            "only isolated worktree sessions can sync".to_string(),
-        ).into());
+        return Err(
+            AppError::Invalid("only isolated worktree sessions can sync".to_string()).into(),
+        );
     }
     let base = session
         .base_branch
@@ -251,7 +253,10 @@ pub async fn push_session(state: State<'_, AppState>, session_id: String) -> Com
 /// Reports clashing files on conflict, like `sync_worktree`.
 #[tauri::command]
 #[specta::specta]
-pub async fn pull_session(state: State<'_, AppState>, session_id: String) -> CommandResult<SyncOutcome> {
+pub async fn pull_session(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> CommandResult<SyncOutcome> {
     let session = state.store.get_session(&session_id)?;
     let worktree = Path::new(&session.working_dir);
     match git::pull_upstream(worktree, git::MergeMode::MergeCommit)? {

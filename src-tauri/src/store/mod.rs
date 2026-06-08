@@ -870,7 +870,10 @@ impl Store {
             let (session_id, label_id) = row?;
             assignments.entry(session_id).or_default().push(label_id);
         }
-        Ok(ProjectLabels { labels, assignments })
+        Ok(ProjectLabels {
+            labels,
+            assignments,
+        })
     }
 
     /// Replace a session's labels with `label_ids`.

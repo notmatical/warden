@@ -29,11 +29,17 @@ pub async fn open_project(state: State<'_, AppState>, path: String) -> CommandRe
         .unwrap_or(&path)
         .to_string();
     let is_git = git::is_repo(p);
-    state.store.upsert_project(&name, &path, is_git).map_err(Into::into)
+    state
+        .store
+        .upsert_project(&name, &path, is_git)
+        .map_err(Into::into)
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn list_sessions(state: State<'_, AppState>, project_id: String) -> CommandResult<Vec<Session>> {
+pub async fn list_sessions(
+    state: State<'_, AppState>,
+    project_id: String,
+) -> CommandResult<Vec<Session>> {
     state.store.list_sessions(&project_id).map_err(Into::into)
 }

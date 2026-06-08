@@ -55,7 +55,10 @@ pub async fn set_group_layout(
     group_id: String,
     layout: String,
 ) -> CommandResult<()> {
-    state.store.update_group_layout(&group_id, &layout).map_err(Into::into)
+    state
+        .store
+        .update_group_layout(&group_id, &layout)
+        .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -73,7 +76,10 @@ pub async fn list_group_sessions(
     state: State<'_, AppState>,
     group_id: String,
 ) -> CommandResult<Vec<Session>> {
-    state.store.list_group_sessions(&group_id).map_err(Into::into)
+    state
+        .store
+        .list_group_sessions(&group_id)
+        .map_err(Into::into)
 }
 
 /// Add a folder to a group as a root, opening/registering the project first.
@@ -105,7 +111,10 @@ pub async fn remove_group_root(
     group_id: String,
     project_id: String,
 ) -> CommandResult<()> {
-    state.store.remove_group_root(&group_id, &project_id).map_err(Into::into)
+    state
+        .store
+        .remove_group_root(&group_id, &project_id)
+        .map_err(Into::into)
 }
 
 /// The repos a session pulls into context, primary first.
@@ -115,7 +124,10 @@ pub async fn list_session_roots(
     state: State<'_, AppState>,
     session_id: String,
 ) -> CommandResult<Vec<Project>> {
-    state.store.list_session_root_projects(&session_id).map_err(Into::into)
+    state
+        .store
+        .list_session_root_projects(&session_id)
+        .map_err(Into::into)
 }
 
 /// Replace a session's non-primary roots (selected from the group's roots).
@@ -127,5 +139,8 @@ pub async fn set_session_roots(
     project_ids: Vec<String>,
 ) -> CommandResult<Vec<Project>> {
     state.store.set_session_roots(&session_id, &project_ids)?;
-    state.store.list_session_root_projects(&session_id).map_err(Into::into)
+    state
+        .store
+        .list_session_root_projects(&session_id)
+        .map_err(Into::into)
 }

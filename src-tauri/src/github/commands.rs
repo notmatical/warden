@@ -67,9 +67,9 @@ pub async fn open_pull_request(
         return Err(AppError::Invalid("session is already merged".to_string()).into());
     }
     if !session.is_isolated {
-        return Err(AppError::Invalid(
-            "only isolated worktree sessions can open a PR".to_string(),
-        ).into());
+        return Err(
+            AppError::Invalid("only isolated worktree sessions can open a PR".to_string()).into(),
+        );
     }
     let base = session
         .base_branch
@@ -80,9 +80,9 @@ pub async fn open_pull_request(
     let repo = Path::new(&project.path);
     let worktree = Path::new(&session.working_dir);
     if !crate::git::has_remote(repo) {
-        return Err(AppError::Invalid(
-            "this repository has no git remote to push to".to_string(),
-        ).into());
+        return Err(
+            AppError::Invalid("this repository has no git remote to push to".to_string()).into(),
+        );
     }
 
     // Stop any in-flight work so the worktree isn't mutated mid-push.
@@ -151,9 +151,7 @@ pub async fn merge_pull_request(
         return Err(AppError::Invalid("session is already merged".to_string()).into());
     }
     if session.pr_number.is_none() {
-        return Err(AppError::Invalid(
-            "session has no open pull request".to_string(),
-        ).into());
+        return Err(AppError::Invalid("session has no open pull request".to_string()).into());
     }
     let branch = session
         .branch
@@ -228,9 +226,7 @@ pub async fn checkout_pr(
     let project = state.store.get_project(&project_id)?;
     let repo = Path::new(&project.path);
     if !crate::git::has_remote(repo) {
-        return Err(AppError::Invalid(
-            "this repository has no git remote".to_string(),
-        ).into());
+        return Err(AppError::Invalid("this repository has no git remote".to_string()).into());
     }
     let base = pr::pr_base_ref(repo, number).unwrap_or_else(|| "main".to_string());
     let dir = crate::git::provision_pr_worktree(&app, &project, number, &base)?;
