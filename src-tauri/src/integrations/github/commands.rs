@@ -10,7 +10,7 @@ use crate::cli::{self, Source, Tool, ToolStatus};
 use crate::domain::{Backend, EffortLevel, PermissionMode, Session, SessionKind, SessionRole};
 use crate::error::{AppError, CommandResult};
 use crate::events::emit_session;
-use crate::github::pr::{self, PrInfo};
+use crate::integrations::github::pr::{self, PrInfo};
 use crate::state::AppState;
 use crate::store::NewSession;
 use crate::util::uuid;
@@ -18,7 +18,7 @@ use crate::util::uuid;
 #[tauri::command]
 #[specta::specta]
 pub async fn github_status() -> CommandResult<ToolStatus> {
-    Ok(crate::github::status().await)
+    Ok(crate::integrations::github::status().await)
 }
 
 /// Install warden's managed copy of the GitHub CLI (latest version).
@@ -167,7 +167,7 @@ pub async fn merge_pull_request(
     // Stop in-flight work, then merge the PR on GitHub.
     state.manager.cancel(&app, &state.store, &session_id);
     crate::terminal::kill(&session_id);
-    crate::github::pr::merge(worktree, mode)?;
+    crate::integrations::github::pr::merge(worktree, mode)?;
 
     // Land & clean up locally (best-effort; the PR is already merged).
     let _ = crate::git::remove_worktree(repo, worktree);
@@ -186,13 +186,13 @@ pub async fn merge_pull_request(
 pub async fn generate_pr_content(
     state: State<'_, AppState>,
     session_id: String,
-) -> CommandResult<crate::github::pr_content::PrContent> {
+) -> CommandResult<crate::integrations::github::pr_content::PrContent> {
     let session = state.store.get_session(&session_id)?;
     let base = session
         .base_sha
         .clone()
         .ok_or_else(|| AppError::Invalid("session has no base commit".to_string()))?;
-    crate::github::pr_content::generate_pr_content(
+    crate::integrations::github::pr_content::generate_pr_content(
         std::path::Path::new(&session.working_dir),
         &base,
         &session.title,

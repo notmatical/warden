@@ -67,7 +67,7 @@ fn gh_cmd(working_dir: &str, args: &[&str]) -> Command {
     let mut cmd = Command::new(crate::cli::resolve(crate::cli::Tool::Gh));
     crate::platform::silent_command(&mut cmd);
     cmd.current_dir(working_dir).args(args);
-    if let Some(token) = crate::github::resolve_token() {
+    if let Some(token) = crate::integrations::github::resolve_token() {
         cmd.env("GH_TOKEN", token);
     }
     cmd
