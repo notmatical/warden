@@ -55,7 +55,12 @@ export async function encodeWorkflow(
   name: string,
   graph: WorkflowGraph
 ): Promise<string> {
-  const envelope: WorkflowEnvelope = { schema: SCHEMA, version: VERSION, name, graph }
+  const envelope: WorkflowEnvelope = {
+    schema: SCHEMA,
+    version: VERSION,
+    name,
+    graph,
+  }
   const json = new TextEncoder().encode(JSON.stringify(envelope))
   if (typeof CompressionStream === "undefined") {
     return `${PREFIX}r${toBase64Url(json)}`

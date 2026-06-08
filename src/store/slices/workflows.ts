@@ -176,7 +176,10 @@ export const createWorkflowsSlice: StateCreator<
     }
     try {
       const code = await encodeWorkflow(wf.name, wf.graph)
-      await copyText(code, "Workflow code copied — paste it into Import to restore")
+      await copyText(
+        code,
+        "Workflow code copied — paste it into Import to restore"
+      )
     } catch (error) {
       reportError("Failed to export workflow", error)
     }
@@ -194,7 +197,11 @@ export const createWorkflowsSlice: StateCreator<
       return null
     }
     try {
-      const wf = await ipc.createWorkflow(projectId, decoded.name, decoded.graph)
+      const wf = await ipc.createWorkflow(
+        projectId,
+        decoded.name,
+        decoded.graph
+      )
       set((s) => ({ workflows: { ...s.workflows, [wf.id]: wf } }))
       return wf
     } catch (error) {

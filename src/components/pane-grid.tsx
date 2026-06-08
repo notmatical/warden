@@ -8,9 +8,9 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable"
+import { cn } from "@/lib/utils"
 import { leafCount } from "@/lib/viewport"
 import { describe, PaneContent } from "@/lib/viewport/content-registry"
-import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store/app-store"
 import type { Leaf, PaneTree, SplitSide } from "@/types"
 
@@ -156,9 +156,7 @@ function DropZones({
 function Pane({ leaf, chrome }: { leaf: Leaf; chrome: boolean }) {
   const refId = leaf.ref
   const dragging = useAppStore((s) => s.draggingSessionId !== null)
-  const active = useAppStore(
-    (s) => refId !== null && s.activeTabId === refId
-  )
+  const active = useAppStore((s) => refId !== null && s.activeTabId === refId)
   const selectTab = useAppStore((s) => s.selectTab)
   const [overSide, setOverSide] = useState<SplitSide | null>(null)
 

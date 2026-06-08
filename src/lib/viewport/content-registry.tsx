@@ -1,4 +1,3 @@
-import type { ComponentType } from "react"
 import {
   CircleDot,
   FolderGit2,
@@ -8,6 +7,7 @@ import {
   SquareTerminal,
   Workflow as WorkflowIcon,
 } from "lucide-react"
+import type { ComponentType } from "react"
 
 import { FolderView } from "@/components/folder-view"
 import { IssuesView } from "@/components/issues-view"

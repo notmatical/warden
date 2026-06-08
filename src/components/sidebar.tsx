@@ -104,13 +104,7 @@ function RowAction({
   )
 }
 
-function RootRow({
-  groupId,
-  project,
-}: {
-  groupId: string
-  project: Project
-}) {
+function RootRow({ groupId, project }: { groupId: string; project: Project }) {
   const createSession = useAppStore((s) => s.createSession)
   const createNativeSession = useAppStore((s) => s.createNativeSession)
   const removeRoot = useAppStore((s) => s.removeRoot)

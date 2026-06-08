@@ -2,8 +2,8 @@ import { open } from "@tauri-apps/plugin-dialog"
 import type { StateCreator } from "zustand"
 
 import * as ipc from "@/lib/ipc"
-import { detachRef, firstLeaf } from "@/lib/viewport"
 import * as terminals from "@/lib/terminal-instances"
+import { detachRef, firstLeaf } from "@/lib/viewport"
 import { reportError } from "../shared"
 import type { AppState } from "../types"
 

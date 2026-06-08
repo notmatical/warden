@@ -72,10 +72,7 @@ const nodeTypes = { agent: AgentNode, gate: GateNode }
 
 // Colored status chip (shares the workflows table's color language): a tinted
 // fill + ring, with the dot echoing the state color.
-const RUN_PILL: Record<
-  string,
-  { label: string; dot: string; pill: string }
-> = {
+const RUN_PILL: Record<string, { label: string; dot: string; pill: string }> = {
   pending: {
     label: "Pending",
     dot: "bg-muted-foreground/40",

@@ -51,7 +51,9 @@ export function Titlebar() {
 
   return (
     <header className="flex h-(--header-height) shrink-0 items-stretch bg-background">
-      <div className={cn("flex items-center gap-1 pr-2 pl-3", isMac && "pl-20")}>
+      <div
+        className={cn("flex items-center gap-1 pr-2 pl-3", isMac && "pl-20")}
+      >
         {collapsed ? (
           <HoverCard openDelay={120} closeDelay={120}>
             <HoverCardTrigger asChild>

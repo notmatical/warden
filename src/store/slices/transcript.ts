@@ -134,11 +134,7 @@ export const createTranscriptSlice: StateCreator<
           },
           openTabs: tabs,
           activeTabId: result.coder.id,
-          layout: showRef(
-            state.layout,
-            state.activeTabId,
-            result.coder.id
-          ),
+          layout: showRef(state.layout, state.activeTabId, result.coder.id),
           eventsBySession: {
             ...state.eventsBySession,
             [result.planner.id]: state.eventsBySession[result.planner.id] ?? [],

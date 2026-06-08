@@ -7,8 +7,8 @@ import {
   DEFAULT_CODEX_MODEL,
 } from "@/lib/models"
 import { notify, windowFocused } from "@/lib/notify"
-import { detachRef, firstLeaf } from "@/lib/viewport"
 import * as terminals from "@/lib/terminal-instances"
+import { detachRef, firstLeaf } from "@/lib/viewport"
 import { NATIVE_CLI, NATIVE_TITLE, reportError, showRef } from "../shared"
 import type { AppState } from "../types"
 

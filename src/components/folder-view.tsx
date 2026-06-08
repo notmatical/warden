@@ -14,12 +14,12 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react"
 
 import { AgentProvidersIcon } from "@/components/agent-providers-icon"
-import { useConfirm } from "@/components/confirm-dialog"
 import {
   DataTable,
   DataTableEmpty,
   DataTableRow,
 } from "@/components/common/data-table"
+import { useConfirm } from "@/components/confirm-dialog"
 import { ClaudeIcon, CodexIcon } from "@/components/icons/brand"
 import { LabelChip, LabelPicker, labelColor } from "@/components/label-picker"
 import { SessionFavicon } from "@/components/session-favicon"
@@ -399,8 +399,8 @@ export function FolderView({ projectId }: { projectId: string }) {
                 .filter((l): l is Label => !!l)
               const onOpen = () => runAction(() => openSession(session.id))
               const onTogglePin = () =>
-                runAction(() =>
-                  void setSessionPinned(session.id, !session.pinned)
+                runAction(
+                  () => void setSessionPinned(session.id, !session.pinned)
                 )
               const onDelete = () =>
                 runAction(async () => {
@@ -544,7 +544,10 @@ export function FolderView({ projectId }: { projectId: string }) {
                       <ExternalLink />
                       Open
                     </ContextMenuItem>
-                    <ContextMenuItem onSelect={onTogglePin} className={MENU_ITEM}>
+                    <ContextMenuItem
+                      onSelect={onTogglePin}
+                      className={MENU_ITEM}
+                    >
                       {session.pinned ? <PinOff /> : <Pin />}
                       {session.pinned ? "Unpin" : "Pin to top"}
                     </ContextMenuItem>
