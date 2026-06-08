@@ -1,14 +1,16 @@
 mod migrations;
 
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use rusqlite::{Connection, OptionalExtension, Row};
 
 use crate::domain::{
-    AgentEvent, Backend, CheckStatus, ContextSource, EffortLevel, EventRecord, Group,
-    NodeRunStatus, PermissionMode, Project, RunStatus, Session, SessionContextSource, SessionKind,
-    SessionRole, SessionStatus, Workflow, WorkflowGraph, WorkflowNodeRun, WorkflowRun,
+    AgentEvent, Backend, CheckStatus, ContextSource, EffortLevel, EventRecord, Group, Label,
+    NodeRunStatus, PermissionMode, Project, ProjectLabels, RunStatus, Session,
+    SessionContextSource, SessionKind, SessionRole, SessionStatus, Workflow, WorkflowGraph,
+    WorkflowNodeRun, WorkflowRun,
 };
 use crate::error::{AppError, Result};
 use crate::util::{now_rfc3339, uuid};
@@ -714,6 +716,7 @@ impl Store {
             pr_state: None,
             pr_check_status: None,
             pr_checked_at: None,
+            pinned: false,
             created_at: now.clone(),
             updated_at: now,
         };
@@ -787,6 +790,104 @@ impl Store {
             "UPDATE sessions SET status = ?2, updated_at = ?3 WHERE id = ?1",
             (id, status.as_str(), now_rfc3339()),
         )?;
+        Ok(())
+    }
+
+    /// Pin/unpin a session. Deliberately does *not* touch `updated_at` — pinning
+    /// shouldn't re-sort the session as if it were just active.
+    pub fn set_session_pinned(&self, id: &str, pinned: bool) -> Result<()> {
+        let conn = self.lock();
+        conn.execute(
+            "UPDATE sessions SET pinned = ?2 WHERE id = ?1",
+            (id, pinned as i64),
+        )?;
+        Ok(())
+    }
+
+    // ----- labels (per-project) -----
+
+    pub fn list_labels(&self, project_id: &str) -> Result<Vec<Label>> {
+        let conn = self.lock();
+        let mut stmt = conn.prepare(
+            "SELECT id, project_id, name, color, created_at FROM labels \
+             WHERE project_id = ?1 ORDER BY name COLLATE NOCASE",
+        )?;
+        let rows = stmt.query_map([project_id], map_label)?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    pub fn create_label(&self, project_id: &str, name: &str, color: &str) -> Result<Label> {
+        let label = Label {
+            id: uuid(),
+            project_id: project_id.to_string(),
+            name: name.to_string(),
+            color: color.to_string(),
+            created_at: now_rfc3339(),
+        };
+        let conn = self.lock();
+        conn.execute(
+            "INSERT INTO labels (id, project_id, name, color, created_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            (
+                &label.id,
+                &label.project_id,
+                &label.name,
+                &label.color,
+                &label.created_at,
+            ),
+        )?;
+        Ok(label)
+    }
+
+    pub fn update_label(&self, id: &str, name: &str, color: &str) -> Result<()> {
+        let conn = self.lock();
+        conn.execute(
+            "UPDATE labels SET name = ?2, color = ?3 WHERE id = ?1",
+            (id, name, color),
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_label(&self, id: &str) -> Result<()> {
+        let conn = self.lock();
+        conn.execute("DELETE FROM labels WHERE id = ?1", [id])?;
+        Ok(())
+    }
+
+    /// A project's labels + each session's label ids, in one round-trip.
+    pub fn project_labels(&self, project_id: &str) -> Result<ProjectLabels> {
+        let labels = self.list_labels(project_id)?;
+        let conn = self.lock();
+        let mut stmt = conn.prepare(
+            "SELECT sl.session_id, sl.label_id FROM session_labels sl \
+             JOIN sessions s ON s.id = sl.session_id WHERE s.project_id = ?1",
+        )?;
+        let rows = stmt.query_map([project_id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?;
+        let mut assignments: HashMap<String, Vec<String>> = HashMap::new();
+        for row in rows {
+            let (session_id, label_id) = row?;
+            assignments.entry(session_id).or_default().push(label_id);
+        }
+        Ok(ProjectLabels { labels, assignments })
+    }
+
+    /// Replace a session's labels with `label_ids`.
+    pub fn set_session_labels(&self, session_id: &str, label_ids: &[String]) -> Result<()> {
+        let mut conn = self.lock();
+        let tx = conn.transaction()?;
+        tx.execute(
+            "DELETE FROM session_labels WHERE session_id = ?1",
+            [session_id],
+        )?;
+        for label_id in label_ids {
+            tx.execute(
+                "INSERT OR IGNORE INTO session_labels (session_id, label_id) VALUES (?1, ?2)",
+                (session_id, label_id),
+            )?;
+        }
+        tx.commit()?;
         Ok(())
     }
 
@@ -1088,14 +1189,14 @@ const SESSION_SELECT: &str =
     agent_session_id, working_dir, branch, base_sha, is_isolated, allowed_tools, turns, cost_usd, \
     parent_id, workflow_id, created_at, updated_at, effort, auto_named, kind, terminal_command, terminal_started, \
     terminal_resume_id, base_branch, merged_at, pr_number, pr_url, pr_state, pr_check_status, \
-    pr_checked_at FROM sessions WHERE id = ?1";
+    pr_checked_at, pinned FROM sessions WHERE id = ?1";
 
 const SESSION_SELECT_ALL: &str =
     "SELECT id, group_id, project_id, title, backend, model, permission_mode, status, role, \
     agent_session_id, working_dir, branch, base_sha, is_isolated, allowed_tools, turns, cost_usd, \
     parent_id, workflow_id, created_at, updated_at, effort, auto_named, kind, terminal_command, terminal_started, \
     terminal_resume_id, base_branch, merged_at, pr_number, pr_url, pr_state, pr_check_status, \
-    pr_checked_at FROM sessions";
+    pr_checked_at, pinned FROM sessions";
 
 fn map_project(row: &Row<'_>) -> rusqlite::Result<Project> {
     Ok(Project {
@@ -1177,8 +1278,19 @@ fn map_session(row: &Row<'_>) -> rusqlite::Result<Session> {
             .get::<_, Option<String>>("pr_check_status")?
             .and_then(|s| CheckStatus::parse(&s)),
         pr_checked_at: row.get("pr_checked_at")?,
+        pinned: row.get::<_, i64>("pinned")? != 0,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
+    })
+}
+
+fn map_label(row: &Row<'_>) -> rusqlite::Result<Label> {
+    Ok(Label {
+        id: row.get("id")?,
+        project_id: row.get("project_id")?,
+        name: row.get("name")?,
+        color: row.get("color")?,
+        created_at: row.get("created_at")?,
     })
 }
 

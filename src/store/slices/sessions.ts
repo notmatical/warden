@@ -22,6 +22,7 @@ type SessionsSlice = Pick<
   | "renameSession"
   | "deleteSessions"
   | "deleteSession"
+  | "setSessionPinned"
   | "onSessionUpdated"
 >
 
@@ -231,6 +232,24 @@ export const createSessionsSlice: StateCreator<
   },
 
   deleteSession: (sessionId) => get().deleteSessions([sessionId]),
+
+  setSessionPinned: async (id, pinned) => {
+    const prev = get().sessions[id]
+    if (!prev) return
+    // Optimistic — the backend also emits a session-updated event.
+    set((s) => ({ sessions: { ...s.sessions, [id]: { ...prev, pinned } } }))
+    try {
+      await ipc.setSessionPinned(id, pinned)
+    } catch (error) {
+      reportError("Failed to pin session", error)
+      set((s) => ({
+        sessions: {
+          ...s.sessions,
+          [id]: { ...s.sessions[id], pinned: prev.pinned },
+        },
+      }))
+    }
+  },
 
   onSessionUpdated: (session) => {
     const finishedTurn =

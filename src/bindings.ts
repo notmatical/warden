@@ -180,6 +180,63 @@ async renameSession(sessionId: string, title: string) : Promise<Result<Session, 
 }
 },
 /**
+ * Pin/unpin a session — pinned sessions sort to the top of the folder list.
+ */
+async setSessionPinned(sessionId: string, pinned: boolean) : Promise<Result<Session, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_session_pinned", { sessionId, pinned }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * A project's labels + which sessions each is attached to (one round-trip).
+ */
+async loadProjectLabels(projectId: string) : Promise<Result<ProjectLabels, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("load_project_labels", { projectId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async createLabel(projectId: string, name: string, color: string) : Promise<Result<Label, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("create_label", { projectId, name, color }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async updateLabel(id: string, name: string, color: string) : Promise<Result<null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("update_label", { id, name, color }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async deleteLabel(id: string) : Promise<Result<null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("delete_label", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Replace a session's attached labels.
+ */
+async setSessionLabels(sessionId: string, labelIds: string[]) : Promise<Result<null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_session_labels", { sessionId, labelIds }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Permanently delete a session: stop any running turn, tear down its isolated
  * worktree (best-effort), and remove its rows (events cascade).
  */
@@ -943,6 +1000,14 @@ export type Intent =
 export type IpcError = string
 export type JsonValue = null | boolean | number | string | JsonValue[] | Partial<{ [key in string]: JsonValue }>
 /**
+ * A per-project label (GitHub-style) that can be attached to sessions.
+ */
+export type Label = { id: string; projectId: string; name: string; 
+/**
+ * A palette token the frontend maps to fill/text/ring classes.
+ */
+color: string; createdAt: string }
+/**
  * The node's behavior.
  */
 export type NodeKind = 
@@ -1003,6 +1068,11 @@ export type PrSummary = { number: number; title: string; author: string; headRef
  * repository, sessions get isolated worktrees; otherwise they run in-place.
  */
 export type Project = { id: string; name: string; path: string; isGit: boolean; createdAt: string }
+/**
+ * A project's labels plus which sessions each is attached to — one round-trip
+ * for the folder view. `assignments` maps a session id to its label ids.
+ */
+export type ProjectLabels = { labels: Label[]; assignments: Partial<{ [key in string]: string[] }> }
 export type RepoComment = { author: string; body: string }
 export type RepoRef = { number: number; title: string; 
 /**
@@ -1092,7 +1162,11 @@ prState: string | null;
 /**
  * Aggregate CI-check state for the PR, and when it was last polled (epoch s).
  */
-prCheckStatus: CheckStatus | null; prCheckedAt: number | null; createdAt: string; updatedAt: string }
+prCheckStatus: CheckStatus | null; prCheckedAt: number | null; 
+/**
+ * Pinned sessions sort to the top of the folder's session list.
+ */
+pinned: boolean; createdAt: string; updatedAt: string }
 /**
  * A persisted, ordered, toggleable context source on a session.
  */

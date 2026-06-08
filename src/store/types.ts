@@ -5,6 +5,7 @@ import type {
   EventRecord,
   Group,
   IntegrateOutcome,
+  Label,
   MergeMode,
   PaneTree,
   PermissionMode,
@@ -110,6 +111,10 @@ export interface AppState {
   saveWorkflowGraph: (id: string, graph: WorkflowGraph) => Promise<void>
   renameWorkflow: (id: string, name: string) => Promise<void>
   duplicateWorkflow: (id: string) => Promise<Workflow | null>
+  /** Copy a workflow to the clipboard as a shareable code. */
+  exportWorkflow: (id: string) => Promise<void>
+  /** Create a new workflow under `projectId` from a shared code. */
+  importWorkflow: (projectId: string, code: string) => Promise<Workflow | null>
   deleteWorkflow: (id: string) => Promise<void>
   openWorkflow: (id: string) => void
   runWorkflowById: (id: string) => Promise<void>
@@ -117,6 +122,20 @@ export interface AppState {
   resumeRun: (approve: boolean, runId?: string) => Promise<void>
   loadWorkflowRun: (id: string) => Promise<void>
   applyWorkflowRun: (view: WorkflowRunView) => void
+
+  // ----- labels (per-project, GitHub-style) -----
+  labelsByProject: Record<string, Label[]>
+  /** sessionId → its attached label ids. */
+  labelIdsBySession: Record<string, string[]>
+  loadProjectLabels: (projectId: string) => Promise<void>
+  createLabel: (
+    projectId: string,
+    name: string,
+    color: string
+  ) => Promise<Label | null>
+  updateLabel: (id: string, name: string, color: string) => Promise<void>
+  deleteLabel: (id: string) => Promise<void>
+  setSessionLabels: (sessionId: string, labelIds: string[]) => Promise<void>
 
   init: () => Promise<void>
   /** Restore the persisted global view once all groups are loaded. */
@@ -186,6 +205,7 @@ export interface AppState {
   renameSession: (sessionId: string, title: string) => Promise<void>
   deleteSessions: (sessionIds: string[]) => Promise<void>
   deleteSession: (sessionId: string) => Promise<void>
+  setSessionPinned: (id: string, pinned: boolean) => Promise<void>
   selectTab: (id: string) => void
   closeTab: (id: string) => void
   closeOthers: (id: string) => void

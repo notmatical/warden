@@ -2,10 +2,12 @@ import {
   Ban,
   ChevronDown,
   Copy,
+  Download,
   Eye,
   MoreHorizontal,
   Plus,
   Trash2,
+  Upload,
   Workflow as WorkflowIcon,
 } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
@@ -25,6 +27,14 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
@@ -33,6 +43,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { readClipboard } from "@/lib/clipboard"
 import * as ipc from "@/lib/ipc"
 import { relativeTime } from "@/lib/time"
 import { cn } from "@/lib/utils"
@@ -95,7 +107,7 @@ function StatusPill({ status }: { status: RunStatus | undefined }) {
   return (
     <span
       className={cn(
-        "inline-flex w-fit items-center gap-1.5 rounded-md px-2 py-0.5 font-medium text-[11px] ring-1 ring-inset",
+        "inline-flex w-fit items-center gap-1.5 rounded-lg px-2 py-0.5 font-medium text-[11px] ring-1 ring-inset",
         s.pill
       )}
     >
@@ -114,6 +126,8 @@ export function WorkflowsView() {
   const createWorkflow = useAppStore((s) => s.createWorkflow)
   const openWorkflow = useAppStore((s) => s.openWorkflow)
   const duplicateWorkflow = useAppStore((s) => s.duplicateWorkflow)
+  const exportWorkflow = useAppStore((s) => s.exportWorkflow)
+  const importWorkflow = useAppStore((s) => s.importWorkflow)
   const deleteWorkflow = useAppStore((s) => s.deleteWorkflow)
   const cancelWorkflow = useAppStore((s) => s.cancelWorkflow)
   const activeGroupId = useAppStore((s) => s.activeGroupId)
@@ -138,6 +152,9 @@ export function WorkflowsView() {
   const [statusFilter, setStatusFilter] = useState<Set<RunStatus>>(
     () => new Set(STATUS_ORDER)
   )
+  const [importOpen, setImportOpen] = useState(false)
+  const [importCode, setImportCode] = useState("")
+  const [importing, setImporting] = useState(false)
 
   useEffect(() => {
     void loadAllWorkflows()
@@ -189,6 +206,18 @@ export function WorkflowsView() {
     if (wf) openWorkflow(wf.id)
   }
 
+  const runImport = async () => {
+    if (!newProject || !importCode.trim() || importing) return
+    setImporting(true)
+    const wf = await importWorkflow(newProject, importCode)
+    setImporting(false)
+    if (wf) {
+      setImportOpen(false)
+      setImportCode("")
+      openWorkflow(wf.id)
+    }
+  }
+
   return (
     <div className="flex h-full flex-col gap-4 p-6">
       <div className="flex shrink-0 items-center justify-between gap-3">
@@ -198,10 +227,23 @@ export function WorkflowsView() {
             {Object.keys(workflowsMap).length} across all projects
           </p>
         </div>
-        <Button size="sm" onClick={() => void create()} disabled={!newProject}>
-          <Plus className="size-4" />
-          New workflow
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setImportCode("")
+              setImportOpen(true)
+            }}
+            disabled={!newProject}
+          >
+            <Download className="size-4" />
+            Import
+          </Button>
+          <Button onClick={() => void create()} disabled={!newProject}>
+            <Plus className="size-4" />
+            New workflow
+          </Button>
+        </div>
       </div>
 
       <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -214,7 +256,7 @@ export function WorkflowsView() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               className={cn(
                 "h-8 gap-2 hover:bg-input/70 dark:hover:bg-input/70",
@@ -283,6 +325,7 @@ export function WorkflowsView() {
                       (c) => c && openWorkflow(c.id)
                     )
                 )
+              const onExport = () => runAction(() => void exportWorkflow(w.id))
               const onDelete = () =>
                 runAction(async () => {
                   if (
@@ -358,6 +401,13 @@ export function WorkflowsView() {
                             <Copy />
                             Duplicate
                           </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onSelect={onExport}
+                            className={MENU_ITEM}
+                          >
+                            <Upload />
+                            Export
+                          </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
                             variant="destructive"
@@ -395,6 +445,10 @@ export function WorkflowsView() {
                       <Copy />
                       Duplicate
                     </ContextMenuItem>
+                    <ContextMenuItem onSelect={onExport} className={MENU_ITEM}>
+                      <Upload />
+                      Export
+                    </ContextMenuItem>
                     <ContextMenuSeparator />
                     <ContextMenuItem
                       variant="destructive"
@@ -411,6 +465,51 @@ export function WorkflowsView() {
           )}
         </DataTable>
       </div>
+
+      <Dialog open={importOpen} onOpenChange={setImportOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Import workflow</DialogTitle>
+            <DialogDescription>
+              Paste a workflow code exported from Warden. It'll be added as a
+              new workflow{newProject ? ` in ${projectName(newProject)}` : ""}.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={importCode}
+            onChange={(e) => setImportCode(e.target.value)}
+            onKeyDown={(e) => {
+              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                e.preventDefault()
+                void runImport()
+              }
+            }}
+            placeholder="warden-wf-…"
+            rows={5}
+            // biome-ignore lint/a11y/noAutofocus: paste target in a modal
+            autoFocus
+            className="max-h-48 overflow-y-auto break-all font-mono text-xs"
+          />
+          <DialogFooter className="sm:justify-between">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                void readClipboard().then((t) => t && setImportCode(t))
+              }}
+            >
+              Paste from clipboard
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => void runImport()}
+              disabled={!importCode.trim() || importing || !newProject}
+            >
+              {importing ? "Importing…" : "Import"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

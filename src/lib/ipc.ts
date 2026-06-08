@@ -8,12 +8,14 @@ import type {
   FileEntry,
   Group,
   IntegrateOutcome,
+  Label,
   MergeMode,
   PermissionMode,
   PlanToCodeResult,
   PrContent,
   PrInfo,
   Project,
+  ProjectLabels,
   Provider,
   ProviderSource,
   ProviderStatus,
@@ -355,6 +357,44 @@ export function renameSession(
 
 export function deleteSession(sessionId: string): Promise<void> {
   return invoke("delete_session", { sessionId })
+}
+
+export function setSessionPinned(
+  sessionId: string,
+  pinned: boolean
+): Promise<Session> {
+  return invoke("set_session_pinned", { sessionId, pinned })
+}
+
+export function loadProjectLabels(projectId: string): Promise<ProjectLabels> {
+  return invoke("load_project_labels", { projectId })
+}
+
+export function createLabel(
+  projectId: string,
+  name: string,
+  color: string
+): Promise<Label> {
+  return invoke("create_label", { projectId, name, color })
+}
+
+export function updateLabel(
+  id: string,
+  name: string,
+  color: string
+): Promise<void> {
+  return invoke("update_label", { id, name, color })
+}
+
+export function deleteLabel(id: string): Promise<void> {
+  return invoke("delete_label", { id })
+}
+
+export function setSessionLabels(
+  sessionId: string,
+  labelIds: string[]
+): Promise<void> {
+  return invoke("set_session_labels", { sessionId, labelIds })
 }
 
 export function setSessionIsolation(

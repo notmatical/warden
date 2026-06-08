@@ -6,8 +6,8 @@ use specta::Type;
 use tauri::{AppHandle, State};
 
 use crate::domain::{
-    Backend, ContextSource, EffortLevel, EventRecord, PermissionMode, Session,
-    SessionContextSource, SessionKind, SessionRole,
+    Backend, ContextSource, EffortLevel, EventRecord, Label, PermissionMode, ProjectLabels,
+    Session, SessionContextSource, SessionKind, SessionRole,
 };
 use crate::error::{AppError, CommandResult};
 use crate::events::emit_session;
@@ -174,6 +174,73 @@ pub async fn rename_session(
     let updated = state.store.get_session(&session_id)?;
     emit_session(&app, &updated);
     Ok(updated)
+}
+
+/// Pin/unpin a session — pinned sessions sort to the top of the folder list.
+#[tauri::command]
+#[specta::specta]
+pub async fn set_session_pinned(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: String,
+    pinned: bool,
+) -> CommandResult<Session> {
+    state.store.set_session_pinned(&session_id, pinned)?;
+    let updated = state.store.get_session(&session_id)?;
+    emit_session(&app, &updated);
+    Ok(updated)
+}
+
+/// A project's labels + which sessions each is attached to (one round-trip).
+#[tauri::command]
+#[specta::specta]
+pub async fn load_project_labels(
+    state: State<'_, AppState>,
+    project_id: String,
+) -> CommandResult<ProjectLabels> {
+    Ok(state.store.project_labels(&project_id)?)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn create_label(
+    state: State<'_, AppState>,
+    project_id: String,
+    name: String,
+    color: String,
+) -> CommandResult<Label> {
+    Ok(state.store.create_label(&project_id, name.trim(), &color)?)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn update_label(
+    state: State<'_, AppState>,
+    id: String,
+    name: String,
+    color: String,
+) -> CommandResult<()> {
+    state.store.update_label(&id, name.trim(), &color)?;
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn delete_label(state: State<'_, AppState>, id: String) -> CommandResult<()> {
+    state.store.delete_label(&id)?;
+    Ok(())
+}
+
+/// Replace a session's attached labels.
+#[tauri::command]
+#[specta::specta]
+pub async fn set_session_labels(
+    state: State<'_, AppState>,
+    session_id: String,
+    label_ids: Vec<String>,
+) -> CommandResult<()> {
+    state.store.set_session_labels(&session_id, &label_ids)?;
+    Ok(())
 }
 
 /// Permanently delete a session: stop any running turn, tear down its isolated

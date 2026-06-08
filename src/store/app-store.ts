@@ -11,6 +11,7 @@ import * as ipc from "@/lib/ipc"
 import { reportError } from "./shared"
 import { createGitSlice } from "./slices/git"
 import { createGroupsSlice } from "./slices/groups"
+import { createLabelsSlice } from "./slices/labels"
 import { createProvidersSlice } from "./slices/providers"
 import { createSessionsSlice } from "./slices/sessions"
 import { createTranscriptSlice } from "./slices/transcript"
@@ -45,6 +46,7 @@ export const useAppStore = create<AppState>()(
       ...createSessionsSlice(set, get, store),
       ...createTranscriptSlice(set, get, store),
       ...createWorkflowsSlice(set, get, store),
+      ...createLabelsSlice(set, get, store),
 
       initialized: false,
 

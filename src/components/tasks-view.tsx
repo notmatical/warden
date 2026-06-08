@@ -11,7 +11,7 @@ export function TasksView() {
       title="Tasks"
       description="Connect Linear to triage and work issues without leaving warden."
       action={
-        <Button size="sm" variant="outline" disabled>
+        <Button size="sm" variant="secondary" disabled>
           Connect Linear — coming soon
         </Button>
       }

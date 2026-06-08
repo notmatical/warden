@@ -1,6 +1,7 @@
 import type { ComponentType } from "react"
 import {
   CircleDot,
+  FolderGit2,
   ListTodo,
   type LucideIcon,
   Settings2,
@@ -8,6 +9,7 @@ import {
   Workflow as WorkflowIcon,
 } from "lucide-react"
 
+import { FolderView } from "@/components/folder-view"
 import { IssuesView } from "@/components/issues-view"
 import { SessionPane } from "@/components/session-view"
 import { SettingsPanel } from "@/components/settings/settings-panel"
@@ -15,7 +17,12 @@ import { TasksView } from "@/components/tasks-view"
 import { WorkflowEditor } from "@/components/workflow/workflow-editor"
 import { WorkflowsView } from "@/components/workflows-view"
 import type { AppState } from "@/store/types"
-import { type ContentKind, kindOf, workflowIdOf } from "./content-kinds"
+import {
+  type ContentKind,
+  folderIdOf,
+  kindOf,
+  workflowIdOf,
+} from "./content-kinds"
 
 /** The render half of the viewport engine: how each content kind looks and which
  *  component fills the pane. Components consult `describe(ref)`; adding a kind is
@@ -48,6 +55,14 @@ const REGISTRY: Partial<Record<ContentKind, Entry>> = {
     icon: WorkflowIcon,
     View: () => <WorkflowsView />,
     title: () => "Workflows",
+  },
+  folder: {
+    icon: FolderGit2,
+    View: ({ refId }) => <FolderView projectId={folderIdOf(refId)} />,
+    title: (s, ref) =>
+      Object.values(s.rootsByGroup)
+        .flat()
+        .find((p) => p.id === folderIdOf(ref))?.name ?? "Folder",
   },
   settings: {
     icon: Settings2,

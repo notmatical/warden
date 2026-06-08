@@ -10,6 +10,7 @@ import {
   type Node,
   type OnConnectEnd,
   type OnConnectStart,
+  Panel,
   ReactFlow,
   ReactFlowProvider,
   useEdgesState,
@@ -17,6 +18,7 @@ import {
   useReactFlow,
 } from "@xyflow/react"
 import {
+  Check,
   Copy,
   ExternalLink,
   Loader2,
@@ -25,6 +27,8 @@ import {
   Play,
   Plus,
   Trash2,
+  Upload,
+  X,
 } from "lucide-react"
 import {
   type MouseEvent as ReactMouseEvent,
@@ -66,15 +70,52 @@ import { NodePalette } from "./node-palette"
 
 const nodeTypes = { agent: AgentNode, gate: GateNode }
 
-// Neutral pill; only the small dot carries the state color.
-const RUN_PILL: Record<string, { label: string; dot: string }> = {
-  pending: { label: "Pending", dot: "bg-muted-foreground/40" },
-  running: { label: "Running", dot: "bg-blue-500" },
-  done: { label: "Done", dot: "bg-emerald-500" },
-  completed: { label: "Done", dot: "bg-emerald-500" },
-  failed: { label: "Failed", dot: "bg-red-500" },
-  paused: { label: "Paused", dot: "bg-amber-500" },
-  awaitingInput: { label: "Needs input", dot: "bg-amber-500" },
+// Colored status chip (shares the workflows table's color language): a tinted
+// fill + ring, with the dot echoing the state color.
+const RUN_PILL: Record<
+  string,
+  { label: string; dot: string; pill: string }
+> = {
+  pending: {
+    label: "Pending",
+    dot: "bg-muted-foreground/40",
+    pill: "bg-muted/60 text-muted-foreground ring-border",
+  },
+  running: {
+    label: "Running",
+    dot: "bg-blue-500",
+    pill: "bg-blue-500/10 text-blue-400 ring-blue-500/30",
+  },
+  done: {
+    label: "Done",
+    dot: "bg-emerald-500",
+    pill: "bg-emerald-500/10 text-emerald-400 ring-emerald-500/30",
+  },
+  completed: {
+    label: "Done",
+    dot: "bg-emerald-500",
+    pill: "bg-emerald-500/10 text-emerald-400 ring-emerald-500/30",
+  },
+  failed: {
+    label: "Failed",
+    dot: "bg-red-500",
+    pill: "bg-red-500/10 text-red-400 ring-red-500/30",
+  },
+  paused: {
+    label: "Paused",
+    dot: "bg-amber-500",
+    pill: "bg-amber-500/10 text-amber-400 ring-amber-500/30",
+  },
+  awaitingInput: {
+    label: "Needs input",
+    dot: "bg-amber-500",
+    pill: "bg-amber-500/10 text-amber-400 ring-amber-500/30",
+  },
+  canceled: {
+    label: "Canceled",
+    dot: "bg-muted-foreground/40",
+    pill: "bg-muted/50 text-muted-foreground ring-border",
+  },
 }
 
 function backendOf(model: string): Backend {
@@ -163,6 +204,7 @@ function Canvas({ workflow }: { workflow: Workflow }) {
   const openSession = useAppStore((s) => s.openSession)
   const renameWorkflow = useAppStore((s) => s.renameWorkflow)
   const duplicateWorkflow = useAppStore((s) => s.duplicateWorkflow)
+  const exportWorkflow = useAppStore((s) => s.exportWorkflow)
   const deleteWorkflow = useAppStore((s) => s.deleteWorkflow)
   const openWorkflow = useAppStore((s) => s.openWorkflow)
 
@@ -330,111 +372,6 @@ function Canvas({ workflow }: { workflow: Workflow }) {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-2">
-        {renaming ? (
-          <input
-            value={nameDraft}
-            onChange={(e) => setNameDraft(e.target.value)}
-            onBlur={commitRename}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") commitRename()
-              if (e.key === "Escape") setRenaming(false)
-            }}
-            className="h-7 w-56 rounded-md border border-border bg-transparent px-2 text-sm font-medium outline-none"
-          />
-        ) : (
-          <button
-            type="button"
-            onDoubleClick={() => {
-              setNameDraft(workflow.name)
-              setRenaming(true)
-            }}
-            className="rounded px-1 text-sm font-medium hover:bg-muted"
-            title="Double-click to rename"
-          >
-            {workflow.name}
-          </button>
-        )}
-        {runStatus && RUN_PILL[runStatus] ? (
-          <span className="flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-            <span
-              className={cn(
-                "size-1.5 rounded-full",
-                RUN_PILL[runStatus].dot,
-                running && "animate-pulse"
-              )}
-            />
-            {RUN_PILL[runStatus].label}
-          </span>
-        ) : null}
-
-        <div className="ml-auto flex items-center gap-1.5">
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={openAddPalette}
-          >
-            <Plus className="size-3.5" />
-            Add node
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => void run()}
-            disabled={nodes.length === 0 || running}
-            className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-600/90"
-          >
-            {running ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <Play className="size-3.5" />
-            )}
-            {running ? "Running" : "Run"}
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                size="icon-sm"
-                aria-label="Workflow actions"
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <MoreHorizontal className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuItem
-                onSelect={() => {
-                  setNameDraft(workflow.name)
-                  setRenaming(true)
-                }}
-              >
-                <Pencil className="size-3.5" />
-                Rename
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() =>
-                  void duplicateWorkflow(workflow.id).then(
-                    (c) => c && openWorkflow(c.id)
-                  )
-                }
-              >
-                <Copy className="size-3.5" />
-                Duplicate
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                variant="destructive"
-                onSelect={() => void deleteWorkflow(workflow.id)}
-              >
-                <Trash2 className="size-3.5" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </header>
-
       <div className="flex min-h-0 flex-1">
         <div className="min-w-0 flex-1">
           <ReactFlow
@@ -465,6 +402,150 @@ function Canvas({ workflow }: { workflow: Workflow }) {
           >
             <Background />
             <Controls showInteractive={false} />
+
+            {/* Title — floating top-left, like the zoom controls. */}
+            <Panel position="top-left" className="flex items-center gap-2">
+              {renaming ? (
+                <div className="relative flex items-center">
+                  <input
+                    // biome-ignore lint/a11y/noAutofocus: rename starts focused for immediate typing
+                    autoFocus
+                    value={nameDraft}
+                    onChange={(e) => setNameDraft(e.target.value)}
+                    onFocus={(e) => e.target.select()}
+                    onBlur={commitRename}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") commitRename()
+                      if (e.key === "Escape") setRenaming(false)
+                    }}
+                    className="h-9 w-64 rounded-lg border border-border bg-card pr-[3.75rem] pl-2.5 font-semibold text-lg shadow-sm outline-none focus:border-ring"
+                  />
+                  <div className="absolute right-1 flex items-center gap-0.5">
+                    <button
+                      type="button"
+                      aria-label="Save name"
+                      // Keep the input focused so its blur doesn't fire first.
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={commitRename}
+                      className="flex size-6 items-center justify-center rounded-md text-emerald-500 transition-colors hover:bg-emerald-500/10"
+                    >
+                      <Check className="size-4" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Cancel rename"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => setRenaming(false)}
+                      className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onDoubleClick={() => {
+                    setNameDraft(workflow.name)
+                    setRenaming(true)
+                  }}
+                  className="rounded-lg bg-card/80 px-2.5 py-1 font-semibold text-lg shadow-sm ring-1 ring-border/60 backdrop-blur transition-colors hover:bg-card"
+                  title="Double-click to rename"
+                >
+                  {workflow.name}
+                </button>
+              )}
+              {runStatus && RUN_PILL[runStatus] ? (
+                <span
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-lg px-2 py-1 font-medium text-[11px] shadow-sm ring-1 ring-inset backdrop-blur",
+                    RUN_PILL[runStatus].pill
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "size-1.5 rounded-full",
+                      RUN_PILL[runStatus].dot,
+                      running && "animate-pulse"
+                    )}
+                  />
+                  {RUN_PILL[runStatus].label}
+                </span>
+              ) : null}
+            </Panel>
+
+            {/* Actions — floating top-right. */}
+            <Panel position="top-right" className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="lg"
+                className="gap-1.5 shadow-sm"
+                onClick={openAddPalette}
+              >
+                <Plus className="size-4" />
+                Add node
+              </Button>
+              <Button
+                size="lg"
+                onClick={() => void run()}
+                disabled={nodes.length === 0 || running}
+                className="gap-2 bg-emerald-600 px-5 font-semibold text-white shadow-sm shadow-emerald-900/20 hover:bg-emerald-600/90"
+              >
+                {running ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Play className="size-4 fill-current" />
+                )}
+                {running ? "Running" : "Run"}
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="secondary"
+                    size="icon-lg"
+                    aria-label="Workflow actions"
+                    className="text-muted-foreground shadow-sm hover:text-foreground"
+                  >
+                    <MoreHorizontal className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-44">
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      setNameDraft(workflow.name)
+                      setRenaming(true)
+                    }}
+                  >
+                    <Pencil className="size-3.5" />
+                    Rename
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={() =>
+                      void duplicateWorkflow(workflow.id).then(
+                        (c) => c && openWorkflow(c.id)
+                      )
+                    }
+                  >
+                    <Copy className="size-3.5" />
+                    Duplicate
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={() => void exportWorkflow(workflow.id)}
+                  >
+                    <Upload className="size-3.5" />
+                    Export
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onSelect={() => void deleteWorkflow(workflow.id)}
+                  >
+                    <Trash2 className="size-3.5" />
+                    Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </Panel>
           </ReactFlow>
         </div>
 

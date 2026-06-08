@@ -10,11 +10,13 @@ export type ContentKind =
   | "session"
   | "workflow"
   | "workflows"
+  | "folder"
   | "settings"
   | "tasks"
   | "issues"
 
 const WORKFLOW_PREFIX = "workflow:"
+const FOLDER_PREFIX = "folder:"
 
 /** Singleton destination ids — there's only ever one tab of each. */
 export const SETTINGS_TAB_ID = "settings"
@@ -32,6 +34,19 @@ export function workflowIdOf(ref: string): string {
 
 export function isWorkflowTab(ref: string): boolean {
   return ref.startsWith(WORKFLOW_PREFIX)
+}
+
+/** A folder destination: the session list-view for one project (repo root). */
+export function folderTabId(projectId: string): string {
+  return FOLDER_PREFIX + projectId
+}
+
+export function folderIdOf(ref: string): string {
+  return ref.slice(FOLDER_PREFIX.length)
+}
+
+export function isFolderTab(ref: string): boolean {
+  return ref.startsWith(FOLDER_PREFIX)
 }
 
 /** Pure, render-free metadata the viewport store needs about a kind. */
@@ -65,6 +80,12 @@ const META: Record<ContentKind, KindMeta> = {
     loadsEvents: false,
     persistsWithoutRecord: true,
   },
+  folder: {
+    kind: "folder",
+    singleton: false,
+    loadsEvents: false,
+    persistsWithoutRecord: true,
+  },
   settings: {
     kind: "settings",
     singleton: true,
@@ -91,6 +112,7 @@ export function kindOf(ref: string): ContentKind {
   if (ref === WORKFLOWS_TAB_ID) return "workflows"
   if (ref === TASKS_TAB_ID) return "tasks"
   if (ref === ISSUES_TAB_ID) return "issues"
+  if (isFolderTab(ref)) return "folder"
   if (isWorkflowTab(ref)) return "workflow"
   return "session"
 }

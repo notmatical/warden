@@ -150,8 +150,26 @@ export interface Session {
   /** Aggregate CI-check state for the PR, refreshed by background polling. */
   prCheckStatus: CheckStatus | null
   prCheckedAt: number | null
+  /** Pinned sessions sort to the top of the folder's session list. */
+  pinned: boolean
   createdAt: string
   updatedAt: string
+}
+
+/** A per-project label (GitHub-style) attachable to sessions. */
+export interface Label {
+  id: string
+  projectId: string
+  name: string
+  /** A palette token (see LABEL_COLORS) the UI maps to fill/text/ring classes. */
+  color: string
+  createdAt: string
+}
+
+/** A project's labels + which sessions each is attached to (sessionId → labelIds). */
+export interface ProjectLabels {
+  labels: Label[]
+  assignments: Record<string, string[]>
 }
 
 /** Aggregate CI-check state for a PR. */

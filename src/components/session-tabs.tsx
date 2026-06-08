@@ -10,8 +10,8 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
-import { describe } from "@/lib/viewport/content-registry"
 import { cn } from "@/lib/utils"
+import { describe } from "@/lib/viewport/content-registry"
 import { useAppStore } from "@/store/app-store"
 
 function Tab({ sessionId }: { sessionId: string }) {
@@ -151,7 +151,7 @@ function Tab({ sessionId }: { sessionId: string }) {
             ) : null}
           </span>
           {role !== "chat" ? (
-            <Badge variant="outline" className="capitalize">
+            <Badge variant="secondary" className="capitalize">
               {role === "planner" ? "plan" : "code"}
             </Badge>
           ) : null}

@@ -12,7 +12,7 @@ export function IssuesView() {
       title="Issues"
       description="Browse and open GitHub issues for your connected repositories."
       action={
-        <Button size="sm" variant="outline" disabled>
+        <Button size="sm" variant="secondary" disabled>
           <GitHubIcon />
           Connect GitHub — coming soon
         </Button>

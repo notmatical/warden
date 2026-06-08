@@ -287,6 +287,8 @@ pub struct Session {
     /// Aggregate CI-check state for the PR, and when it was last polled (epoch s).
     pub pr_check_status: Option<CheckStatus>,
     pub pr_checked_at: Option<i64>,
+    /// Pinned sessions sort to the top of the folder's session list.
+    pub pinned: bool,
     pub created_at: String,
     pub updated_at: String,
 }

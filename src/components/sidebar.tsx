@@ -1,4 +1,3 @@
-import { useDraggable } from "@dnd-kit/core"
 import {
   ChevronRight,
   CircleDot,
@@ -19,8 +18,6 @@ import { AgentProvidersIcon } from "@/components/agent-providers-icon"
 import { useConfirm } from "@/components/confirm-dialog"
 import { ClaudeIcon, CodexIcon, GitHubIcon } from "@/components/icons/brand"
 import { ReviewPrDialog } from "@/components/review-pr-dialog"
-import { SessionFavicon } from "@/components/session-favicon"
-import { SessionHoverCard } from "@/components/session-hover-card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -59,6 +56,7 @@ import { UpdateBanner } from "@/components/update-banner"
 import { DEFAULT_CHAT_MODEL } from "@/lib/models"
 import { cn } from "@/lib/utils"
 import {
+  folderTabId,
   ISSUES_TAB_ID,
   TASKS_TAB_ID,
   WORKFLOWS_TAB_ID,
@@ -106,146 +104,18 @@ function RowAction({
   )
 }
 
-function SessionRow({ sessionId }: { sessionId: string }) {
-  const session = useAppStore((s) => s.sessions[sessionId])
-  const active = useAppStore((s) => s.activeTabId === sessionId)
-  const openSession = useAppStore((s) => s.openSession)
-  const renameSession = useAppStore((s) => s.renameSession)
-  const deleteSession = useAppStore((s) => s.deleteSession)
-  const confirm = useConfirm()
-
-  // Draggable into the viewport to open/compose; the sensor's activation
-  // distance still lets a plain click open the session in the focused pane.
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: `sidebar:${sessionId}`,
-    data: { sessionId },
-  })
-
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState("")
-
-  if (!session) return null
-
-  const startRename = () => {
-    setDraft(session.title)
-    setEditing(true)
-  }
-
-  const commitRename = () => {
-    setEditing(false)
-    void renameSession(sessionId, draft)
-  }
-
-  const onEditKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    event.stopPropagation()
-    if (event.key === "Enter") {
-      event.preventDefault()
-      commitRename()
-    } else if (event.key === "Escape") {
-      event.preventDefault()
-      setEditing(false)
-    }
-  }
-
-  return (
-    <ContextMenu>
-      <ContextMenuTrigger asChild>
-        <SidebarMenuSubItem>
-          {editing ? (
-            <div className="flex h-7 items-center gap-2 rounded-md bg-sidebar-accent pr-2 pl-2.5 ring-1 ring-transparent ring-inset focus-within:ring-ring/50">
-              <SessionFavicon
-                kind={session.kind}
-                backend={session.backend}
-                status={session.status}
-                terminalCommand={session.terminalCommand}
-              />
-              <Input
-                autoFocus
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={onEditKeyDown}
-                onBlur={commitRename}
-                onFocus={(e) => e.target.select()}
-                className="h-full min-w-0 flex-1 border-0 bg-transparent px-0 text-xs text-sidebar-foreground shadow-none focus-visible:border-0 focus-visible:ring-0"
-              />
-            </div>
-          ) : (
-            <SessionHoverCard session={session}>
-              <SidebarMenuSubButton
-                asChild
-                isActive={active}
-                className="w-full cursor-default text-left text-sidebar-foreground/70 hover:bg-transparent hover:text-sidebar-foreground active:bg-transparent data-[active=true]:bg-transparent data-[active=true]:font-medium data-[active=true]:text-sidebar-foreground"
-              >
-                <button
-                  ref={setNodeRef}
-                  type="button"
-                  {...attributes}
-                  {...listeners}
-                  onClick={() => openSession(sessionId)}
-                  onDoubleClick={startRename}
-                  title={session.title}
-                  className={cn(isDragging && "opacity-50")}
-                >
-                  <SessionFavicon
-                    kind={session.kind}
-                    backend={session.backend}
-                    status={session.status}
-                    terminalCommand={session.terminalCommand}
-                  />
-                  <span className="min-w-0 flex-1 truncate">
-                    {session.title}
-                  </span>
-                </button>
-              </SidebarMenuSubButton>
-            </SessionHoverCard>
-          )}
-        </SidebarMenuSubItem>
-      </ContextMenuTrigger>
-      <ContextMenuContent className="w-40">
-        <ContextMenuItem onSelect={() => startRename()}>
-          <Pencil />
-          Rename
-        </ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuItem
-          variant="destructive"
-          onSelect={async () => {
-            if (
-              await confirm({
-                title: "Delete session?",
-                description: `"${session.title}" and its history will be permanently deleted.`,
-                confirmLabel: "Delete",
-                destructive: true,
-              })
-            ) {
-              void deleteSession(sessionId)
-            }
-          }}
-        >
-          <Trash2 />
-          Delete
-        </ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenu>
-  )
-}
-
 function RootRow({
   groupId,
   project,
-  expanded,
-  onToggle,
 }: {
   groupId: string
   project: Project
-  expanded: boolean
-  onToggle: () => void
 }) {
-  const sessionIds = useAppStore((s) => s.sessionsByGroup[groupId])
-  const sessions = useAppStore((s) => s.sessions)
   const createSession = useAppStore((s) => s.createSession)
   const createNativeSession = useAppStore((s) => s.createNativeSession)
   const removeRoot = useAppStore((s) => s.removeRoot)
+  const openTab = useAppStore((s) => s.openTab)
+  const active = useAppStore((s) => s.activeTabId === folderTabId(project.id))
   const claudeAuthed = useAppStore((s) =>
     s.providers.some((p) => p.id === "claude" && p.authed)
   )
@@ -254,10 +124,6 @@ function RootRow({
   )
 
   const [reviewOpen, setReviewOpen] = useState(false)
-
-  const rootSessions = (sessionIds ?? []).filter(
-    (id) => sessions[id]?.projectId === project.id
-  )
 
   const newSession = async (kind: SessionKind) => {
     await createSession({
@@ -276,12 +142,14 @@ function RootRow({
         <ContextMenuTrigger asChild>
           <SidebarMenuSubButton
             asChild
-            className="w-full cursor-default text-left text-sidebar-foreground/70 hover:bg-transparent hover:text-sidebar-foreground active:bg-transparent active:text-sidebar-foreground"
+            isActive={active}
+            className="w-full cursor-default text-left text-sidebar-foreground/70 hover:bg-transparent hover:text-sidebar-foreground active:bg-transparent data-[active=true]:bg-transparent data-[active=true]:font-medium data-[active=true]:text-sidebar-foreground"
           >
-            <button type="button" onClick={onToggle} title={project.path}>
-              <ChevronRight
-                className={cn("transition-transform", expanded && "rotate-90")}
-              />
+            <button
+              type="button"
+              onClick={() => openTab(folderTabId(project.id))}
+              title={project.path}
+            >
               <FolderGit2 className="opacity-70" />
               <span className="min-w-0 flex-1 truncate">{project.name}</span>
             </button>
@@ -352,18 +220,6 @@ function RootRow({
         open={reviewOpen}
         onOpenChange={setReviewOpen}
       />
-
-      {expanded ? (
-        <SidebarMenuSub className={SUB_CLASS}>
-          {rootSessions.length > 0 ? (
-            rootSessions.map((id) => <SessionRow key={id} sessionId={id} />)
-          ) : (
-            <p className="px-2 py-1 text-xs text-muted-foreground/60">
-              No sessions yet
-            </p>
-          )}
-        </SidebarMenuSub>
-      ) : null}
     </SidebarMenuSubItem>
   )
 }
@@ -387,7 +243,6 @@ function GroupRow({
 
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState("")
-  const [expandedRoots, setExpandedRoots] = useState<Set<string>>(new Set())
 
   const startRename = () => {
     setDraft(group.name)
@@ -408,15 +263,6 @@ function GroupRow({
       event.preventDefault()
       setEditing(false)
     }
-  }
-
-  const toggleRoot = (id: string) => {
-    setExpandedRoots((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
   }
 
   return (
@@ -514,13 +360,7 @@ function GroupRow({
         <SidebarMenuSub className={SUB_CLASS}>
           {roots && roots.length > 0 ? (
             roots.map((root) => (
-              <RootRow
-                key={root.id}
-                groupId={group.id}
-                project={root}
-                expanded={expandedRoots.has(root.id)}
-                onToggle={() => toggleRoot(root.id)}
-              />
+              <RootRow key={root.id} groupId={group.id} project={root} />
             ))
           ) : (
             <button

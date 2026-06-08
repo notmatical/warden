@@ -1,9 +1,11 @@
 import { toast } from "sonner"
 import type { StateCreator } from "zustand"
 
+import { copyText } from "@/lib/clipboard"
 import * as ipc from "@/lib/ipc"
 import { notify, windowFocused } from "@/lib/notify"
 import { workflowTabId } from "@/lib/viewport"
+import { decodeWorkflow, encodeWorkflow } from "@/lib/workflow-share"
 import type { WorkflowRunView } from "@/types/workflow"
 
 import { reportError } from "../shared"
@@ -23,6 +25,8 @@ type WorkflowsSlice = Pick<
   | "saveWorkflowGraph"
   | "renameWorkflow"
   | "duplicateWorkflow"
+  | "exportWorkflow"
+  | "importWorkflow"
   | "deleteWorkflow"
   | "openWorkflow"
   | "runWorkflowById"
@@ -155,6 +159,46 @@ export const createWorkflowsSlice: StateCreator<
       return copy
     } catch (error) {
       reportError("Failed to duplicate workflow", error)
+      return null
+    }
+  },
+
+  // Copy the workflow as a shareable code (gzipped, base64) to the clipboard.
+  exportWorkflow: async (id) => {
+    let wf = get().workflows[id]
+    if (!wf) {
+      try {
+        wf = await ipc.getWorkflow(id)
+      } catch (error) {
+        reportError("Failed to export workflow", error)
+        return
+      }
+    }
+    try {
+      const code = await encodeWorkflow(wf.name, wf.graph)
+      await copyText(code, "Workflow code copied — paste it into Import to restore")
+    } catch (error) {
+      reportError("Failed to export workflow", error)
+    }
+  },
+
+  // Decode a shared code into a brand-new workflow under `projectId`.
+  importWorkflow: async (projectId, code) => {
+    let decoded: Awaited<ReturnType<typeof decodeWorkflow>>
+    try {
+      decoded = await decodeWorkflow(code)
+    } catch (error) {
+      toast.error("Couldn't import workflow", {
+        description: error instanceof Error ? error.message : String(error),
+      })
+      return null
+    }
+    try {
+      const wf = await ipc.createWorkflow(projectId, decoded.name, decoded.graph)
+      set((s) => ({ workflows: { ...s.workflows, [wf.id]: wf } }))
+      return wf
+    } catch (error) {
+      reportError("Failed to import workflow", error)
       return null
     }
   },
