@@ -3,3 +3,4 @@
 pub mod agent;
 pub mod auth;
 pub mod download;
+pub mod history;
