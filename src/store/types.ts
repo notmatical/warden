@@ -28,6 +28,9 @@ import type {
 
 export interface CreateSessionOptions {
   projectId: string
+  /** Explicit owning group — needed when the same root lives in several
+   *  groups; defaults to the first group containing the root. */
+  groupId?: string
   title: string
   model: string
   permissionMode: PermissionMode
