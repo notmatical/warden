@@ -16,8 +16,10 @@ import { cn } from "@/lib/utils"
 
 import { useLinearIssues } from "../hooks"
 import { linearConnect, linearDisconnect, linearStatus } from "../ipc"
+import type { LinearComment, LinearIssue } from "../types"
 import { IssueList } from "./issue-list"
 import { IssuePeekPanel } from "./issue-peek-panel"
+import { SendToAgentDialog } from "./send-to-agent-dialog"
 
 const API_KEYS_URL = "https://linear.app/settings/account/security"
 
@@ -36,6 +38,11 @@ export function LinearTasksView() {
 
   const [peekId, setPeekId] = useState<string | null>(null)
   const peekIssue = issues.find((i) => i.id === peekId) ?? null
+
+  const [send, setSend] = useState<{
+    issue: LinearIssue
+    comments: LinearComment[]
+  } | null>(null)
 
   const refresh = useCallback(async () => {
     try {
@@ -196,6 +203,17 @@ export function LinearTasksView() {
         onOpenChange={(open) => {
           if (!open) setPeekId(null)
         }}
+        onSendToAgent={(issue, comments) => setSend({ issue, comments })}
+      />
+
+      <SendToAgentDialog
+        issue={send?.issue ?? null}
+        comments={send?.comments ?? []}
+        open={send !== null}
+        onOpenChange={(open) => {
+          if (!open) setSend(null)
+        }}
+        onSent={() => setPeekId(null)}
       />
     </div>
   )
