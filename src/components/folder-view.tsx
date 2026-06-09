@@ -6,7 +6,6 @@ import {
   MoreHorizontal,
   Pin,
   PinOff,
-  Plus,
   SquareTerminal,
   Tag,
   Trash2,
@@ -114,10 +113,6 @@ export function FolderView({ projectId }: { projectId: string }) {
       .flat()
       .find((p) => p.id === projectId)
   )
-  const sessionCount = useAppStore(
-    (s) =>
-      Object.values(s.sessions).filter((x) => x.projectId === projectId).length
-  )
   const createSession = useAppStore((s) => s.createSession)
   const createNativeSession = useAppStore((s) => s.createNativeSession)
   const claudeAuthed = useAppStore((s) =>
@@ -126,8 +121,6 @@ export function FolderView({ projectId }: { projectId: string }) {
   const codexAuthed = useAppStore((s) =>
     s.providers.some((p) => p.id === "codex" && p.authed)
   )
-
-  const [tab, setTab] = useState<"sessions" | "tasks">("sessions")
 
   const newSession = (kind: SessionKind) => {
     void createSession({
@@ -141,30 +134,27 @@ export function FolderView({ projectId }: { projectId: string }) {
   }
 
   return (
-    <div className="flex h-full flex-col gap-4 p-6">
-      <div className="flex shrink-0 items-center gap-2.5">
-        <FolderGit2 className="size-4 shrink-0 text-muted-foreground" />
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate font-medium text-foreground">
-            {project?.name ?? "Folder"}
-          </h1>
-          {project ? (
-            <p className="truncate font-mono text-[11px] text-muted-foreground/70">
-              {project.path}
-            </p>
-          ) : null}
-        </div>
-        <span className="shrink-0 text-muted-foreground text-xs">
-          {sessionCount} session{sessionCount === 1 ? "" : "s"}
-        </span>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button size="sm" className="shrink-0 gap-1.5">
-              <Plus className="size-4" />
-              New session
-              <ChevronDown className="size-3.5 opacity-70" />
-            </Button>
-          </DropdownMenuTrigger>
+    <div className="h-full overflow-y-auto">
+      <div className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
+        <div className="flex shrink-0 items-center gap-2.5">
+          <FolderGit2 className="size-4 shrink-0 text-muted-foreground" />
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate font-medium text-foreground">
+              {project?.name ?? "Folder"}
+            </h1>
+            {project ? (
+              <p className="truncate font-mono text-[11px] text-muted-foreground/70">
+                {project.path}
+              </p>
+            ) : null}
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" className="shrink-0 gap-1.5">
+                New session
+                <ChevronDown className="size-3.5 opacity-70" />
+              </Button>
+            </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-44">
             <DropdownMenuItem onSelect={() => newSession("agent")}>
               <AgentProvidersIcon />
@@ -193,53 +183,12 @@ export function FolderView({ projectId }: { projectId: string }) {
             ) : null}
           </DropdownMenuContent>
         </DropdownMenu>
-      </div>
+        </div>
 
-      <div
-        className={cn(
-          "flex w-fit shrink-0 items-center gap-0.5 rounded-lg border p-0.5",
-          FILTER_SURFACE
-        )}
-      >
-        <TabButton active={tab === "sessions"} onClick={() => setTab("sessions")}>
-          Sessions
-        </TabButton>
-        <TabButton active={tab === "tasks"} onClick={() => setTab("tasks")}>
-          Tasks
-        </TabButton>
-      </div>
-
-      {tab === "sessions" ? (
         <SessionsSection projectId={projectId} />
-      ) : (
         <FolderTasksSection projectId={projectId} />
-      )}
+      </div>
     </div>
-  )
-}
-
-function TabButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean
-  onClick: () => void
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "rounded-md px-3 py-1 font-medium text-xs transition-colors",
-        active
-          ? "bg-background text-foreground shadow-sm"
-          : "text-muted-foreground hover:text-foreground"
-      )}
-    >
-      {children}
-    </button>
   )
 }
 
@@ -326,13 +275,18 @@ function SessionsSection({ projectId }: { projectId: string }) {
   ])
 
   return (
-    <>
-      <div className="flex shrink-0 flex-wrap items-center gap-2">
+    <section className="flex flex-col gap-3">
+      <div className="flex h-7 shrink-0 flex-wrap items-center gap-2">
+        <h2 className="font-medium text-foreground text-sm">Sessions</h2>
+        <span className="text-muted-foreground text-xs tabular-nums">
+          {rows.length}
+        </span>
+        <div className="flex-1" />
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search sessions…"
-          className={cn("h-8 w-56", FILTER_SURFACE)}
+          className={cn("h-8 w-48", FILTER_SURFACE)}
         />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -444,8 +398,7 @@ function SessionsSection({ projectId }: { projectId: string }) {
         </DropdownMenu>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <DataTable>
+      <DataTable>
           {rows.length === 0 ? (
             <DataTableEmpty>
               {search || !allStatuses || labelFilter.size > 0
@@ -626,8 +579,7 @@ function SessionsSection({ projectId }: { projectId: string }) {
               )
             })
           )}
-        </DataTable>
-      </div>
-    </>
+      </DataTable>
+    </section>
   )
 }

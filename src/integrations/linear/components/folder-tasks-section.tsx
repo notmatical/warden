@@ -15,9 +15,9 @@ import { SendToAgentDialog } from "./send-to-agent-dialog"
 
 type Phase = "loading" | "disconnected" | "unbound" | "bound"
 
-/** The Tasks tab of a folder dashboard: this repo's Linear issues, scoped by
- *  its .warden/config.json binding. The cache is assigned-to-me only, so this
- *  is "your issues" in the bound team, not the team's whole board. */
+/** The Tasks section of a folder dashboard: this repo's Linear issues, scoped
+ *  by its .warden/config.json binding. The cache is assigned-to-me only, so
+ *  this is "your issues" in the bound team, not the team's whole board. */
 export function FolderTasksSection({ projectId }: { projectId: string }) {
   const openTab = useAppStore((s) => s.openTab)
   const [phase, setPhase] = useState<Phase>("loading")
@@ -68,34 +68,65 @@ export function FolderTasksSection({ projectId }: { projectId: string }) {
     comments: LinearComment[]
   } | null>(null)
 
-  if (phase === "loading") {
-    return (
-      <div className="flex flex-1 items-center justify-center text-muted-foreground">
-        <Loader2 className="size-4 animate-spin" />
+  return (
+    <section className="flex flex-col gap-3">
+      <div className="flex h-7 shrink-0 items-center gap-2">
+        <h2 className="font-medium text-foreground text-sm">Tasks</h2>
+        {phase === "bound" ? (
+          <span className="text-muted-foreground text-xs">
+            {scoped.length} · your issues in {teamName}
+          </span>
+        ) : null}
+        <div className="flex-1" />
+        {phase === "bound" ? (
+          <>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Refresh"
+              onClick={() => void syncNow()}
+              disabled={syncing}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <RefreshCw
+                className={cn("size-3.5", syncing && "animate-spin")}
+              />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Edit binding"
+              onClick={() => setBindOpen(true)}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <Settings2 className="size-3.5" />
+            </Button>
+          </>
+        ) : null}
       </div>
-    )
-  }
 
-  if (phase === "disconnected") {
-    return (
-      <EmptyState
-        icon={<ListTodo className="size-6" />}
-        title="Connect Linear"
-        body="Connect Linear from the Tasks view to see this repo's issues here."
-        action={
-          <Button variant="secondary" size="sm" onClick={() => openTab("tasks")}>
-            Open Tasks
-          </Button>
-        }
-      />
-    )
-  }
-
-  if (phase === "unbound") {
-    return (
-      <>
-        <EmptyState
-          icon={<Link2 className="size-6" />}
+      {phase === "loading" ? (
+        <EmptyCard>
+          <Loader2 className="size-4 animate-spin text-muted-foreground" />
+        </EmptyCard>
+      ) : phase === "disconnected" ? (
+        <EmptyCard
+          icon={<ListTodo className="size-5" />}
+          title="Connect Linear"
+          body="Connect Linear from the Tasks view to see this repo's issues here."
+          action={
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => openTab("tasks")}
+            >
+              Open Tasks
+            </Button>
+          }
+        />
+      ) : phase === "unbound" ? (
+        <EmptyCard
+          icon={<Link2 className="size-5" />}
           title="Bind this repo to a Linear team"
           body="Pick the team (and optionally project) whose issues belong to this codebase. The binding is committed with the repo."
           action={
@@ -104,52 +135,16 @@ export function FolderTasksSection({ projectId }: { projectId: string }) {
             </Button>
           }
         />
-        <BindRepoDialog
-          projectId={projectId}
-          existing={null}
-          open={bindOpen}
-          onOpenChange={setBindOpen}
-          onBound={() => void refresh()}
+      ) : (
+        <IssueList
+          issues={scoped}
+          syncing={syncing}
+          error={error}
+          emptyMessage="No issues assigned to you in this team."
+          onSelect={(issue) => setPeekId(issue.id)}
+          scroll={false}
         />
-      </>
-    )
-  }
-
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center gap-2 px-3 pt-2">
-        <span className="text-muted-foreground text-xs">
-          Your issues in {teamName}
-        </span>
-        <div className="flex-1" />
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Refresh"
-          onClick={() => void syncNow()}
-          disabled={syncing}
-          className="text-muted-foreground hover:text-foreground"
-        >
-          <RefreshCw className={cn("size-3.5", syncing && "animate-spin")} />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Edit binding"
-          onClick={() => setBindOpen(true)}
-          className="text-muted-foreground hover:text-foreground"
-        >
-          <Settings2 className="size-3.5" />
-        </Button>
-      </div>
-
-      <IssueList
-        issues={scoped}
-        syncing={syncing}
-        error={error}
-        emptyMessage="No issues assigned to you in this team."
-        onSelect={(issue) => setPeekId(issue.id)}
-      />
+      )}
 
       <IssuePeekPanel
         open={peekId !== null}
@@ -178,30 +173,39 @@ export function FolderTasksSection({ projectId }: { projectId: string }) {
         onOpenChange={setBindOpen}
         onBound={() => void refresh()}
       />
-    </div>
+    </section>
   )
 }
 
-function EmptyState({
+function EmptyCard({
   icon,
   title,
   body,
   action,
+  children,
 }: {
-  icon: React.ReactNode
-  title: string
-  body: string
-  action: React.ReactNode
+  icon?: React.ReactNode
+  title?: string
+  body?: string
+  action?: React.ReactNode
+  children?: React.ReactNode
 }) {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
-      <div className="flex size-12 items-center justify-center rounded-2xl bg-muted/50 text-muted-foreground">
-        {icon}
-      </div>
-      <div className="space-y-1">
-        <h2 className="font-medium text-foreground text-sm">{title}</h2>
-        <p className="max-w-xs text-muted-foreground text-xs">{body}</p>
-      </div>
+    <div className="flex flex-col items-center justify-center gap-3 rounded-xl bg-card px-6 py-10 text-center shadow-xs ring-1 ring-foreground/10">
+      {children}
+      {icon ? (
+        <div className="flex size-10 items-center justify-center rounded-xl bg-muted/50 text-muted-foreground">
+          {icon}
+        </div>
+      ) : null}
+      {title ? (
+        <div className="space-y-1">
+          <h3 className="font-medium text-foreground text-sm">{title}</h3>
+          {body ? (
+            <p className="max-w-sm text-muted-foreground text-xs">{body}</p>
+          ) : null}
+        </div>
+      ) : null}
       {action}
     </div>
   )
