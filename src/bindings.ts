@@ -770,6 +770,62 @@ async checkoutPr(projectId: string, number: number, model: string) : Promise<Res
 }
 },
 /**
+ * Validate a personal API key against Linear and, on success, store it in the
+ * OS keychain and do a best-effort initial sync. Returns the authenticated user.
+ */
+async linearConnect(key: string) : Promise<Result<Viewer, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("linear_connect", { key }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Forget the stored API key and clear the cached inbox.
+ */
+async linearDisconnect() : Promise<Result<null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("linear_disconnect") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Whether a Linear key is stored (no network call).
+ */
+async linearStatus() : Promise<Result<LinearStatus, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("linear_status") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * The cached inbox (assigned issues), read from the local DB — instant, offline.
+ */
+async linearCachedIssues() : Promise<Result<LinearIssue[], IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("linear_cached_issues") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Force a sync against Linear and return the freshened cache.
+ */
+async linearSyncNow() : Promise<Result<LinearIssue[], IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("linear_sync_now") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Spawn a PTY in `working_dir` (the session's root) and stream its output over
  * `on_output`. The terminal id is the session id; the launch command is derived
  * from the persisted session, so a native CLI session relaunches (and resumes)
@@ -1008,6 +1064,19 @@ export type Label = { id: string; projectId: string; name: string;
  * A palette token the frontend maps to fill/text/ring classes.
  */
 color: string; createdAt: string }
+export type LinearIssue = { id: string; identifier: string; title: string; description: string | null; priority: number; url: string; updatedAt: string; state: LinearState; assignee: LinearUserRef | null; team: LinearTeamRef; project: LinearProjectRef | null; labels: string[] }
+export type LinearProjectRef = { id: string; name: string }
+export type LinearState = { id: string; name: string; color: string; 
+/**
+ * Linear state category: backlog | unstarted | started | completed | canceled.
+ */
+type: string }
+/**
+ * Connection state for the Tasks UI.
+ */
+export type LinearStatus = { connected: boolean }
+export type LinearTeamRef = { id: string; key: string; name: string }
+export type LinearUserRef = { id: string; name: string; email: string | null; avatarUrl: string | null }
 /**
  * The node's behavior.
  */
@@ -1228,6 +1297,7 @@ installed: boolean; version: string | null;
  * Absolute path of the effective binary.
  */
 path: string | null; authed: boolean; systemDetected: boolean; managedInstalled: boolean; managedVersion: string | null; latestVersion: string | null; updateAvailable: boolean }
+export type Viewer = { id: string; name: string; email: string | null }
 /**
  * A persisted workflow definition.
  */

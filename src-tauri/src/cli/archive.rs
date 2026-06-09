@@ -39,7 +39,7 @@ pub fn github_get(url: String) -> Result<reqwest::RequestBuilder, String> {
         .get(url)
         .header("Accept", "application/vnd.github+json")
         .header("X-GitHub-Api-Version", "2022-11-28");
-    if let Some(token) = crate::github::resolve_token() {
+    if let Some(token) = crate::integrations::github::resolve_token() {
         req = req.bearer_auth(token);
     }
     Ok(req)

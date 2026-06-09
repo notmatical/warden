@@ -32,7 +32,7 @@ fn apply_gh_env(cmd: &mut Command) {
         };
         cmd.env("PATH", path);
     }
-    if let Some(token) = crate::github::resolve_token() {
+    if let Some(token) = crate::integrations::github::resolve_token() {
         cmd.env("GH_TOKEN", token);
     }
 }

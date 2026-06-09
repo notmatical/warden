@@ -21,6 +21,14 @@ pub fn codex_home() -> PathBuf {
         .unwrap_or_else(|| home_dir().unwrap_or_default().join(".codex"))
 }
 
+/// Claude Code's config/state directory. Honours `$CLAUDE_CONFIG_DIR`, defaulting
+/// to `~/.claude`.
+pub fn claude_home() -> PathBuf {
+    std::env::var_os("CLAUDE_CONFIG_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| home_dir().unwrap_or_default().join(".claude"))
+}
+
 /// The current UTC time as an RFC 3339 / ISO 8601 string.
 pub fn now_rfc3339() -> String {
     chrono::Utc::now().to_rfc3339()
