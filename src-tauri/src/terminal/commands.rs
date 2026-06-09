@@ -6,6 +6,7 @@ use tauri::State;
 use crate::cli::{self, Tool};
 use crate::domain::{Backend, Session};
 use crate::error::{CommandResult, Result};
+use crate::providers::claude::history as claude_history;
 use crate::providers::codex::history as codex_history;
 use crate::state::AppState;
 use crate::store::Store;
@@ -15,6 +16,9 @@ use crate::terminal::{self, TerminalEvent};
 /// runs its provider binary — starting a fresh conversation the first time and
 /// resuming it thereafter; everything else runs the user's shell.
 ///
+/// Each provider tracks "is there a conversation to resume?" differently:
+/// Claude pins its own session id but writes the conversation file lazily (only
+/// after the first message), so we resume by that id only once the file exists.
 /// Codex assigns its own session id, so on first resume we recover it from
 /// Codex's rollout history (newest session for this cwd, not already claimed by
 /// another tab) and persist it; later launches reuse the bound id.
@@ -29,20 +33,29 @@ fn launch_recipe(store: &Store, session: &Session) -> Result<(Option<String>, Ve
         Backend::Codex => Tool::Codex,
     };
     let program = cli::resolve(tool).to_string_lossy().into_owned();
-    let args = match (session.backend, session.terminal_started) {
-        // Claude owns its session id, so we pin it on first launch and resume by
-        // that exact id afterwards.
-        (Backend::Claude, false) => {
-            vec!["--session-id".to_string(), session.agent_session_id.clone()]
+    let args = match session.backend {
+        // Claude owns its session id. Resume by that exact id only when its
+        // conversation file is on disk; otherwise (re)pin the id and start
+        // fresh. Re-pinning is safe precisely because no conversation exists
+        // under that id yet — which is the case when the terminal was opened but
+        // closed before a single message was sent.
+        Backend::Claude => {
+            let flag = if claude_history::conversation_exists(&session.agent_session_id) {
+                "--resume"
+            } else {
+                "--session-id"
+            };
+            vec![flag.to_string(), session.agent_session_id.clone()]
         }
-        (Backend::Claude, true) => vec!["--resume".to_string(), session.agent_session_id.clone()],
         // Codex: a fresh session the first time; afterwards resume the bound id.
-        (Backend::Codex, false) => Vec::new(),
-        (Backend::Codex, true) => match codex_resume_id(store, session)? {
-            Some(id) => vec!["resume".to_string(), id],
-            // No rollout matched yet (e.g. nothing was sent last time): fall back
-            // to Codex's own "most recent for this cwd".
-            None => vec!["resume".to_string(), "--last".to_string()],
+        Backend::Codex => match session.terminal_started {
+            false => Vec::new(),
+            true => match codex_resume_id(store, session)? {
+                Some(id) => vec!["resume".to_string(), id],
+                // No rollout matched yet (e.g. nothing was sent last time): fall
+                // back to Codex's own "most recent for this cwd".
+                None => vec!["resume".to_string(), "--last".to_string()],
+            },
         },
     };
     Ok((Some(program), args))
@@ -91,9 +104,14 @@ pub async fn start_terminal(
         rows,
     )?;
 
-    // First launch of a native CLI session: flip to resume mode for next time.
+    // First launch of a native Codex session: flip to resume mode for next time.
+    // (Claude decides resume-vs-fresh from its on-disk conversation file, so it
+    // doesn't rely on this flag.)
     if let Some(session) = session {
-        if session.terminal_command.is_some() && !session.terminal_started {
+        if matches!(session.backend, Backend::Codex)
+            && session.terminal_command.is_some()
+            && !session.terminal_started
+        {
             state.store.set_terminal_started(&terminal_id)?;
         }
     }

@@ -13,9 +13,9 @@ import { FolderView } from "@/components/folder-view"
 import { IssuesView } from "@/components/issues-view"
 import { SessionPane } from "@/components/session-view"
 import { SettingsPanel } from "@/components/settings/settings-panel"
-import { TasksView } from "@/components/tasks-view"
 import { WorkflowEditor } from "@/components/workflow/workflow-editor"
 import { WorkflowsView } from "@/components/workflows-view"
+import { LinearTasksView } from "@/integrations/linear/components/linear-tasks-view"
 import type { AppState } from "@/store/types"
 import {
   type ContentKind,
@@ -71,7 +71,7 @@ const REGISTRY: Partial<Record<ContentKind, Entry>> = {
   },
   tasks: {
     icon: ListTodo,
-    View: () => <TasksView />,
+    View: () => <LinearTasksView />,
     title: () => "Tasks",
   },
   issues: {

@@ -3,7 +3,7 @@ mod cli;
 mod core;
 mod domain;
 mod git;
-mod github;
+mod integrations;
 mod mentions;
 mod providers;
 mod session;
@@ -101,16 +101,22 @@ pub fn run() {
         providers::commands::update_provider,
         providers::commands::set_provider_source,
         // github cli
-        github::commands::github_status,
-        github::commands::install_github_cli,
-        github::commands::update_github_cli,
-        github::commands::set_github_source,
-        github::commands::open_pull_request,
-        github::commands::refresh_pr_status,
-        github::commands::merge_pull_request,
-        github::commands::generate_pr_content,
-        github::commands::list_open_prs,
-        github::commands::checkout_pr,
+        integrations::github::commands::github_status,
+        integrations::github::commands::install_github_cli,
+        integrations::github::commands::update_github_cli,
+        integrations::github::commands::set_github_source,
+        integrations::github::commands::open_pull_request,
+        integrations::github::commands::refresh_pr_status,
+        integrations::github::commands::merge_pull_request,
+        integrations::github::commands::generate_pr_content,
+        integrations::github::commands::list_open_prs,
+        integrations::github::commands::checkout_pr,
+        // linear
+        integrations::linear::commands::linear_connect,
+        integrations::linear::commands::linear_disconnect,
+        integrations::linear::commands::linear_status,
+        integrations::linear::commands::linear_cached_issues,
+        integrations::linear::commands::linear_sync_now,
         // terminal
         terminal::commands::start_terminal,
         terminal::commands::terminal_write,
@@ -207,7 +213,8 @@ pub fn run() {
             });
 
             // Keep open PRs' state + CI checks fresh in the background.
-            github::poll::spawn(app.handle().clone());
+            integrations::github::poll::spawn(app.handle().clone());
+            integrations::linear::poll::spawn(app.handle().clone());
             Ok(())
         })
         .invoke_handler(specta_builder.invoke_handler())
