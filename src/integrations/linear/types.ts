@@ -43,6 +43,24 @@ export interface LinearIssue {
   labels: string[]
 }
 
+export interface LinearTeam {
+  id: string
+  key: string
+  name: string
+  projects: LinearProjectRef[]
+}
+
+/** Repo ↔ Linear binding stored in the repo's committable .warden/config.json. */
+export interface LinearBinding {
+  teamId: string
+  projectId: string | null
+}
+
+export interface ProjectLinearBinding {
+  projectId: string
+  binding: LinearBinding
+}
+
 export interface LinearComment {
   id: string
   body: string

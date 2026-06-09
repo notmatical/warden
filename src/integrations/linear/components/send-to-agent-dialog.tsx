@@ -1,5 +1,5 @@
 import { Loader2 } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 
 import { ModeMenu } from "@/components/controls/mode-menu"
 import { ModelMenu } from "@/components/controls/model-menu"
@@ -24,8 +24,9 @@ import { DEFAULT_CHAT_MODEL, backendForModel } from "@/lib/models"
 import { useAppStore } from "@/store/app-store"
 import type { PermissionMode, Project } from "@/types"
 
-import type { LinearComment, LinearIssue } from "../types"
+import { linearBindings } from "../ipc"
 import { buildIssuePrompt } from "../prompt"
+import type { LinearComment, LinearIssue } from "../types"
 
 /** Spawn a chat session seeded with the full issue as its first message.
  *  Repo, model, permission mode, and worktree isolation are picked here;
@@ -61,11 +62,41 @@ export function SendToAgentDialog({
   const [isolate, setIsolate] = useState(false)
   const [creating, setCreating] = useState(false)
 
-  // Re-seed the repo selection each time the dialog opens.
+  const issueRef = useRef(issue)
+  issueRef.current = issue
+
+  // Re-seed the repo selection each time the dialog opens. Without an explicit
+  // default, prefer a repo bound to the issue's project, then its team.
+  const issueId = open ? issue?.id : undefined
   useEffect(() => {
-    if (!open) return
+    if (!issueId) return
     setProjectId(defaultProjectId ?? projects[0]?.id ?? "")
-  }, [open, defaultProjectId, projects])
+    if (defaultProjectId) return
+
+    let stale = false
+    void linearBindings()
+      .then((bound) => {
+        if (stale) return
+        const target = issueRef.current
+        if (!target || target.id !== issueId) return
+        const known = new Set(projects.map((p) => p.id))
+        const match =
+          bound.find(
+            (b) =>
+              known.has(b.projectId) &&
+              b.binding.projectId != null &&
+              b.binding.projectId === target.project?.id
+          ) ??
+          bound.find(
+            (b) => known.has(b.projectId) && b.binding.teamId === target.team.id
+          )
+        if (match) setProjectId(match.projectId)
+      })
+      .catch(() => {}) // preselection is best-effort
+    return () => {
+      stale = true
+    }
+  }, [issueId, defaultProjectId, projects])
 
   if (!issue) return null
 
