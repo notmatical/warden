@@ -8,7 +8,8 @@ use tauri::State;
 use crate::error::{AppError, CommandResult};
 use crate::state::AppState;
 
-use super::client::{self, LinearComment, LinearIssue, Viewer};
+use super::binding::{self, LinearBinding};
+use super::client::{self, LinearComment, LinearIssue, LinearTeam, Viewer};
 use super::{key, sync};
 
 /// Connection state for the Tasks UI.
@@ -76,4 +77,62 @@ pub async fn linear_sync_now(state: State<'_, AppState>) -> CommandResult<Vec<Li
     let key = key::load()?.ok_or_else(|| AppError::Invalid("not connected to Linear".into()))?;
     sync::sync_once(&state.store, &key).await?;
     Ok(sync::cached_issues(&state.store)?)
+}
+
+/// Teams (with their projects) visible to the user — for the binding picker.
+#[tauri::command]
+#[specta::specta]
+pub async fn linear_teams() -> CommandResult<Vec<LinearTeam>> {
+    let key = key::load()?.ok_or_else(|| AppError::Invalid("not connected to Linear".into()))?;
+    Ok(client::fetch_teams(&key).await?)
+}
+
+/// A project's Linear binding from its `.warden/config.json`, if any.
+#[tauri::command]
+#[specta::specta]
+pub async fn linear_binding(
+    state: State<'_, AppState>,
+    project_id: String,
+) -> CommandResult<Option<LinearBinding>> {
+    let project = state.store.get_project(&project_id)?;
+    Ok(binding::read(std::path::Path::new(&project.path)))
+}
+
+#[derive(Debug, Clone, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectLinearBinding {
+    pub project_id: String,
+    pub binding: LinearBinding,
+}
+
+/// Every known project that carries a Linear binding — for preselecting the
+/// repo when sending an issue to an agent.
+#[tauri::command]
+#[specta::specta]
+pub async fn linear_bindings(
+    state: State<'_, AppState>,
+) -> CommandResult<Vec<ProjectLinearBinding>> {
+    let projects = state.store.list_projects()?;
+    Ok(projects
+        .into_iter()
+        .filter_map(|p| {
+            binding::read(std::path::Path::new(&p.path)).map(|b| ProjectLinearBinding {
+                project_id: p.id,
+                binding: b,
+            })
+        })
+        .collect())
+}
+
+/// Write (or remove, with `None`) a project's Linear binding.
+#[tauri::command]
+#[specta::specta]
+pub async fn linear_set_binding(
+    state: State<'_, AppState>,
+    project_id: String,
+    binding: Option<LinearBinding>,
+) -> CommandResult<()> {
+    let project = state.store.get_project(&project_id)?;
+    binding::write(std::path::Path::new(&project.path), binding.as_ref())?;
+    Ok(())
 }

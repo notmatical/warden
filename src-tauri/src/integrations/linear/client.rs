@@ -120,11 +120,44 @@ pub async fn fetch_issue_comments(key: &str, issue_id: &str) -> Result<Vec<Linea
     Ok(all)
 }
 
+/// Every team visible to the user, with its projects — for the repo-binding
+/// picker. One page of projects per team is plenty there.
+pub async fn fetch_teams(key: &str) -> Result<Vec<LinearTeam>> {
+    let mut all = Vec::new();
+    let mut after: Option<String> = None;
+
+    for _ in 0..10 {
+        let vars = serde_json::json!({ "first": 50, "after": after });
+        let data: TeamsData = request(key, TEAMS_QUERY, vars).await?;
+        all.extend(data.teams.nodes.into_iter().map(LinearTeam::from));
+
+        if data.teams.page_info.has_next_page {
+            match data.teams.page_info.end_cursor {
+                Some(cursor) => after = Some(cursor),
+                None => break,
+            }
+        } else {
+            break;
+        }
+    }
+
+    Ok(all)
+}
+
 // ---------------------------------------------------------------------------
 // GraphQL documents
 // ---------------------------------------------------------------------------
 
 const VIEWER_QUERY: &str = "query { viewer { id name email } }";
+
+const TEAMS_QUERY: &str = r#"
+query Teams($first: Int!, $after: String) {
+  teams(first: $first, after: $after) {
+    pageInfo { hasNextPage endCursor }
+    nodes { id key name projects(first: 100) { nodes { id name } } }
+  }
+}
+"#;
 
 const COMMENTS_QUERY: &str = r#"
 query IssueComments($id: String!, $first: Int!, $after: String) {
@@ -225,6 +258,26 @@ pub struct LinearIssue {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
+pub struct LinearTeam {
+    pub id: String,
+    pub key: String,
+    pub name: String,
+    pub projects: Vec<LinearProjectRef>,
+}
+
+impl From<RawTeam> for LinearTeam {
+    fn from(r: RawTeam) -> Self {
+        LinearTeam {
+            id: r.id,
+            key: r.key,
+            name: r.name,
+            projects: r.projects.nodes,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
 pub struct LinearComment {
     pub id: String,
     pub body: String,
@@ -310,6 +363,31 @@ struct RawIssue {
 #[derive(Deserialize)]
 struct LabelConnection {
     nodes: Vec<LabelNode>,
+}
+
+#[derive(Deserialize)]
+struct TeamsData {
+    teams: TeamConnection,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TeamConnection {
+    nodes: Vec<RawTeam>,
+    page_info: PageInfo,
+}
+
+#[derive(Deserialize)]
+struct RawTeam {
+    id: String,
+    key: String,
+    name: String,
+    projects: ProjectConnection,
+}
+
+#[derive(Deserialize)]
+struct ProjectConnection {
+    nodes: Vec<LinearProjectRef>,
 }
 
 #[derive(Deserialize)]
