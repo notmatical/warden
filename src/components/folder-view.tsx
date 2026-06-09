@@ -10,6 +10,7 @@ import {
   SquareTerminal,
   Tag,
   Trash2,
+  Wrench,
 } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 
@@ -41,6 +42,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { WorktreeSetupDialog } from "@/components/worktree-setup-dialog"
 import { DEFAULT_CHAT_MODEL } from "@/lib/models"
 import { relativeTime } from "@/lib/time"
 import { cn } from "@/lib/utils"
@@ -160,6 +167,7 @@ export function FolderView({ projectId }: { projectId: string }) {
     fn()
   }
 
+  const [setupOpen, setSetupOpen] = useState(false)
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<Set<SessionStatus>>(
     () => new Set(STATUS_ORDER)
@@ -228,6 +236,31 @@ export function FolderView({ projectId }: { projectId: string }) {
         <span className="shrink-0 text-muted-foreground text-xs">
           {rows.length} session{rows.length === 1 ? "" : "s"}
         </span>
+        {project?.isGit ? (
+          <>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Worktree commands"
+                  onClick={() => setSetupOpen(true)}
+                  className="shrink-0 text-muted-foreground"
+                >
+                  <Wrench className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                Worktree setup/teardown commands
+              </TooltipContent>
+            </Tooltip>
+            <WorktreeSetupDialog
+              projectId={projectId}
+              open={setupOpen}
+              onOpenChange={setSetupOpen}
+            />
+          </>
+        ) : null}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button size="sm" className="shrink-0 gap-1.5">

@@ -290,6 +290,25 @@ export function createSession(input: CreateSessionInput): Promise<Session> {
   })
 }
 
+/** Per-repo config stored in `.warden/config.json` (committed to the repo). */
+export interface RepoConfig {
+  /** Commands run in a fresh worktree after it's created, joined with `&&`. */
+  setup: string[]
+  /** Commands run in a worktree before it's removed. */
+  teardown: string[]
+}
+
+export function getRepoConfig(projectId: string): Promise<RepoConfig> {
+  return invoke("get_repo_config", { projectId })
+}
+
+export function updateRepoConfig(
+  projectId: string,
+  config: RepoConfig
+): Promise<RepoConfig> {
+  return invoke("update_repo_config", { projectId, config })
+}
+
 export interface TerminalEvent {
   event: "output" | "exit"
   data?: string
