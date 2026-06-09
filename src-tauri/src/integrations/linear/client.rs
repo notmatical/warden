@@ -94,11 +94,48 @@ pub async fn fetch_assigned_issues(key: &str) -> Result<Vec<LinearIssue>> {
     Ok(all)
 }
 
+/// All comments on an issue, oldest first. Fetched live per issue (never part
+/// of the poll loop) so the peek panel is always current; capped at 5 pages.
+pub async fn fetch_issue_comments(key: &str, issue_id: &str) -> Result<Vec<LinearComment>> {
+    let mut all: Vec<LinearComment> = Vec::new();
+    let mut after: Option<String> = None;
+
+    for _ in 0..5 {
+        let vars = serde_json::json!({ "id": issue_id, "first": 50, "after": after });
+        let data: CommentsData = request(key, COMMENTS_QUERY, vars).await?;
+        let conn = data.issue.comments;
+        all.extend(conn.nodes);
+
+        if conn.page_info.has_next_page {
+            match conn.page_info.end_cursor {
+                Some(cursor) => after = Some(cursor),
+                None => break,
+            }
+        } else {
+            break;
+        }
+    }
+
+    all.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+    Ok(all)
+}
+
 // ---------------------------------------------------------------------------
 // GraphQL documents
 // ---------------------------------------------------------------------------
 
 const VIEWER_QUERY: &str = "query { viewer { id name email } }";
+
+const COMMENTS_QUERY: &str = r#"
+query IssueComments($id: String!, $first: Int!, $after: String) {
+  issue(id: $id) {
+    comments(first: $first, after: $after) {
+      pageInfo { hasNextPage endCursor }
+      nodes { id body createdAt user { id name email avatarUrl } }
+    }
+  }
+}
+"#;
 
 const ISSUES_QUERY: &str = r#"
 query Issues($first: Int!, $after: String, $filter: IssueFilter) {
@@ -186,6 +223,15 @@ pub struct LinearIssue {
     pub labels: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct LinearComment {
+    pub id: String,
+    pub body: String,
+    pub created_at: String,
+    pub user: Option<LinearUserRef>,
+}
+
 impl From<RawIssue> for LinearIssue {
     fn from(r: RawIssue) -> Self {
         LinearIssue {
@@ -267,6 +313,23 @@ struct LabelConnection {
 }
 
 #[derive(Deserialize)]
+struct CommentsData {
+    issue: CommentIssue,
+}
+
+#[derive(Deserialize)]
+struct CommentIssue {
+    comments: CommentConnection,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CommentConnection {
+    nodes: Vec<LinearComment>,
+    page_info: PageInfo,
+}
+
+#[derive(Deserialize)]
 struct LabelNode {
     name: String,
 }
@@ -298,6 +361,17 @@ mod tests {
                 "  {} [{}] {}",
                 issue.identifier, issue.state.name, issue.title
             );
+        }
+
+        if let Some(issue) = issues.first() {
+            let comments = fetch_issue_comments(&key, &issue.id)
+                .await
+                .expect("fetch_issue_comments failed");
+            eprintln!("comments on {}: {}", issue.identifier, comments.len());
+            for c in &comments {
+                let who = c.user.as_ref().map(|u| u.name.as_str()).unwrap_or("?");
+                eprintln!("  {} at {}: {} chars", who, c.created_at, c.body.len());
+            }
         }
     }
 }

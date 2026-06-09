@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core"
 import { listen, type UnlistenFn } from "@tauri-apps/api/event"
 
-import type { LinearIssue, LinearStatus, Viewer } from "./types"
+import type { LinearComment, LinearIssue, LinearStatus, Viewer } from "./types"
 
 /** Validate a personal API key against Linear and store it in the OS keychain. */
 export function linearConnect(key: string): Promise<Viewer> {
@@ -26,6 +26,11 @@ export function linearCachedIssues(): Promise<LinearIssue[]> {
 /** Force a sync against Linear and return the freshened cache. */
 export function linearSyncNow(): Promise<LinearIssue[]> {
   return invoke("linear_sync_now")
+}
+
+/** Comments for one issue, fetched live (not cached), oldest first. */
+export function linearIssueComments(issueId: string): Promise<LinearComment[]> {
+  return invoke("linear_issue_comments", { issueId })
 }
 
 /** Subscribe to background-sync change notifications. */

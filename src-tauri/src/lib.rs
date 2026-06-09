@@ -117,6 +117,7 @@ pub fn run() {
         integrations::linear::commands::linear_status,
         integrations::linear::commands::linear_cached_issues,
         integrations::linear::commands::linear_sync_now,
+        integrations::linear::commands::linear_issue_comments,
         // terminal
         terminal::commands::start_terminal,
         terminal::commands::terminal_write,
