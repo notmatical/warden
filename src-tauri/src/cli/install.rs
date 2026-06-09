@@ -69,7 +69,7 @@ async fn fetch(app: &AppHandle, tool: Tool, version: &str) -> Result<Vec<u8>, St
     match tool {
         Tool::Claude => crate::providers::claude::download::fetch(app, version).await,
         Tool::Codex => crate::providers::codex::download::fetch(app, version).await,
-        Tool::Gh => crate::github::download::fetch(app, version).await,
+        Tool::Gh => crate::integrations::github::download::fetch(app, version).await,
     }
 }
 
@@ -78,7 +78,7 @@ pub async fn latest_version(tool: Tool) -> Result<String, String> {
     match tool {
         Tool::Claude => crate::providers::claude::download::latest_version().await,
         Tool::Codex => crate::providers::codex::download::latest_version().await,
-        Tool::Gh => crate::github::download::latest_version().await,
+        Tool::Gh => crate::integrations::github::download::latest_version().await,
     }
 }
 

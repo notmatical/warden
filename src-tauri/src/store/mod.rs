@@ -43,6 +43,14 @@ pub struct NewSession {
     pub workflow_id: Option<String>,
 }
 
+/// A cached Linear issue row: indexed `id`/`updated_at` plus the full JSON
+/// `payload` (a serialized `LinearIssue`) the UI deserializes.
+pub struct LinearIssueRow {
+    pub id: String,
+    pub updated_at: String,
+    pub payload: String,
+}
+
 /// Thread-safe handle to the SQLite database. Cloneable and `Send + Sync` so it
 /// can be shared with background turn tasks. All access is serialized through a
 /// mutex, which suits SQLite's single-writer model.
@@ -1093,6 +1101,42 @@ impl Store {
              ON CONFLICT(key) DO UPDATE SET value = excluded.value",
             (key, value),
         )?;
+        Ok(())
+    }
+
+    // ----- linear issue cache ---------------------------------------------
+
+    /// `(id, updated_at)` for every cached issue — used to detect changes cheaply.
+    pub fn linear_issue_versions(&self) -> Result<Vec<(String, String)>> {
+        let conn = self.lock();
+        let mut stmt = conn.prepare("SELECT id, updated_at FROM linear_issues")?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    /// Every cached issue's JSON payload, newest-updated first.
+    pub fn linear_issue_payloads(&self) -> Result<Vec<String>> {
+        let conn = self.lock();
+        let mut stmt =
+            conn.prepare("SELECT payload FROM linear_issues ORDER BY updated_at DESC")?;
+        let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    /// Replace the entire cached issue set in one transaction.
+    pub fn replace_linear_issues(&self, rows: &[LinearIssueRow]) -> Result<()> {
+        let now = now_rfc3339();
+        let mut conn = self.lock();
+        let tx = conn.transaction()?;
+        tx.execute("DELETE FROM linear_issues", [])?;
+        for row in rows {
+            tx.execute(
+                "INSERT INTO linear_issues (id, updated_at, payload, synced_at)
+                 VALUES (?1, ?2, ?3, ?4)",
+                (&row.id, &row.updated_at, &row.payload, &now),
+            )?;
+        }
+        tx.commit()?;
         Ok(())
     }
 

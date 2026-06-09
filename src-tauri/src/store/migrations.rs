@@ -172,6 +172,16 @@ const MIGRATIONS: &[&str] = &[
     );
     CREATE INDEX idx_session_labels_session ON session_labels(session_id);
     CREATE INDEX idx_session_labels_label ON session_labels(label_id);
+
+    -- Cached Linear issues for the Tasks inbox. `payload` is the full JSON
+    -- LinearIssue the UI deserializes; id/updated_at are surfaced for cheap
+    -- change detection during background sync.
+    CREATE TABLE linear_issues (
+        id          TEXT PRIMARY KEY,
+        updated_at  TEXT NOT NULL,
+        payload     TEXT NOT NULL,
+        synced_at   TEXT NOT NULL
+    );
     "#,
 ];
 
