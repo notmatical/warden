@@ -266,7 +266,7 @@ export interface CreateSessionInput {
   kind?: SessionKind
   /** Agent backend that powers the session. Defaults to Claude. */
   backend?: Backend
-  /** Run the agent in an isolated git worktree instead of the repo's checkout. */
+  /** Isolate in a git worktree. Omitted → backend default (agents yes, terminals no). */
   isolate?: boolean
   /** Provider CLI a native terminal session launches instead of the shell. */
   nativeCommand?: string
@@ -284,7 +284,7 @@ export function createSession(input: CreateSessionInput): Promise<Session> {
       role: input.role ?? null,
       kind: input.kind ?? null,
       backend: input.backend ?? null,
-      isolate: input.isolate ?? false,
+      isolate: input.isolate ?? null,
       nativeCommand: input.nativeCommand ?? null,
     },
   })

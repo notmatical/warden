@@ -71,8 +71,6 @@ pub async fn create_session(
             .store
             .ensure_group_for_project(&project_id, &project.name)?,
     };
-    let dir = provision_working_dir(&app, &project, options.isolate.unwrap_or(false), None)?;
-
     let permission_mode = options
         .permission_mode
         .as_deref()
@@ -93,6 +91,11 @@ pub async fn create_session(
         .as_deref()
         .and_then(SessionKind::parse)
         .unwrap_or(SessionKind::Agent);
+
+    // Worktree-first: agent sessions isolate by default. Plain terminals stay
+    // in the checkout — a fresh worktree per shell is noise, not safety.
+    let isolate = options.isolate.unwrap_or(kind != SessionKind::Terminal);
+    let dir = provision_working_dir(&app, &project, isolate, None)?;
     // An explicit backend wins; otherwise it follows from the model id, since
     // the model picks its own backend (codex/gpt ids run on Codex).
     let backend = options

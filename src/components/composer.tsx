@@ -169,8 +169,8 @@ export function Composer({ sessionId }: { sessionId: string }) {
     : started
       ? `This session runs in ${isolated ? "an isolated worktree" : "the project checkout"} — fixed once it has started.`
       : isolated
-        ? "Isolated in a git worktree. Click to run in the project checkout instead."
-        : "Runs in the project checkout. Click to isolate in a git worktree so the agent's changes stay on a separate branch."
+        ? "Isolated in a git worktree (default). Click to run in the project checkout instead."
+        : "Runs in the project checkout — changes land directly on your branch. Click to isolate in a git worktree."
 
   const submit = () => {
     if (!canSend) return
