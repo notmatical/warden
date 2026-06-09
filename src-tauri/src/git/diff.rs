@@ -57,7 +57,52 @@ pub fn worktree_diff(worktree: &Path, base: &str) -> Result<Vec<DiffFile>> {
             patch,
         });
     }
+
+    // Untracked files are invisible to `diff <base>`; list them explicitly so
+    // brand-new files show up too (with a synthesized all-add patch).
+    let untracked = run(worktree, &["ls-files", "--others", "--exclude-standard"])?;
+    for path in untracked.lines().map(str::trim).filter(|p| !p.is_empty()) {
+        match std::fs::read_to_string(worktree.join(path)) {
+            Ok(contents) => {
+                let added = contents.lines().count() as u32;
+                let patch: String = contents.lines().map(|l| format!("+{l}\n")).collect();
+                files.push(DiffFile {
+                    path: path.to_string(),
+                    added,
+                    removed: 0,
+                    binary: false,
+                    patch,
+                });
+            }
+            // Unreadable as text → treat as binary, like numstat's `-` entries.
+            Err(_) => files.push(DiffFile {
+                path: path.to_string(),
+                added: 0,
+                removed: 0,
+                binary: true,
+                patch: String::new(),
+            }),
+        }
+    }
     Ok(files)
+}
+
+/// One file's full before/after contents, for a rich (side-by-side) diff.
+#[derive(Debug, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct FileVersions {
+    /// Contents at the base commit; `None` when the file was added.
+    pub old_text: Option<String>,
+    /// Working-tree contents; `None` when the file was deleted.
+    pub new_text: Option<String>,
+}
+
+/// Read a file's contents at `base` and in the working tree. Either side is
+/// `None` when it doesn't exist there (added/deleted) or isn't valid text.
+pub fn file_versions(worktree: &Path, base: &str, path: &str) -> FileVersions {
+    let old_text = run(worktree, &["show", &format!("{base}:{path}")]).ok();
+    let new_text = std::fs::read_to_string(worktree.join(path)).ok();
+    FileVersions { old_text, new_text }
 }
 
 /// Commits on the worktree's branch since `base`, newest first (capped).

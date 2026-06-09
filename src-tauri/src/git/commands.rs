@@ -184,6 +184,26 @@ pub async fn get_session_diff(
     git::diff::worktree_diff(Path::new(&session.working_dir), base).map_err(Into::into)
 }
 
+/// Full before/after contents of one changed file, for the diff tab's
+/// side-by-side rendering.
+#[tauri::command]
+#[specta::specta]
+pub async fn get_session_file_versions(
+    state: State<'_, AppState>,
+    session_id: String,
+    path: String,
+) -> CommandResult<git::diff::FileVersions> {
+    let session = state.store.get_session(&session_id)?;
+    let Some(base) = session.base_sha.as_deref() else {
+        return Err(AppError::Invalid("session has no diff base".to_string()).into());
+    };
+    Ok(git::diff::file_versions(
+        Path::new(&session.working_dir),
+        base,
+        &path,
+    ))
+}
+
 /// The commits a session has made on its branch since it forked from base.
 #[tauri::command]
 #[specta::specta]

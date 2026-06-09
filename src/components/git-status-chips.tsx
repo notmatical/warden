@@ -3,6 +3,7 @@ import {
   ArrowDown,
   ArrowUp,
   CheckCircle2,
+  FileDiff,
   GitBranch,
   GitPullRequest,
   Loader2,
@@ -14,7 +15,6 @@ import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 
 import { LandSessionButton } from "@/components/land-session-dialog"
-import { SessionDiffButton } from "@/components/session-diff-dialog"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/tooltip"
 import * as ipc from "@/lib/ipc"
 import { cn } from "@/lib/utils"
+import { diffTabId } from "@/lib/viewport"
 import { useAppStore } from "@/store/app-store"
 import type { CheckStatus, Project, RepoStatus } from "@/types"
 
@@ -355,6 +356,7 @@ export function GitStatusChips({
 }: GitStatusChipsProps) {
   const session = useAppStore((s) => s.sessions[sessionId])
   const refreshPrStatus = useAppStore((s) => s.refreshPrStatus)
+  const openTab = useAppStore((s) => s.openTab)
   const primary = statuses.find((s) => s.isPrimary)
   const hasRemote = primary?.hasRemote ?? false
   const canSync =
@@ -454,7 +456,15 @@ export function GitStatusChips({
           />
         ) : null}
         {session?.isIsolated && !session.mergedAt ? (
-          <SessionDiffButton sessionId={sessionId} />
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={() => openTab(diffTabId(sessionId))}
+            className="gap-1.5 text-muted-foreground hover:text-foreground"
+          >
+            <FileDiff className="size-3.5" />
+            Diff
+          </Button>
         ) : null}
         <LandSessionButton
           sessionId={sessionId}

@@ -74,6 +74,7 @@ pub fn run() {
         git::commands::pull_session,
         git::commands::integrate_session,
         git::commands::get_session_diff,
+        git::commands::get_session_file_versions,
         git::commands::get_session_commits,
         git::commands::sync_worktree,
         // agent recipes

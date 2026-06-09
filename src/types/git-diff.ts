@@ -8,6 +8,14 @@ export interface DiffFile {
   patch: string
 }
 
+/** One file's full before/after contents for side-by-side rendering. */
+export interface FileVersions {
+  /** Contents at the base commit; null when the file was added. */
+  oldText: string | null
+  /** Working-tree contents; null when the file was deleted. */
+  newText: string | null
+}
+
 /** A commit on the session's branch since it forked from base. */
 export interface GitCommit {
   sha: string

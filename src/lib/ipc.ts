@@ -30,7 +30,7 @@ import type {
   SlashCommand,
   SyncOutcome,
 } from "@/types"
-import type { DiffFile, GitCommit } from "@/types/git-diff"
+import type { DiffFile, FileVersions, GitCommit } from "@/types/git-diff"
 import type { Workflow, WorkflowGraph, WorkflowRunView } from "@/types/workflow"
 
 export function listProjects(): Promise<Project[]> {
@@ -175,6 +175,13 @@ export function setContextSourceEnabled(
 
 export function getSessionDiff(sessionId: string): Promise<DiffFile[]> {
   return invoke("get_session_diff", { sessionId })
+}
+
+export function getSessionFileVersions(
+  sessionId: string,
+  path: string
+): Promise<FileVersions> {
+  return invoke("get_session_file_versions", { sessionId, path })
 }
 
 export function getSessionCommits(

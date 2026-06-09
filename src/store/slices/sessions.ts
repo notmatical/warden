@@ -8,7 +8,7 @@ import {
 } from "@/lib/models"
 import { notify, windowFocused } from "@/lib/notify"
 import * as terminals from "@/lib/terminal-instances"
-import { detachRef, firstLeaf } from "@/lib/viewport"
+import { detachRef, diffTabId, firstLeaf } from "@/lib/viewport"
 import { NATIVE_CLI, NATIVE_TITLE, reportError, showRef } from "../shared"
 import type { AppState } from "../types"
 
@@ -175,6 +175,13 @@ export const createSessionsSlice: StateCreator<
     }
     if (deleted.size === 0) return
 
+    // A deleted session takes its diff tab down with it.
+    const closed = new Set<string>()
+    for (const sid of deleted) {
+      closed.add(sid)
+      closed.add(diffTabId(sid))
+    }
+
     set((state) => {
       const omit = <T>(record: Record<string, T>): Record<string, T> =>
         Object.fromEntries(
@@ -189,18 +196,18 @@ export const createSessionsSlice: StateCreator<
       )
 
       const prevTabs = state.openTabs
-      const openTabs = prevTabs.filter((sid) => !deleted.has(sid))
+      const openTabs = prevTabs.filter((sid) => !closed.has(sid))
 
       let layout = state.layout
-      for (const sid of deleted) layout = detachRef(layout, sid)
+      for (const sid of closed) layout = detachRef(layout, sid)
 
       let activeTabId = state.activeTabId
-      if (activeTabId && deleted.has(activeTabId)) {
+      if (activeTabId && closed.has(activeTabId)) {
         const idx = prevTabs.indexOf(activeTabId)
         const surviving = (start: number, step: number) => {
           for (let i = start; i >= 0 && i < prevTabs.length; i += step) {
             const sid = prevTabs[i]
-            if (!deleted.has(sid)) return sid
+            if (!closed.has(sid)) return sid
           }
           return null
         }
