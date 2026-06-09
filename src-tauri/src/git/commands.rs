@@ -155,8 +155,11 @@ pub async fn integrate_session(
     match git::merge_into_base(repo, worktree, &branch, &base, mode, &message)? {
         git::MergeOutcome::Conflict(files) => Ok(IntegrateOutcome::Conflict { files }),
         git::MergeOutcome::Merged => {
-            let _ = git::remove_worktree(repo, worktree);
-            let _ = git::delete_branch(repo, &branch);
+            git::setup::spawn_teardown_and_remove(
+                repo.to_path_buf(),
+                worktree.to_path_buf(),
+                Some(branch),
+            );
             state.store.mark_session_merged(&session_id)?;
             if let Ok(updated) = state.store.get_session(&session_id) {
                 emit_session(&app, &updated);

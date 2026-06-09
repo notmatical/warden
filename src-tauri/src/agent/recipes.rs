@@ -105,6 +105,8 @@ pub async fn run_plan_to_code(
 
     emit_session(&app, &planner);
     emit_session(&app, &coder);
+    // Setup narrates on the planner — it's the session that runs first.
+    crate::git::setup::spawn_session_setup(&app, &store, &planner, &project.path);
 
     let bg_planner = planner.clone();
     let bg_coder = coder.clone();

@@ -275,5 +275,6 @@ pub async fn checkout_pr(
     }
     let session = state.store.get_session(&session.id)?;
     emit_session(&app, &session);
+    crate::git::setup::spawn_session_setup(&app, &state.store, &session, &project.path);
     Ok(session)
 }

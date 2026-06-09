@@ -116,7 +116,19 @@ async fn run_steps(ctx: &RunContext) -> Result<Outcome> {
                 is_isolated: s.is_isolated,
             }
         }
-        None => provision_working_dir(&ctx.app, &project, true, Some(&ctx.branch))?,
+        None => {
+            let dir = provision_working_dir(&ctx.app, &project, true, Some(&ctx.branch))?;
+            // Run repo setup before the first node so agents find a ready tree.
+            if dir.is_isolated {
+                if let Err(reason) =
+                    git::setup::run_setup(Path::new(&project.path), Path::new(&dir.working_dir))
+                        .await
+                {
+                    log::warn!("workflow worktree setup failed (continuing): {reason}");
+                }
+            }
+            dir
+        }
     };
 
     let mut last_session: Option<String> = None;

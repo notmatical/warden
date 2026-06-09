@@ -3,6 +3,7 @@
 
 mod cli;
 pub mod diff;
+pub mod setup;
 mod worktree;
 
 pub use cli::*;

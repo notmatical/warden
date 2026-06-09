@@ -127,6 +127,7 @@ pub async fn create_session(
     })?;
 
     emit_session(&app, &session);
+    git::setup::spawn_session_setup(&app, &state.store, &session, &project.path);
     Ok(session)
 }
 
@@ -260,11 +261,12 @@ pub async fn delete_session(
 
     if session.is_isolated {
         if let Ok(project) = state.store.get_project(&session.project_id) {
-            let repo = std::path::Path::new(&project.path);
-            let worktree = std::path::Path::new(&session.working_dir);
-            if let Err(e) = git::remove_worktree(repo, worktree) {
-                log::warn!("failed to remove worktree for session {session_id}: {e}");
-            }
+            // Background: teardown commands may take a while; deletion shouldn't.
+            git::setup::spawn_teardown_and_remove(
+                project.path.into(),
+                session.working_dir.clone().into(),
+                None,
+            );
         }
     }
 
@@ -295,13 +297,14 @@ pub async fn set_session_isolation(
 
     let project = state.store.get_project(&session.project_id)?;
 
-    // Tear down the existing worktree when turning isolation off.
+    // Tear down the existing worktree (and its unused branch) when turning
+    // isolation off. The session has no turns yet, so nothing is lost.
     if session.is_isolated {
-        let repo = std::path::Path::new(&project.path);
-        let worktree = std::path::Path::new(&session.working_dir);
-        if let Err(e) = git::remove_worktree(repo, worktree) {
-            log::warn!("failed to remove worktree for {session_id}: {e}");
-        }
+        git::setup::spawn_teardown_and_remove(
+            project.path.clone().into(),
+            session.working_dir.clone().into(),
+            session.branch.clone(),
+        );
     }
 
     let dir = provision_working_dir(&app, &project, isolate, None)?;
@@ -316,6 +319,7 @@ pub async fn set_session_isolation(
 
     let updated = state.store.get_session(&session_id)?;
     emit_session(&app, &updated);
+    git::setup::spawn_session_setup(&app, &state.store, &updated, &project.path);
     Ok(updated)
 }
 
