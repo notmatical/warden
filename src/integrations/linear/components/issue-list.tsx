@@ -3,6 +3,11 @@ import { ChevronDown, ChevronRight, Plus } from "lucide-react"
 import { type ReactNode, useMemo, useState } from "react"
 import { toast } from "sonner"
 
+import {
+  DataTable,
+  DataTableEmpty,
+  DataTableRow,
+} from "@/components/common/data-table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -60,20 +65,26 @@ function toggleIn(set: Set<string>, value: string, on: boolean): Set<string> {
   return next
 }
 
-/** Filterable Linear issue list grouped by workflow state, like Linear's own
- *  list view. Reused by the global Tasks destination and folder dashboards. */
+/** Filterable Linear issue list grouped by workflow state: a borderless filter
+ *  row over a card table (the FolderView treatment). Reused by the global
+ *  Tasks destination and folder dashboards. */
 export function IssueList({
   issues,
   onSelect,
   syncing = false,
   error = null,
   emptyMessage = "No issues assigned to you.",
+  scroll = true,
+  className,
 }: {
   issues: LinearIssue[]
   onSelect: (issue: LinearIssue) => void
   syncing?: boolean
   error?: string | null
   emptyMessage?: string
+  /** Scroll the table internally (full-height views); off for stacked pages. */
+  scroll?: boolean
+  className?: string
 }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
@@ -174,9 +185,82 @@ export function IssueList({
   const toggleGroup = (name: string) =>
     setCollapsed((prev) => toggleIn(prev, name, !prev.has(name)))
 
+  const table = (
+    <DataTable>
+      {filtered.length === 0 ? (
+        <DataTableEmpty>
+          {issues.length === 0
+            ? error && !syncing
+              ? error
+              : syncing
+                ? "Syncing…"
+                : emptyMessage
+            : "No issues match your filters."}
+        </DataTableEmpty>
+      ) : (
+        groups.map((group) => {
+          const isCollapsed = collapsed.has(group.state.name)
+          return (
+            <div key={group.state.name}>
+              <div className="group/section flex items-center gap-2.5 border-foreground/5 border-b bg-foreground/[0.02] px-4 py-2">
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(group.state.name)}
+                  className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+                >
+                  {isCollapsed ? (
+                    <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/70" />
+                  ) : (
+                    <ChevronDown className="size-3.5 shrink-0 text-muted-foreground/70" />
+                  )}
+                  <StatusIcon
+                    type={group.state.type}
+                    color={group.state.color}
+                    className="size-3.5"
+                  />
+                  <span className="truncate font-medium text-[13px] text-foreground">
+                    {group.state.name}
+                  </span>
+                  <span className="font-medium text-[11px] text-muted-foreground tabular-nums">
+                    {group.issues.length}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  aria-label={`New issue in ${group.state.name}`}
+                  onClick={() =>
+                    toast("Creating issues lands with writeback support.")
+                  }
+                  className="shrink-0 rounded p-1 text-muted-foreground/70 opacity-0 transition hover:bg-foreground/10 hover:text-foreground group-hover/section:opacity-100"
+                >
+                  <Plus className="size-3.5" />
+                </button>
+              </div>
+              {!isCollapsed
+                ? group.issues.map((issue) => (
+                    <IssueRow
+                      key={issue.id}
+                      issue={issue}
+                      onClick={() => onSelect(issue)}
+                    />
+                  ))
+                : null}
+            </div>
+          )
+        })
+      )}
+    </DataTable>
+  )
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex flex-wrap items-center gap-2 border-b px-3 py-2">
+    <div
+      className={cn(
+        "flex flex-col gap-3",
+        scroll && "min-h-0 flex-1",
+        className
+      )}
+    >
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -213,76 +297,11 @@ export function IssueList({
         />
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
-        {filtered.length === 0 ? (
-          <div className="p-12 text-center text-muted-foreground text-sm">
-            {issues.length === 0
-              ? error && !syncing
-                ? error
-                : syncing
-                  ? "Syncing…"
-                  : emptyMessage
-              : "No issues match your filters."}
-          </div>
-        ) : (
-          groups.map((group) => {
-            const isCollapsed = collapsed.has(group.state.name)
-            return (
-              <div key={group.state.name} className="mb-3 last:mb-0">
-                <div
-                  className="group/section sticky top-1 z-10 mb-1 flex items-center gap-2.5 rounded-lg border bg-muted px-3 py-2 shadow-sm"
-                  style={{
-                    backgroundImage: `linear-gradient(${tint(group.state.color, 0.16)}, ${tint(group.state.color, 0.16)})`,
-                    borderColor: tint(group.state.color, 0.28),
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => toggleGroup(group.state.name)}
-                    className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
-                  >
-                    {isCollapsed ? (
-                      <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/70" />
-                    ) : (
-                      <ChevronDown className="size-3.5 shrink-0 text-muted-foreground/70" />
-                    )}
-                    <StatusIcon
-                      type={group.state.type}
-                      color={group.state.color}
-                      className="size-4"
-                    />
-                    <span className="truncate font-medium text-foreground text-sm">
-                      {group.state.name}
-                    </span>
-                    <span className="rounded bg-foreground/[0.08] px-1.5 py-0.5 font-medium text-[11px] text-muted-foreground tabular-nums">
-                      {group.issues.length}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`New issue in ${group.state.name}`}
-                    onClick={() =>
-                      toast("Creating issues lands with writeback support.")
-                    }
-                    className="shrink-0 rounded p-1 text-muted-foreground/70 opacity-0 transition hover:bg-foreground/10 hover:text-foreground group-hover/section:opacity-100"
-                  >
-                    <Plus className="size-4" />
-                  </button>
-                </div>
-                {!isCollapsed
-                  ? group.issues.map((issue) => (
-                      <IssueRow
-                        key={issue.id}
-                        issue={issue}
-                        onClick={() => onSelect(issue)}
-                      />
-                    ))
-                  : null}
-              </div>
-            )
-          })
-        )}
-      </div>
+      {scroll ? (
+        <div className="min-h-0 flex-1 overflow-y-auto">{table}</div>
+      ) : (
+        table
+      )}
     </div>
   )
 }
@@ -364,10 +383,9 @@ function IssueRow({
   onClick: () => void
 }) {
   return (
-    <button
-      type="button"
+    <DataTableRow
       onClick={onClick}
-      className="group flex w-full items-center gap-3 rounded-md border-x border-transparent px-3 py-2.5 text-left transition-colors hover:bg-accent/50"
+      className="flex w-full items-center gap-3 text-left"
     >
       <PriorityIcon
         priority={issue.priority}
@@ -381,7 +399,7 @@ function IssueRow({
         color={issue.state.color}
         className="size-4"
       />
-      <span className="min-w-0 flex-1 truncate text-foreground text-sm">
+      <span className="min-w-0 flex-1 truncate text-[13px] text-foreground">
         {issue.title}
       </span>
       {issue.labels.length > 0 ? (
@@ -404,7 +422,7 @@ function IssueRow({
       <span className="w-14 shrink-0 text-right text-muted-foreground text-xs tabular-nums">
         {formatDate(issue.updatedAt)}
       </span>
-    </button>
+    </DataTableRow>
   )
 }
 
@@ -433,12 +451,4 @@ export function Avatar({
 export function formatDate(iso: string): string {
   const date = new Date(iso)
   return Number.isNaN(date.getTime()) ? "" : format(date, "MMM d")
-}
-
-/** A translucent rgba derived from a Linear "#rrggbb" state color, for tinting. */
-function tint(hex: string, alpha: number): string {
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim())
-  if (!m) return `rgba(127, 127, 127, ${alpha})`
-  const n = Number.parseInt(m[1], 16)
-  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`
 }

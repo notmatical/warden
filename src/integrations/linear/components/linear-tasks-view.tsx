@@ -195,6 +195,7 @@ export function LinearTasksView() {
         syncing={syncing}
         error={error}
         onSelect={(issue) => setPeekId(issue.id)}
+        className="px-4 py-3"
       />
 
       <IssuePeekPanel
