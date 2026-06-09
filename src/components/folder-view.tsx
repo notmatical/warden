@@ -41,6 +41,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
+import { FolderTasksSection } from "@/integrations/linear/components/folder-tasks-section"
 import { DEFAULT_CHAT_MODEL } from "@/lib/models"
 import { relativeTime } from "@/lib/time"
 import { cn } from "@/lib/utils"
@@ -105,18 +106,18 @@ function subtitle(session: Session): string {
   return session.model
 }
 
-/** A folder's session list — every session for one project (repo root). Click a
- *  row to open it; right-click or the kebab for pin/labels/delete. */
+/** A folder's dashboard: its sessions, and — when the repo is bound to a
+ *  Linear team — its tasks. Header always offers session creation. */
 export function FolderView({ projectId }: { projectId: string }) {
   const project = useAppStore((s) =>
     Object.values(s.rootsByGroup)
       .flat()
       .find((p) => p.id === projectId)
   )
-  const sessionsMap = useAppStore((s) => s.sessions)
-  const openSession = useAppStore((s) => s.openSession)
-  const deleteSession = useAppStore((s) => s.deleteSession)
-  const setSessionPinned = useAppStore((s) => s.setSessionPinned)
+  const sessionCount = useAppStore(
+    (s) =>
+      Object.values(s.sessions).filter((x) => x.projectId === projectId).length
+  )
   const createSession = useAppStore((s) => s.createSession)
   const createNativeSession = useAppStore((s) => s.createNativeSession)
   const claudeAuthed = useAppStore((s) =>
@@ -125,6 +126,130 @@ export function FolderView({ projectId }: { projectId: string }) {
   const codexAuthed = useAppStore((s) =>
     s.providers.some((p) => p.id === "codex" && p.authed)
   )
+
+  const [tab, setTab] = useState<"sessions" | "tasks">("sessions")
+
+  const newSession = (kind: SessionKind) => {
+    void createSession({
+      projectId,
+      title: kind === "terminal" ? "Terminal" : "New session",
+      model: DEFAULT_CHAT_MODEL,
+      permissionMode: "bypassPermissions",
+      role: "chat",
+      kind,
+    })
+  }
+
+  return (
+    <div className="flex h-full flex-col gap-4 p-6">
+      <div className="flex shrink-0 items-center gap-2.5">
+        <FolderGit2 className="size-4 shrink-0 text-muted-foreground" />
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate font-medium text-foreground">
+            {project?.name ?? "Folder"}
+          </h1>
+          {project ? (
+            <p className="truncate font-mono text-[11px] text-muted-foreground/70">
+              {project.path}
+            </p>
+          ) : null}
+        </div>
+        <span className="shrink-0 text-muted-foreground text-xs">
+          {sessionCount} session{sessionCount === 1 ? "" : "s"}
+        </span>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="sm" className="shrink-0 gap-1.5">
+              <Plus className="size-4" />
+              New session
+              <ChevronDown className="size-3.5 opacity-70" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuItem onSelect={() => newSession("agent")}>
+              <AgentProvidersIcon />
+              Agent session
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => newSession("terminal")}>
+              <SquareTerminal />
+              Terminal session
+            </DropdownMenuItem>
+            {claudeAuthed || codexAuthed ? <DropdownMenuSeparator /> : null}
+            {claudeAuthed ? (
+              <DropdownMenuItem
+                onSelect={() => void createNativeSession(projectId, "claude")}
+              >
+                <ClaudeIcon />
+                Native Claude
+              </DropdownMenuItem>
+            ) : null}
+            {codexAuthed ? (
+              <DropdownMenuItem
+                onSelect={() => void createNativeSession(projectId, "codex")}
+              >
+                <CodexIcon />
+                Native Codex
+              </DropdownMenuItem>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      <div
+        className={cn(
+          "flex w-fit shrink-0 items-center gap-0.5 rounded-lg border p-0.5",
+          FILTER_SURFACE
+        )}
+      >
+        <TabButton active={tab === "sessions"} onClick={() => setTab("sessions")}>
+          Sessions
+        </TabButton>
+        <TabButton active={tab === "tasks"} onClick={() => setTab("tasks")}>
+          Tasks
+        </TabButton>
+      </div>
+
+      {tab === "sessions" ? (
+        <SessionsSection projectId={projectId} />
+      ) : (
+        <FolderTasksSection projectId={projectId} />
+      )}
+    </div>
+  )
+}
+
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "rounded-md px-3 py-1 font-medium text-xs transition-colors",
+        active
+          ? "bg-background text-foreground shadow-sm"
+          : "text-muted-foreground hover:text-foreground"
+      )}
+    >
+      {children}
+    </button>
+  )
+}
+
+/** Every session for one project (repo root). Click a row to open it;
+ *  right-click or the kebab for pin/labels/delete. */
+function SessionsSection({ projectId }: { projectId: string }) {
+  const sessionsMap = useAppStore((s) => s.sessions)
+  const openSession = useAppStore((s) => s.openSession)
+  const deleteSession = useAppStore((s) => s.deleteSession)
+  const setSessionPinned = useAppStore((s) => s.setSessionPinned)
   const labels = useAppStore((s) => s.labelsByProject[projectId])
   const labelIdsBySession = useAppStore((s) => s.labelIdsBySession)
   const loadProjectLabels = useAppStore((s) => s.loadProjectLabels)
@@ -138,17 +263,6 @@ export function FolderView({ projectId }: { projectId: string }) {
     () => new Map((labels ?? []).map((l) => [l.id, l])),
     [labels]
   )
-
-  const newSession = (kind: SessionKind) => {
-    void createSession({
-      projectId,
-      title: kind === "terminal" ? "Terminal" : "New session",
-      model: DEFAULT_CHAT_MODEL,
-      permissionMode: "bypassPermissions",
-      role: "chat",
-      kind,
-    })
-  }
 
   // Suppress the fall-through row click when a menu item is selected.
   const skipNextOpen = useRef(false)
@@ -212,60 +326,7 @@ export function FolderView({ projectId }: { projectId: string }) {
   ])
 
   return (
-    <div className="flex h-full flex-col gap-4 p-6">
-      <div className="flex shrink-0 items-center gap-2.5">
-        <FolderGit2 className="size-4 shrink-0 text-muted-foreground" />
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate font-medium text-foreground">
-            {project?.name ?? "Folder"}
-          </h1>
-          {project ? (
-            <p className="truncate font-mono text-[11px] text-muted-foreground/70">
-              {project.path}
-            </p>
-          ) : null}
-        </div>
-        <span className="shrink-0 text-muted-foreground text-xs">
-          {rows.length} session{rows.length === 1 ? "" : "s"}
-        </span>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button size="sm" className="shrink-0 gap-1.5">
-              <Plus className="size-4" />
-              New session
-              <ChevronDown className="size-3.5 opacity-70" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
-            <DropdownMenuItem onSelect={() => newSession("agent")}>
-              <AgentProvidersIcon />
-              Agent session
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => newSession("terminal")}>
-              <SquareTerminal />
-              Terminal session
-            </DropdownMenuItem>
-            {claudeAuthed || codexAuthed ? <DropdownMenuSeparator /> : null}
-            {claudeAuthed ? (
-              <DropdownMenuItem
-                onSelect={() => void createNativeSession(projectId, "claude")}
-              >
-                <ClaudeIcon />
-                Native Claude
-              </DropdownMenuItem>
-            ) : null}
-            {codexAuthed ? (
-              <DropdownMenuItem
-                onSelect={() => void createNativeSession(projectId, "codex")}
-              >
-                <CodexIcon />
-                Native Codex
-              </DropdownMenuItem>
-            ) : null}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
+    <>
       <div className="flex shrink-0 flex-wrap items-center gap-2">
         <Input
           value={search}
@@ -567,6 +628,6 @@ export function FolderView({ projectId }: { projectId: string }) {
           )}
         </DataTable>
       </div>
-    </div>
+    </>
   )
 }
