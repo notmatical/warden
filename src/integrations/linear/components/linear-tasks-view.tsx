@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils"
 import { useLinearIssues } from "../hooks"
 import { linearConnect, linearDisconnect, linearStatus } from "../ipc"
 import { IssueList } from "./issue-list"
+import { IssuePeekPanel } from "./issue-peek-panel"
 
 const API_KEYS_URL = "https://linear.app/settings/account/security"
 
@@ -32,6 +33,9 @@ export function LinearTasksView() {
 
   const [keyInput, setKeyInput] = useState("")
   const [connecting, setConnecting] = useState(false)
+
+  const [peekId, setPeekId] = useState<string | null>(null)
+  const peekIssue = issues.find((i) => i.id === peekId) ?? null
 
   const refresh = useCallback(async () => {
     try {
@@ -183,7 +187,15 @@ export function LinearTasksView() {
         issues={issues}
         syncing={syncing}
         error={error}
-        onSelect={(issue) => void openUrl(issue.url)}
+        onSelect={(issue) => setPeekId(issue.id)}
+      />
+
+      <IssuePeekPanel
+        open={peekId !== null}
+        issue={peekIssue}
+        onOpenChange={(open) => {
+          if (!open) setPeekId(null)
+        }}
       />
     </div>
   )
