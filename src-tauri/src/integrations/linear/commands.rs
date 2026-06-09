@@ -8,7 +8,7 @@ use tauri::State;
 use crate::error::{AppError, CommandResult};
 use crate::state::AppState;
 
-use super::client::{self, LinearIssue, Viewer};
+use super::client::{self, LinearComment, LinearIssue, Viewer};
 use super::{key, sync};
 
 /// Connection state for the Tasks UI.
@@ -57,6 +57,16 @@ pub async fn linear_status() -> CommandResult<LinearStatus> {
 #[specta::specta]
 pub async fn linear_cached_issues(state: State<'_, AppState>) -> CommandResult<Vec<LinearIssue>> {
     Ok(sync::cached_issues(&state.store)?)
+}
+
+/// Comments for one issue, fetched live when the peek panel opens. Not cached:
+/// keeping comments out of the poll query keeps its complexity flat, and
+/// fetching on open means they are never stale.
+#[tauri::command]
+#[specta::specta]
+pub async fn linear_issue_comments(issue_id: String) -> CommandResult<Vec<LinearComment>> {
+    let key = key::load()?.ok_or_else(|| AppError::Invalid("not connected to Linear".into()))?;
+    Ok(client::fetch_issue_comments(&key, &issue_id).await?)
 }
 
 /// Force a sync against Linear and return the freshened cache.

@@ -43,6 +43,13 @@ export interface LinearIssue {
   labels: string[]
 }
 
+export interface LinearComment {
+  id: string
+  body: string
+  createdAt: string
+  user: LinearUserRef | null
+}
+
 export interface Viewer {
   id: string
   name: string
