@@ -55,9 +55,7 @@ pub async fn linear_status() -> CommandResult<LinearStatus> {
 /// The cached inbox (assigned issues), read from the local DB — instant, offline.
 #[tauri::command]
 #[specta::specta]
-pub async fn linear_cached_issues(
-    state: State<'_, AppState>,
-) -> CommandResult<Vec<LinearIssue>> {
+pub async fn linear_cached_issues(state: State<'_, AppState>) -> CommandResult<Vec<LinearIssue>> {
     Ok(sync::cached_issues(&state.store)?)
 }
 

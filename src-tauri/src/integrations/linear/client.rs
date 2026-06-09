@@ -42,7 +42,9 @@ async fn request<T: DeserializeOwned>(
 
     if !status.is_success() {
         // 400/401 here usually means a bad or revoked API key.
-        return Err(AppError::Integration(format!("linear HTTP {status}: {text}")));
+        return Err(AppError::Integration(format!(
+            "linear HTTP {status}: {text}"
+        )));
     }
 
     let body: GqlResponse<T> = serde_json::from_str(&text)
@@ -299,4 +301,3 @@ mod tests {
         }
     }
 }
-

@@ -1110,8 +1110,7 @@ impl Store {
     pub fn linear_issue_versions(&self) -> Result<Vec<(String, String)>> {
         let conn = self.lock();
         let mut stmt = conn.prepare("SELECT id, updated_at FROM linear_issues")?;
-        let rows =
-            stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
