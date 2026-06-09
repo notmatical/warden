@@ -1,51 +1,46 @@
 import type { LinearComment, LinearIssue } from "./types"
 
-const PRIORITY: Record<number, string> = {
-  1: "Urgent",
-  2: "High",
-  3: "Medium",
-  4: "Low",
-}
-
 const MAX_COMMENTS = 20
 
-/** The first message for a session spawned from a Linear issue: the full task
- *  as agent-readable markdown. Empty sections are omitted rather than noted. */
+/** Minimal escaping for XML attribute values (double-quoted). */
+function attr(value: string): string {
+  return value.replaceAll("&", "&amp;").replaceAll('"', "&quot;")
+}
+
+/** The first message for a session spawned from a Linear issue, matching
+ *  Linear's own "Copy as prompt" output: an <issue> envelope with the raw
+ *  markdown body, followed by <comment-thread> blocks. */
 export function buildIssuePrompt(
   issue: LinearIssue,
   comments: LinearComment[]
 ): string {
-  const meta = [
-    `- Linear: ${issue.url}`,
-    `- State: ${issue.state.name}`,
-    PRIORITY[issue.priority] && `- Priority: ${PRIORITY[issue.priority]}`,
-    `- Team: ${issue.team.name} (${issue.team.key})`,
-    issue.project && `- Project: ${issue.project.name}`,
-    issue.labels.length > 0 && `- Labels: ${issue.labels.join(", ")}`,
-    issue.assignee && `- Assignee: ${issue.assignee.name}`,
-  ].filter(Boolean)
-
-  const parts = [
-    "Work on this Linear issue.",
-    `# ${issue.identifier} — ${issue.title}`,
-    meta.join("\n"),
+  const lines = [
+    `Work on Linear issue ${issue.identifier}:`,
+    "",
+    `<issue identifier="${attr(issue.identifier)}" url="${attr(issue.url)}">`,
+    `<title>${issue.title}</title>`,
   ]
 
   if (issue.description?.trim()) {
-    parts.push("## Description", issue.description.trim())
+    lines.push("<description>", issue.description.trim(), "</description>")
   }
+
+  lines.push(`<team name="${attr(issue.team.name)}"/>`)
+  if (issue.project) lines.push(`<project name="${attr(issue.project.name)}"/>`)
+  lines.push("</issue>")
 
   if (comments.length > 0) {
     const recent = comments.slice(-MAX_COMMENTS)
-    const lines = recent.map((c) => {
-      const who = c.user?.name ?? "Unknown"
-      const when = c.createdAt.slice(0, 10)
-      return `**${who} — ${when}:**\n${c.body.trim()}`
-    })
+    lines.push("")
     if (comments.length > recent.length)
-      lines.unshift("_(earlier comments omitted)_")
-    parts.push("## Comments", lines.join("\n\n"))
+      lines.push("<!-- earlier comments omitted -->")
+    for (const c of recent) {
+      const author = attr(c.user?.name ?? "Unknown")
+      lines.push(
+        `<comment-thread comment-id="${attr(c.id)}"><comment author="${author}" created-at="${attr(c.createdAt)}">${c.body.trim()}</comment></comment-thread>`
+      )
+    }
   }
 
-  return parts.join("\n\n")
+  return lines.join("\n")
 }
