@@ -16,15 +16,18 @@ export interface ModelOption {
  */
 export const MODELS: ModelOption[] = [
   // Anthropic
-  { id: "claude-opus-4-8", label: "Opus 4.8", provider: "Anthropic" },
-  { id: "claude-sonnet-4-6", label: "Sonnet 4.6", provider: "Anthropic" },
-  { id: "haiku", label: "Haiku", provider: "Anthropic" },
+  { id: "claude-fable-5", label: "Fable 5", provider: "Anthropic" },
   { id: "claude-opus-4-8[1m]", label: "Opus 4.8 (1M)", provider: "Anthropic" },
+  { id: "claude-opus-4-8", label: "Opus 4.8", provider: "Anthropic" },
+  { id: "claude-opus-4-7[1m]", label: "Opus 4.7 (1M)", provider: "Anthropic" },
+  { id: "claude-opus-4-7", label: "Opus 4.7", provider: "Anthropic" },
   {
     id: "claude-sonnet-4-6[1m]",
     label: "Sonnet 4.6 (1M)",
     provider: "Anthropic",
   },
+  { id: "claude-sonnet-4-6", label: "Sonnet 4.6", provider: "Anthropic" },
+  { id: "haiku", label: "Haiku", provider: "Anthropic" },
 
   // OpenAI
   { id: "gpt-5.5", label: "GPT-5.5", provider: "OpenAI" },
