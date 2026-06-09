@@ -5,3 +5,5 @@
 pub mod client;
 pub mod commands;
 mod key;
+pub mod poll;
+pub mod sync;

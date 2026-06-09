@@ -115,7 +115,8 @@ pub fn run() {
         integrations::linear::commands::linear_connect,
         integrations::linear::commands::linear_disconnect,
         integrations::linear::commands::linear_status,
-        integrations::linear::commands::linear_list_issues,
+        integrations::linear::commands::linear_cached_issues,
+        integrations::linear::commands::linear_sync_now,
         // terminal
         terminal::commands::start_terminal,
         terminal::commands::terminal_write,
@@ -213,6 +214,7 @@ pub fn run() {
 
             // Keep open PRs' state + CI checks fresh in the background.
             integrations::github::poll::spawn(app.handle().clone());
+            integrations::linear::poll::spawn(app.handle().clone());
             Ok(())
         })
         .invoke_handler(specta_builder.invoke_handler())

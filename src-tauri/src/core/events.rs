@@ -31,3 +31,10 @@ pub fn emit_delta(app: &AppHandle, session_id: &str, text: &str) {
 pub fn emit_session(app: &AppHandle, session: &Session) {
     let _ = app.emit(EVENT_SESSION, session);
 }
+
+/// The cached Linear issue set changed (background sync reconciled new data).
+pub const EVENT_LINEAR: &str = "linear-issues-changed";
+
+pub fn emit_linear_changed(app: &AppHandle) {
+    let _ = app.emit(EVENT_LINEAR, ());
+}

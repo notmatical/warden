@@ -771,7 +771,7 @@ async checkoutPr(projectId: string, number: number, model: string) : Promise<Res
 },
 /**
  * Validate a personal API key against Linear and, on success, store it in the
- * OS keychain. Returns the authenticated user for the UI to display.
+ * OS keychain and do a best-effort initial sync. Returns the authenticated user.
  */
 async linearConnect(key: string) : Promise<Result<Viewer, IpcError>> {
     try {
@@ -782,7 +782,7 @@ async linearConnect(key: string) : Promise<Result<Viewer, IpcError>> {
 }
 },
 /**
- * Forget the stored API key.
+ * Forget the stored API key and clear the cached inbox.
  */
 async linearDisconnect() : Promise<Result<null, IpcError>> {
     try {
@@ -804,11 +804,22 @@ async linearStatus() : Promise<Result<LinearStatus, IpcError>> {
 }
 },
 /**
- * Issues assigned to the authenticated user.
+ * The cached inbox (assigned issues), read from the local DB — instant, offline.
  */
-async linearListIssues() : Promise<Result<LinearIssue[], IpcError>> {
+async linearCachedIssues() : Promise<Result<LinearIssue[], IpcError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("linear_list_issues") };
+    return { status: "ok", data: await TAURI_INVOKE("linear_cached_issues") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Force a sync against Linear and return the freshened cache.
+ */
+async linearSyncNow() : Promise<Result<LinearIssue[], IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("linear_sync_now") };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
