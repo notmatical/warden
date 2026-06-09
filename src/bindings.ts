@@ -826,6 +826,64 @@ async linearSyncNow() : Promise<Result<LinearIssue[], IpcError>> {
 }
 },
 /**
+ * Comments for one issue, fetched live when the peek panel opens. Not cached:
+ * keeping comments out of the poll query keeps its complexity flat, and
+ * fetching on open means they are never stale.
+ */
+async linearIssueComments(issueId: string) : Promise<Result<LinearComment[], IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("linear_issue_comments", { issueId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Teams (with their projects) visible to the user — for the binding picker.
+ */
+async linearTeams() : Promise<Result<LinearTeam[], IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("linear_teams") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * A project's Linear binding from its `.warden/config.json`, if any.
+ */
+async linearBinding(projectId: string) : Promise<Result<LinearBinding | null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("linear_binding", { projectId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Every known project that carries a Linear binding — for preselecting the
+ * repo when sending an issue to an agent.
+ */
+async linearBindings() : Promise<Result<ProjectLinearBinding[], IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("linear_bindings") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Write (or remove, with `None`) a project's Linear binding.
+ */
+async linearSetBinding(projectId: string, binding: LinearBinding | null) : Promise<Result<null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("linear_set_binding", { projectId, binding }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Spawn a PTY in `working_dir` (the session's root) and stream its output over
  * `on_output`. The terminal id is the session id; the launch command is derived
  * from the persisted session, so a native CLI session relaunches (and resumes)
@@ -1064,6 +1122,8 @@ export type Label = { id: string; projectId: string; name: string;
  * A palette token the frontend maps to fill/text/ring classes.
  */
 color: string; createdAt: string }
+export type LinearBinding = { teamId: string; projectId: string | null }
+export type LinearComment = { id: string; body: string; createdAt: string; user: LinearUserRef | null }
 export type LinearIssue = { id: string; identifier: string; title: string; description: string | null; priority: number; url: string; updatedAt: string; state: LinearState; assignee: LinearUserRef | null; team: LinearTeamRef; project: LinearProjectRef | null; labels: string[] }
 export type LinearProjectRef = { id: string; name: string }
 export type LinearState = { id: string; name: string; color: string; 
@@ -1075,6 +1135,7 @@ type: string }
  * Connection state for the Tasks UI.
  */
 export type LinearStatus = { connected: boolean }
+export type LinearTeam = { id: string; key: string; name: string; projects: LinearProjectRef[] }
 export type LinearTeamRef = { id: string; key: string; name: string }
 export type LinearUserRef = { id: string; name: string; email: string | null; avatarUrl: string | null }
 /**
@@ -1143,6 +1204,7 @@ export type Project = { id: string; name: string; path: string; isGit: boolean; 
  * for the folder view. `assignments` maps a session id to its label ids.
  */
 export type ProjectLabels = { labels: Label[]; assignments: Partial<{ [key in string]: string[] }> }
+export type ProjectLinearBinding = { projectId: string; binding: LinearBinding }
 export type RepoComment = { author: string; body: string }
 export type RepoRef = { number: number; title: string; 
 /**
