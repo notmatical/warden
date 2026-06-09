@@ -111,6 +111,11 @@ pub fn run() {
         integrations::github::commands::generate_pr_content,
         integrations::github::commands::list_open_prs,
         integrations::github::commands::checkout_pr,
+        // linear
+        integrations::linear::commands::linear_connect,
+        integrations::linear::commands::linear_disconnect,
+        integrations::linear::commands::linear_status,
+        integrations::linear::commands::linear_list_issues,
         // terminal
         terminal::commands::start_terminal,
         terminal::commands::terminal_write,

@@ -31,6 +31,9 @@ pub enum AppError {
 
     #[error("agent process failed: {0}")]
     Agent(String),
+
+    #[error("integration error: {0}")]
+    Integration(String),
 }
 
 impl Serialize for AppError {

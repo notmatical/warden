@@ -5,3 +5,4 @@
 //! managed CLI (GitHub uses `gh`) or talk to a remote API directly (Linear).
 
 pub mod github;
+pub mod linear;
