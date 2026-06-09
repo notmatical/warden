@@ -1,5 +1,5 @@
 import { openUrl } from "@tauri-apps/plugin-opener"
-import { ExternalLink, Loader2, Send } from "lucide-react"
+import { ExternalLink, Loader2, Send, X } from "lucide-react"
 import {
   type ReactNode,
   useCallback,
@@ -10,7 +10,12 @@ import {
 
 import { Button } from "@/components/ui/button"
 import { Markdown } from "@/components/ui/markdown"
-import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetTitle,
+} from "@/components/ui/sheet"
 
 import { linearIssueComments } from "../ipc"
 import type { LinearComment, LinearIssue } from "../types"
@@ -84,9 +89,10 @@ export function IssuePeekPanel({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
+        showCloseButton={false}
         className="gap-0 data-[side=right]:sm:max-w-xl"
       >
-        <div className="flex items-center gap-2 border-b py-3 pr-14 pl-4">
+        <div className="flex h-12 items-center gap-1.5 border-b px-4">
           <span className="font-mono text-muted-foreground text-xs tabular-nums">
             {shown.identifier}
           </span>
@@ -111,6 +117,16 @@ export function IssuePeekPanel({
           >
             <ExternalLink className="size-3.5" />
           </Button>
+          <SheetClose asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Close"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <X className="size-4" />
+            </Button>
+          </SheetClose>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
@@ -183,7 +199,9 @@ export function IssuePeekPanel({
 
             <div className="border-t pt-4">
               {shown.description?.trim() ? (
-                <Markdown className="text-sm">{shown.description}</Markdown>
+                <Markdown media className="text-sm">
+                  {shown.description}
+                </Markdown>
               ) : (
                 <p className="text-muted-foreground text-sm">
                   No description.
@@ -232,7 +250,9 @@ export function IssuePeekPanel({
                         </span>
                       </div>
                       <div className="pl-7">
-                        <Markdown className="text-sm">{c.body}</Markdown>
+                        <Markdown media className="text-sm">
+                          {c.body}
+                        </Markdown>
                       </div>
                     </div>
                   ))}
