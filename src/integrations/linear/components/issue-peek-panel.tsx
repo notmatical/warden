@@ -199,9 +199,7 @@ export function IssuePeekPanel({
 
             <div className="border-t pt-4">
               {shown.description?.trim() ? (
-                <Markdown media className="text-sm">
-                  {shown.description}
-                </Markdown>
+                <Markdown className="text-sm">{shown.description}</Markdown>
               ) : (
                 <p className="text-muted-foreground text-sm">
                   No description.
@@ -250,9 +248,7 @@ export function IssuePeekPanel({
                         </span>
                       </div>
                       <div className="pl-7">
-                        <Markdown media className="text-sm">
-                          {c.body}
-                        </Markdown>
+                        <Markdown className="text-sm">{c.body}</Markdown>
                       </div>
                     </div>
                   ))}

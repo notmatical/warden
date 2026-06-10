@@ -104,30 +104,6 @@ function TaskMarker({ checked }: { checked: boolean }) {
   )
 }
 
-function Anchor({ children, href }: { children?: ReactNode; href?: string }) {
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noreferrer noopener"
-      className="font-medium text-foreground underline decoration-border decoration-1 underline-offset-2 transition-colors hover:decoration-foreground"
-    >
-      {children}
-    </a>
-  )
-}
-
-/** The href when a link points at a playable video file, else null. */
-function videoSrc(href?: string): string | null {
-  if (!href) return null
-  try {
-    const path = new URL(href).pathname.toLowerCase()
-    return /\.(mp4|webm|mov|m4v)$/.test(path) ? href : null
-  } catch {
-    return null
-  }
-}
-
 const COMPONENTS: Components = {
   h1: ({ children }) => (
     <h1 className="mt-6 mb-3 text-[1.45rem] leading-tight font-semibold tracking-tight text-foreground">
@@ -167,7 +143,16 @@ const COMPONENTS: Components = {
   del: ({ children }) => (
     <del className="text-muted-foreground line-through">{children}</del>
   ),
-  a: ({ children, href }) => <Anchor href={href}>{children}</Anchor>,
+  a: ({ children, href }) => (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer noopener"
+      className="font-medium text-foreground underline decoration-border decoration-1 underline-offset-2 transition-colors hover:decoration-foreground"
+    >
+      {children}
+    </a>
+  ),
   hr: () => <hr className="my-6 border-border" />,
   blockquote: ({ children }) => (
     <blockquote className="my-4 border-l-2 border-border pl-4 text-muted-foreground">
@@ -261,42 +246,12 @@ const COMPONENTS: Components = {
   pre: ({ children }) => <>{children}</>,
 }
 
-// Like COMPONENTS, but links to video files render an inline player (Linear
-// attaches uploads as plain links). Opt-in via `media` so chat transcripts
-// keep rendering cheap text links.
-const MEDIA_COMPONENTS: Components = {
-  ...COMPONENTS,
-  a: ({ children, href }) => {
-    const src = videoSrc(href)
-    if (!src) return <Anchor href={href}>{children}</Anchor>
-    return (
-      <span className="my-3 block">
-        {/* biome-ignore lint/a11y/useMediaCaption: user-uploaded attachments carry no caption tracks */}
-        <video
-          controls
-          preload="metadata"
-          src={src}
-          className="max-h-96 w-full rounded-lg border border-border bg-black"
-        >
-          <Anchor href={href}>{children}</Anchor>
-        </video>
-        <span className="mt-1 block text-[11px] text-muted-foreground">
-          <Anchor href={href}>{children}</Anchor>
-        </span>
-      </span>
-    )
-  },
-}
-
 export const Markdown = memo(function Markdown({
   children,
   className,
-  media = false,
 }: {
   children: string
   className?: string
-  /** Embed video-file links as inline players (used for issue/comment bodies). */
-  media?: boolean
 }) {
   return (
     <div
@@ -309,7 +264,7 @@ export const Markdown = memo(function Markdown({
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeRaw]}
-        components={media ? MEDIA_COMPONENTS : COMPONENTS}
+        components={COMPONENTS}
       >
         {children}
       </ReactMarkdown>
