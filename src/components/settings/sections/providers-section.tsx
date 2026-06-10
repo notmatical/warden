@@ -25,7 +25,7 @@ export function ProvidersSection() {
   return (
     <SettingsSection
       title="Providers"
-      description="Agent CLIs that power your sessions. Run warden's managed copy or the one on your PATH."
+      description="The agent CLIs that power your sessions."
     >
       {providers.length === 0 ? (
         <p className="text-muted-foreground text-xs">No providers detected.</p>
