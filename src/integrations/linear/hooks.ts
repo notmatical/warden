@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useState } from "react"
 
-import { linearCachedIssues, linearSyncNow, onLinearChanged } from "./ipc"
-import type { LinearIssue } from "./types"
+import {
+  linearBinding,
+  linearCachedIssues,
+  linearStatus,
+  linearSyncNow,
+  onLinearChanged,
+} from "./ipc"
+import type { LinearBinding, LinearIssue } from "./types"
 
 /** Cached Linear issues plus sync controls. Subscribes to the background
  *  poller's change events; callers decide when to load (after checking
@@ -46,4 +52,34 @@ export function useLinearIssues() {
   }, [loadCached])
 
   return { issues, syncing, error, loadCached, syncNow, clear }
+}
+
+export type FolderLinearPhase = "loading" | "disconnected" | "unbound" | "bound"
+
+/** A folder's Linear linkage: connection status plus its .warden/config.json
+ *  binding. `refresh` re-reads both (call after bind/unbind). */
+export function useFolderLinearBinding(projectId: string) {
+  const [phase, setPhase] = useState<FolderLinearPhase>("loading")
+  const [binding, setBinding] = useState<LinearBinding | null>(null)
+
+  const refresh = useCallback(async () => {
+    try {
+      const { connected } = await linearStatus()
+      if (!connected) {
+        setPhase("disconnected")
+        return
+      }
+      const bound = await linearBinding(projectId)
+      setBinding(bound)
+      setPhase(bound ? "bound" : "unbound")
+    } catch {
+      setPhase("disconnected")
+    }
+  }, [projectId])
+
+  useEffect(() => {
+    void refresh()
+  }, [refresh])
+
+  return { phase, binding, refresh }
 }
