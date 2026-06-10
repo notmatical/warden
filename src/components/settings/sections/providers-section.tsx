@@ -6,9 +6,8 @@ import { useAppStore } from "@/store/app-store"
 import type { Provider, ProviderStatus } from "@/types"
 
 const PROVIDER_DESCRIPTION: Record<Provider, string> = {
-  claude:
-    "Anthropic's Claude Code CLI — runs your Claude model sessions and workflows.",
-  codex: "OpenAI's Codex CLI — runs your GPT model sessions and workflows.",
+  claude: "Runs your Claude model sessions.",
+  codex: "Runs your GPT model sessions.",
 }
 
 function signInProvider(status: ProviderStatus) {
