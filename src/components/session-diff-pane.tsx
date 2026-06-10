@@ -56,8 +56,12 @@ function useResolvedTheme(): "dark" | "light" {
 }
 
 /** Shared CodeView config for the diff accordion and the file viewer, so both
- *  render with identical themes, wrapping, and large-file degradation. */
-function useCodeViewOptions(): CodeViewOptions<undefined> {
+ *  render with identical themes, wrapping, and large-file degradation. The
+ *  diff variant draws each file as a padded card; the file variant sits flush
+ *  against the pane on the app background. */
+function useCodeViewOptions(
+  variant: "diff" | "file" = "diff"
+): CodeViewOptions<undefined> {
   const themeType = useResolvedTheme()
   return useMemo<CodeViewOptions<undefined>>(
     () => ({
@@ -66,13 +70,18 @@ function useCodeViewOptions(): CodeViewOptions<undefined> {
       stickyHeaders: true,
       theme: { dark: "vitesse-dark", light: "vitesse-light" },
       themeType,
-      layout: { paddingTop: 8, paddingBottom: 16, gap: 10 },
+      layout:
+        variant === "diff"
+          ? { paddingTop: 8, paddingBottom: 16, gap: 10 }
+          : { paddingTop: 0, paddingBottom: 0, gap: 0 },
       // Degrade gracefully on lockfiles / minified bundles instead of
       // blocking the highlighter worker.
       tokenizeMaxLineLength: 5_000,
       tokenizeMaxLength: 200_000,
       maxLineDiffLength: 5_000,
-      unsafeCSS: `
+      unsafeCSS:
+        variant === "diff"
+          ? `
         * { user-select: text; -webkit-user-select: text; }
         /* The chevron in the prefix slot replaces Pierre's status badge. */
         [data-diffs-header='default'] [data-change-icon] { display: none; }
@@ -83,9 +92,17 @@ function useCodeViewOptions(): CodeViewOptions<undefined> {
           --diffs-light-bg: var(--card) !important;
           --diffs-dark-bg: var(--card) !important;
         }
+      `
+          : `
+        * { user-select: text; -webkit-user-select: text; }
+        /* Blend into the pane: app background, no card inset. */
+        [data-diff], [data-file] {
+          --diffs-light-bg: var(--background) !important;
+          --diffs-dark-bg: var(--background) !important;
+        }
       `,
     }),
-    [themeType]
+    [themeType, variant]
   )
 }
 
@@ -351,7 +368,7 @@ function TreeLevel({
 /** Read-only contents of one worktree file, highlighted by the same CodeView
  *  pipeline as the diffs. */
 function FileViewer({ sessionId, path }: { sessionId: string; path: string }) {
-  const options = useCodeViewOptions()
+  const options = useCodeViewOptions("file")
   const query = useQuery({
     queryKey: ["session-file", sessionId, path],
     queryFn: () => ipc.getSessionFileVersions(sessionId, path),
@@ -383,7 +400,7 @@ function FileViewer({ sessionId, path }: { sessionId: string; path: string }) {
   ]
   return (
     <CodeView<undefined>
-      className="h-full w-full overflow-y-auto overflow-x-clip overscroll-contain px-3 [overflow-anchor:none]"
+      className="h-full w-full overflow-y-auto overflow-x-clip overscroll-contain [overflow-anchor:none]"
       style={{ "--diffs-font-size": "12px" } as React.CSSProperties}
       items={items}
       options={options}
@@ -504,7 +521,7 @@ export function SessionDiffPane({ refId }: { refId: string }) {
 
   return (
     <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
-      <div className="flex items-center gap-1 border-b border-border/60 px-2 py-1.5">
+      <div className="flex items-center gap-1 px-2 py-1.5">
         {(
           [
             {
