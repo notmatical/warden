@@ -770,6 +770,29 @@ async checkoutPr(projectId: string, number: number, model: string) : Promise<Res
 }
 },
 /**
+ * Open issues assigned to the user in one repo. Soft-fails to empty (no
+ * remote / unauthenticated) so multi-repo aggregation degrades per repo.
+ */
+async listMyIssues(projectId: string) : Promise<Result<GhIssue[], IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("list_my_issues", { projectId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Comments on one issue, fetched lazily for the detail view.
+ */
+async githubIssueComments(projectId: string, number: number) : Promise<Result<GhIssueComment[], IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("github_issue_comments", { projectId, number }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Validate a personal API key against Linear and, on success, store it in the
  * OS keychain and do a best-effort initial sync. Returns the authenticated user.
  */
@@ -839,6 +862,18 @@ async linearIssueComments(issueId: string) : Promise<Result<LinearComment[], Ipc
 }
 },
 /**
+ * Move an issue to its team's primary "started" state (writeback on
+ * send-to-agent). Freshens the cache afterwards so the inbox reflects it.
+ */
+async linearStartIssue(issueId: string, teamId: string) : Promise<Result<null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("linear_start_issue", { issueId, teamId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Teams (with their projects) visible to the user — for the binding picker.
  */
 async linearTeams() : Promise<Result<LinearTeam[], IpcError>> {
@@ -878,6 +913,17 @@ async linearBindings() : Promise<Result<ProjectLinearBinding[], IpcError>> {
 async linearSetBinding(projectId: string, binding: LinearBinding | null) : Promise<Result<null, IpcError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("linear_set_binding", { projectId, binding }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Frontend focus reporting: window focus/blur events land here.
+ */
+async setAppFocusState(focused: boolean) : Promise<Result<null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_app_focus_state", { focused }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -995,7 +1041,11 @@ export type ContextSource =
  * Optional fields for `create_session`. Grouped into a struct so the command
  * stays within specta's 10-parameter limit while remaining fully expressive.
  */
-export type CreateSessionOptions = { groupId: string | null; permissionMode: string | null; effort: string | null; role: string | null; kind: string | null; backend: string | null; isolate: boolean | null; nativeCommand: string | null }
+export type CreateSessionOptions = { groupId: string | null; permissionMode: string | null; effort: string | null; role: string | null; kind: string | null; backend: string | null; isolate: boolean | null; nativeCommand: string | null; 
+/**
+ * Linear issue this session works on; drives writeback on PR open/merge.
+ */
+linearIssueId: string | null }
 /**
  * One changed file's stats and unified-diff patch (vs the session's base).
  */
@@ -1063,6 +1113,11 @@ export type FileEntry = {
  * Path relative to the working directory, using forward slashes.
  */
 path: string; name: string }
+/**
+ * An open issue assigned to the user, from `gh issue list`.
+ */
+export type GhIssue = { number: number; title: string; url: string; body: string; labels: string[]; author: string; updatedAt: string }
+export type GhIssueComment = { author: string; body: string; createdAt: string }
 /**
  * The top-level workspace: a named set of project roots plus a saved pane
  * layout. Sessions are opened against a group and may pull any of its roots
@@ -1278,6 +1333,11 @@ parentId: string | null;
  * workflow in the sidebar).
  */
 workflowId: string | null; 
+/**
+ * Linear issue this session was spawned from; drives writeback on PR
+ * open (attachment) and merge (completed state).
+ */
+linearIssueId: string | null; 
 /**
  * When the session's branch was merged back into its base — `None` until
  * then. A merged session's worktree is gone, so it becomes read-only.
