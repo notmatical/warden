@@ -56,17 +56,27 @@ jobs:
         include:
           - name: windows
             os: windows-latest
-            bundles: msi,nsis
+            args: --bundles msi,nsis
           # ubuntu-22.04 on purpose: binaries link against the oldest glibc /
           # webkit2gtk we support, so deb/rpm/AppImage run on 22.04 and newer.
           - name: linux
             os: ubuntu-22.04
-            bundles: deb,rpm
+            args: --bundles deb,rpm
+          # macOS ships unsigned for now (no Apple Developer account): the .dmg
+          # is updater-signed but not notarized, so Gatekeeper requires the user
+          # to right-click -> Open. Wire the APPLE_* signing env into the build
+          # step below once an account is available.
+          - name: macos
+            os: macos-latest
+            args: --target universal-apple-darwin --bundles app,dmg
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
       - uses: dtolnay/rust-toolchain@stable
+      - name: Install macOS universal targets
+        if: matrix.name == 'macos'
+        run: rustup target add x86_64-apple-darwin aarch64-apple-darwin
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: "./src-tauri -> target"
@@ -88,7 +98,7 @@ jobs:
           tagName: warden-v__VERSION__
           releaseName: "Warden v__VERSION__"
           includeUpdaterJson: true
-          args: "--bundles ${{ matrix.bundles }}"
+          args: ${{ matrix.args }}
 
       # The AppImage is built outside tauri-action so its AppRun can be
       # swapped for the distro-portable launcher (see scripts/build-appimage.sh),
