@@ -21,7 +21,7 @@ export function IntegrationsSection() {
   return (
     <SettingsSection
       title="Integrations"
-      description="Connect 3rd-party services so warden can read and write on your behalf."
+      description="Services warden can read and act on for you."
     >
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {status ? (
