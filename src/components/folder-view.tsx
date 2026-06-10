@@ -126,10 +126,6 @@ export function FolderView({ projectId }: { projectId: string }) {
       .map((g) => g.name)
       .join(" · ")
   )
-  const sessionCount = useAppStore(
-    (s) =>
-      Object.values(s.sessions).filter((x) => x.projectId === projectId).length
-  )
   const runningCount = useAppStore(
     (s) =>
       Object.values(s.sessions).filter(
@@ -186,9 +182,6 @@ export function FolderView({ projectId }: { projectId: string }) {
               {runningCount} running
             </span>
           ) : null}
-          <CountChip className="shrink-0">
-            {sessionCount} session{sessionCount === 1 ? "" : "s"}
-          </CountChip>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button size="sm" className="shrink-0 gap-1.5">
