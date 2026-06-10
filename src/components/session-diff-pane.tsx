@@ -67,7 +67,9 @@ function useCodeViewOptions(
     () => ({
       diffStyle: "unified",
       overflow: "wrap",
-      stickyHeaders: true,
+      // A transparent (file-variant) sticky header would smear over scrolled
+      // code; the single file's header reads fine pinned at the top.
+      stickyHeaders: variant === "diff",
       theme: { dark: "vitesse-dark", light: "vitesse-light" },
       themeType,
       layout:
@@ -83,22 +85,30 @@ function useCodeViewOptions(
         variant === "diff"
           ? `
         * { user-select: text; -webkit-user-select: text; }
+        /* The component paints the shiki theme's canvas at the host level;
+           clear it so gaps between cards show the pane background. */
+        :host { background-color: transparent !important; }
         /* The chevron in the prefix slot replaces Pierre's status badge. */
         [data-diffs-header='default'] [data-change-icon] { display: none; }
         [data-diffs-header='default'] [data-additions-count] { color: var(--positive, #3fb950); }
         [data-diffs-header='default'] [data-deletions-count] { color: var(--destructive, #f85149); }
-        /* Shiki's theme bg is set inline on <pre>; pin it to the app surface. */
-        [data-diff] {
+        /* Each file is a rounded, hairline-bordered card on the app surface.
+           overflow: clip (not hidden) keeps sticky headers working. */
+        [data-diff], [data-file] {
           --diffs-light-bg: var(--card) !important;
           --diffs-dark-bg: var(--card) !important;
+          border: 1px solid var(--border);
+          border-radius: 10px;
+          overflow: clip;
         }
       `
           : `
         * { user-select: text; -webkit-user-select: text; }
-        /* Blend into the pane: app background, no card inset. */
-        [data-diff], [data-file] {
-          --diffs-light-bg: var(--background) !important;
-          --diffs-dark-bg: var(--background) !important;
+        /* Fully transparent: the pane's own background shows through. */
+        :host { background-color: transparent !important; }
+        :host, [data-diff], [data-file] {
+          --diffs-light-bg: transparent !important;
+          --diffs-dark-bg: transparent !important;
         }
       `,
     }),
@@ -401,7 +411,15 @@ function FileViewer({ sessionId, path }: { sessionId: string; path: string }) {
   return (
     <CodeView<undefined>
       className="h-full w-full overflow-y-auto overflow-x-clip overscroll-contain [overflow-anchor:none]"
-      style={{ "--diffs-font-size": "12px" } as React.CSSProperties}
+      style={
+        {
+          "--diffs-font-size": "12px",
+          // Belt and braces with the :host rule — inherited into the shadow
+          // tree, so the theme canvas never paints over the pane.
+          "--diffs-light-bg": "transparent",
+          "--diffs-dark-bg": "transparent",
+        } as React.CSSProperties
+      }
       items={items}
       options={options}
     />
