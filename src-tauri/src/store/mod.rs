@@ -1253,6 +1253,54 @@ impl Store {
         Ok(record)
     }
 
+    /// Append a line's events and advance the tailer's drained-offset in one
+    /// transaction, so a crash-then-replay neither loses nor duplicates events.
+    /// The offset update is generation-guarded by `proc_id` like the other
+    /// `agent_procs` writes.
+    pub fn append_events_with_offset(
+        &self,
+        session_id: &str,
+        proc_id: &str,
+        events: &[AgentEvent],
+        offset: u64,
+    ) -> Result<Vec<EventRecord>> {
+        let mut conn = self.lock();
+        let tx = conn.transaction()?;
+        let mut seq: i64 = tx.query_row(
+            "SELECT COALESCE(MAX(seq), 0) + 1 FROM events WHERE session_id = ?1",
+            [session_id],
+            |row| row.get(0),
+        )?;
+        let mut records = Vec::with_capacity(events.len());
+        for event in events {
+            let record = EventRecord {
+                id: uuid(),
+                session_id: session_id.to_string(),
+                seq,
+                ts: now_rfc3339(),
+                event: event.clone(),
+            };
+            tx.execute(
+                "INSERT INTO events (id, session_id, seq, ts, payload) VALUES (?1, ?2, ?3, ?4, ?5)",
+                (
+                    &record.id,
+                    &record.session_id,
+                    record.seq,
+                    &record.ts,
+                    serde_json::to_string(&record.event)?,
+                ),
+            )?;
+            seq += 1;
+            records.push(record);
+        }
+        tx.execute(
+            "UPDATE agent_procs SET out_offset = ?3 WHERE session_id = ?1 AND proc_id = ?2",
+            (session_id, proc_id, offset as i64),
+        )?;
+        tx.commit()?;
+        Ok(records)
+    }
+
     pub fn list_events(&self, session_id: &str) -> Result<Vec<EventRecord>> {
         let conn = self.lock();
         let mut stmt = conn.prepare(
@@ -1263,6 +1311,93 @@ impl Store {
         rows.map(|r| r.map_err(AppError::from).and_then(|x| x))
             .collect()
     }
+
+    // ----- agent procs ------------------------------------------------------
+
+    /// Register a freshly spawned detached agent process (replacing any prior
+    /// generation for the session).
+    pub fn upsert_agent_proc(&self, proc: &AgentProc) -> Result<()> {
+        let conn = self.lock();
+        conn.execute(
+            "INSERT INTO agent_procs (session_id, proc_id, pid, out_file, err_file, out_offset, spawned_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+             ON CONFLICT(session_id) DO UPDATE SET
+               proc_id = ?2, pid = ?3, out_file = ?4, err_file = ?5, out_offset = ?6, spawned_at = ?7",
+            (
+                &proc.session_id,
+                &proc.proc_id,
+                proc.pid,
+                &proc.out_file,
+                &proc.err_file,
+                proc.out_offset as i64,
+                &proc.spawned_at,
+            ),
+        )?;
+        Ok(())
+    }
+
+    pub fn list_agent_procs(&self) -> Result<Vec<AgentProc>> {
+        let conn = self.lock();
+        let mut stmt = conn.prepare(
+            "SELECT session_id, proc_id, pid, out_file, err_file, out_offset, spawned_at
+             FROM agent_procs",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok(AgentProc {
+                session_id: r.get(0)?,
+                proc_id: r.get(1)?,
+                pid: r.get(2)?,
+                out_file: r.get(3)?,
+                err_file: r.get(4)?,
+                out_offset: r.get::<_, i64>(5)? as u64,
+                spawned_at: r.get(6)?,
+            })
+        })?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    /// Remove a proc registration — only if this spawn generation still owns
+    /// the row, so a stale tailer can't clobber a respawn's bookkeeping.
+    pub fn delete_agent_proc(&self, session_id: &str, proc_id: &str) -> Result<()> {
+        let conn = self.lock();
+        conn.execute(
+            "DELETE FROM agent_procs WHERE session_id = ?1 AND proc_id = ?2",
+            (session_id, proc_id),
+        )?;
+        Ok(())
+    }
+
+    /// Whether this spawn generation still owns the session's proc row (a newer
+    /// spawn replaces it; deletion removes it).
+    pub fn agent_proc_current(&self, session_id: &str, proc_id: &str) -> Result<bool> {
+        let conn = self.lock();
+        let n: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM agent_procs WHERE session_id = ?1 AND proc_id = ?2",
+            (session_id, proc_id),
+            |r| r.get(0),
+        )?;
+        Ok(n > 0)
+    }
+
+    /// Sessions whose status is `Running` — startup recovery settles the ones
+    /// without a live process behind them.
+    pub fn list_running_sessions(&self) -> Result<Vec<Session>> {
+        let conn = self.lock();
+        let mut stmt = conn.prepare(&format!("{SESSION_SELECT_ALL} WHERE status = 'running'"))?;
+        let rows = stmt.query_map([], map_session)?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+}
+
+/// A detached agent process registered for survive-and-reattach.
+pub struct AgentProc {
+    pub session_id: String,
+    pub proc_id: String,
+    pub pid: u32,
+    pub out_file: String,
+    pub err_file: String,
+    pub out_offset: u64,
+    pub spawned_at: String,
 }
 
 // ----- row mappers ----------------------------------------------------------
@@ -1402,4 +1537,136 @@ fn map_event(row: &Row<'_>) -> rusqlite::Result<Result<EventRecord>> {
             event,
         })
     })())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn store_with_session() -> (Store, String) {
+        let dir = std::env::temp_dir().join(format!("warden-store-test-{}", uuid()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = Store::open(&dir.join("test.db")).unwrap();
+        let project = store.upsert_project("proj", "C:/tmp/proj", false).unwrap();
+        let group_id = store.ensure_group_for_project(&project.id, "proj").unwrap();
+        let session = store
+            .create_session(NewSession {
+                group_id,
+                project_id: project.id,
+                title: "t".into(),
+                kind: SessionKind::Agent,
+                backend: Backend::Claude,
+                model: "claude-fable-5".into(),
+                permission_mode: PermissionMode::Default,
+                effort: EffortLevel::High,
+                role: SessionRole::Chat,
+                auto_named: false,
+                agent_session_id: uuid(),
+                terminal_command: None,
+                working_dir: "C:/tmp/proj".into(),
+                branch: None,
+                base_sha: None,
+                base_branch: None,
+                is_isolated: false,
+                parent_id: None,
+                workflow_id: None,
+                linear_issue_id: None,
+            })
+            .unwrap();
+        (store, session.id)
+    }
+
+    fn proc_row(session_id: &str, proc_id: &str) -> AgentProc {
+        AgentProc {
+            session_id: session_id.to_string(),
+            proc_id: proc_id.to_string(),
+            pid: 4242,
+            out_file: "out.jsonl".into(),
+            err_file: "err.log".into(),
+            out_offset: 0,
+            spawned_at: now_rfc3339(),
+        }
+    }
+
+    #[test]
+    fn agent_proc_crud_is_generation_guarded() {
+        let (store, session_id) = store_with_session();
+        store
+            .upsert_agent_proc(&proc_row(&session_id, "gen1"))
+            .unwrap();
+        assert!(store.agent_proc_current(&session_id, "gen1").unwrap());
+
+        // A respawn replaces the row; the old generation no longer owns it.
+        store
+            .upsert_agent_proc(&proc_row(&session_id, "gen2"))
+            .unwrap();
+        assert!(!store.agent_proc_current(&session_id, "gen1").unwrap());
+        assert!(store.agent_proc_current(&session_id, "gen2").unwrap());
+
+        // A stale tailer's delete is a no-op; the current generation's lands.
+        store.delete_agent_proc(&session_id, "gen1").unwrap();
+        assert_eq!(store.list_agent_procs().unwrap().len(), 1);
+        store.delete_agent_proc(&session_id, "gen2").unwrap();
+        assert!(store.list_agent_procs().unwrap().is_empty());
+    }
+
+    #[test]
+    fn append_events_with_offset_is_atomic_and_guarded() {
+        let (store, session_id) = store_with_session();
+        store
+            .upsert_agent_proc(&proc_row(&session_id, "gen1"))
+            .unwrap();
+
+        let events = vec![
+            AgentEvent::AssistantText {
+                text: "hello".into(),
+                parent_tool_use_id: None,
+            },
+            AgentEvent::Result {
+                is_error: false,
+                cost_usd: Some(0.01),
+                duration_ms: None,
+                num_turns: Some(1),
+                usage: None,
+            },
+        ];
+        let records = store
+            .append_events_with_offset(&session_id, "gen1", &events, 512)
+            .unwrap();
+        assert_eq!(records.len(), 2);
+        assert_eq!(records[0].seq, 1);
+        assert_eq!(records[1].seq, 2);
+        assert_eq!(store.list_events(&session_id).unwrap().len(), 2);
+        assert_eq!(store.list_agent_procs().unwrap()[0].out_offset, 512);
+
+        // A stale generation still appends its drained events, but cannot
+        // touch the new generation's offset bookkeeping.
+        store
+            .upsert_agent_proc(&proc_row(&session_id, "gen2"))
+            .unwrap();
+        store
+            .append_events_with_offset(
+                &session_id,
+                "gen1",
+                &[AgentEvent::Notice {
+                    text: "tail".into(),
+                }],
+                1024,
+            )
+            .unwrap();
+        assert_eq!(store.list_events(&session_id).unwrap().len(), 3);
+        assert_eq!(store.list_agent_procs().unwrap()[0].out_offset, 0);
+    }
+
+    #[test]
+    fn running_sessions_listed_for_recovery() {
+        let (store, session_id) = store_with_session();
+        assert!(store.list_running_sessions().unwrap().is_empty());
+        store
+            .set_session_status(&session_id, SessionStatus::Running)
+            .unwrap();
+        let running = store.list_running_sessions().unwrap();
+        assert_eq!(running.len(), 1);
+        assert_eq!(running[0].id, session_id);
+    }
 }
