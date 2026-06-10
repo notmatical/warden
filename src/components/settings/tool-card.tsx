@@ -1,4 +1,4 @@
-import { Loader2 } from "lucide-react"
+import { ArrowUpCircle, Loader2 } from "lucide-react"
 import type { ComponentType, ReactNode } from "react"
 
 import { Button } from "@/components/ui/button"
@@ -22,10 +22,21 @@ const SOURCES: { value: ProviderSource; label: string; hint: string }[] = [
 
 type PillKind = "ok" | "warn" | "off"
 
-const PILL: Record<PillKind, string> = {
-  ok: "bg-emerald-500/10 text-emerald-600 ring-emerald-500/30 dark:text-emerald-500",
-  warn: "bg-amber-500/10 text-amber-600 ring-amber-500/30 dark:text-amber-500",
-  off: "bg-muted/60 text-muted-foreground ring-border",
+const PILL: Record<PillKind, { surface: string; dot: string }> = {
+  ok: {
+    surface:
+      "bg-emerald-500/10 text-emerald-600 ring-emerald-500/30 dark:text-emerald-500",
+    dot: "bg-emerald-500",
+  },
+  warn: {
+    surface:
+      "bg-amber-500/10 text-amber-600 ring-amber-500/30 dark:text-amber-500",
+    dot: "bg-amber-500",
+  },
+  off: {
+    surface: "bg-muted/60 text-muted-foreground ring-border",
+    dot: "bg-muted-foreground/40",
+  },
 }
 
 /** Connection-state pill shared by every tool/integration card. */
@@ -34,19 +45,10 @@ export function StatePill({ kind, label }: { kind: PillKind; label: string }) {
     <span
       className={cn(
         "inline-flex w-fit shrink-0 items-center gap-1.5 rounded-lg px-2 py-0.5 font-medium text-[11px] ring-1 ring-inset",
-        PILL[kind]
+        PILL[kind].surface
       )}
     >
-      <span
-        className={cn(
-          "size-1.5 rounded-full",
-          kind === "ok"
-            ? "bg-emerald-500"
-            : kind === "warn"
-              ? "bg-amber-500"
-              : "bg-muted-foreground/40"
-        )}
-      />
+      <span className={cn("size-1.5 rounded-full", PILL[kind].dot)} />
       {label}
     </span>
   )
@@ -58,56 +60,73 @@ function statusPill(status: ProviderStatus): { kind: PillKind; label: string } {
   return { kind: "ok", label: "Connected" }
 }
 
-/** Card shell shared by every tool/integration tile: icon tile + name/version,
- *  state pill, description, and a footer row for controls. */
+/** Card shell shared by every tool/integration tile: brand tile + identity,
+ *  state pill, description, an optional full-bleed accent strip (updates,
+ *  progress), and a footer row for controls. The tile goes ghost (dashed)
+ *  when the tool isn't present, so install state reads at a glance. */
 export function ToolCardShell({
   icon: Icon,
   name,
-  version,
+  meta,
+  ghost = false,
   pill,
   description,
+  strip,
   footer,
-  children,
 }: {
   icon: ComponentType<{ className?: string }>
   name: string
-  version?: string | null
+  /** Subdued identity line under the name (version, key type…). */
+  meta?: ReactNode
+  /** Dashed ghost treatment for the brand tile (tool not present). */
+  ghost?: boolean
   pill: { kind: PillKind; label: string }
   description: string
+  /** Full-bleed accent row between body and footer (update offer, progress). */
+  strip?: ReactNode
   footer?: ReactNode
-  children?: ReactNode
 }) {
   return (
-    <div className="flex flex-col gap-3 rounded-xl bg-card p-4 shadow-xs ring-1 ring-foreground/10 transition-shadow hover:ring-foreground/20">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted/60 ring-1 ring-border/50">
-            <Icon className="size-[18px] text-foreground" />
-          </div>
-          <div className="flex min-w-0 flex-col">
-            <span className="truncate font-semibold text-foreground text-sm">
-              {name}
-            </span>
-            {version ? (
-              <span className="truncate font-mono text-[11px] text-muted-foreground tabular-nums">
-                v{version.replace(/^v/, "")}
+    <div className="group flex flex-col overflow-hidden rounded-xl bg-card shadow-xs ring-1 ring-foreground/10 transition-shadow hover:shadow-md hover:ring-foreground/15">
+      <div className="flex flex-1 flex-col gap-3 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <div
+              className={cn(
+                "flex size-10 shrink-0 items-center justify-center rounded-xl transition-colors",
+                ghost
+                  ? "border border-border border-dashed text-muted-foreground/50"
+                  : "bg-muted/60 text-foreground ring-1 ring-border/50"
+              )}
+            >
+              <Icon className="size-5" />
+            </div>
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <span className="truncate font-semibold text-foreground text-sm leading-tight">
+                {name}
               </span>
-            ) : null}
+              {meta ? (
+                <span className="truncate text-[11px] text-muted-foreground">
+                  {meta}
+                </span>
+              ) : null}
+            </div>
           </div>
+          <StatePill kind={pill.kind} label={pill.label} />
         </div>
-        <StatePill kind={pill.kind} label={pill.label} />
+
+        <p className="text-muted-foreground text-xs leading-relaxed">
+          {description}
+        </p>
+
+        {footer ? (
+          <div className="mt-auto flex items-center justify-between gap-2 pt-1">
+            {footer}
+          </div>
+        ) : null}
       </div>
 
-      <p className="text-muted-foreground text-xs leading-relaxed">
-        {description}
-      </p>
-
-      {footer ? (
-        <div className="mt-auto flex items-center justify-between gap-2">
-          {footer}
-        </div>
-      ) : null}
-      {children}
+      {strip}
     </div>
   )
 }
@@ -152,8 +171,13 @@ function SourcePicker({
   )
 }
 
-/** A managed-CLI tile (providers, GitHub CLI): source picker + Install /
- *  Sign in / Update action with live install progress, on the shared shell. */
+function cleanVersion(version: string): string {
+  return version.replace(/^v/, "")
+}
+
+/** A managed-CLI tile (providers, GitHub CLI) on the shared shell. Pending
+ *  updates surface as a tinted full-bleed strip with the version delta and a
+ *  real button — not a label you have to squint for. */
 export function ToolCard({
   status,
   icon,
@@ -171,55 +195,99 @@ export function ToolCard({
   onSetSource: (source: ProviderSource) => void
   onSignIn?: () => void
 }) {
-  const { busy, progress, action } = useToolInstall({
+  const { busy, progress, action, runUpdate } = useToolInstall({
     status,
     onInstall,
     onUpdate,
     onSignIn,
   })
 
+  // Update gets the strip; Install / Sign in stay footer actions (they are the
+  // card's only possible action in those states, so the footer is enough).
+  const updatePending = status.installed && status.updateAvailable
+  const footerAction =
+    action && action.label !== "Update" && !progress ? action : null
+
+  const strip = progress ? (
+    <div className="flex flex-col gap-1.5 border-border/60 border-t bg-muted/30 px-4 py-2.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate font-mono text-[10px] text-muted-foreground">
+          {progress.message}
+        </span>
+        <span className="shrink-0 font-mono text-[10px] text-muted-foreground tabular-nums">
+          {Math.round(progress.percent)}%
+        </span>
+      </div>
+      <div className="h-1 overflow-hidden rounded-full bg-border">
+        <div
+          className="h-full rounded-full bg-foreground/80 transition-[width] duration-300"
+          style={{ width: `${progress.percent}%` }}
+        />
+      </div>
+    </div>
+  ) : updatePending ? (
+    <div className="flex items-center gap-2.5 border-sky-500/20 border-t bg-sky-500/10 px-4 py-2">
+      <ArrowUpCircle className="size-4 shrink-0 text-sky-500" />
+      <span className="min-w-0 flex-1 truncate text-sky-600 text-xs dark:text-sky-400">
+        Update available
+        {status.version && status.latestVersion ? (
+          <span className="ml-1.5 font-mono text-[11px] tabular-nums opacity-80">
+            v{cleanVersion(status.version)} → v
+            {cleanVersion(status.latestVersion)}
+          </span>
+        ) : null}
+      </span>
+      <Button
+        size="xs"
+        onClick={runUpdate}
+        disabled={busy}
+        className="shrink-0 bg-sky-500 text-white hover:bg-sky-600 dark:bg-sky-500 dark:hover:bg-sky-400"
+      >
+        {busy ? <Loader2 className="size-3 animate-spin" /> : "Update"}
+      </Button>
+    </div>
+  ) : null
+
   return (
     <ToolCardShell
       icon={icon}
       name={status.name}
-      version={status.version}
+      meta={
+        status.version ? (
+          <span className="font-mono tabular-nums">
+            v{cleanVersion(status.version)}
+          </span>
+        ) : undefined
+      }
+      ghost={!status.installed}
       pill={statusPill(status)}
       description={description}
+      strip={strip}
       footer={
         <>
           <SourcePicker status={status} onSetSource={onSetSource} />
-          {action && !progress ? (
+          {footerAction ? (
             <Button
               variant="ghost"
               size="xs"
-              onClick={action.onClick}
+              onClick={footerAction.onClick}
               disabled={busy}
               className={cn(
                 "shrink-0",
-                action.primary
+                footerAction.primary
                   ? "bg-foreground text-background hover:bg-foreground/90"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
-              {busy ? <Loader2 className="size-3 animate-spin" /> : action.label}
+              {busy ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                footerAction.label
+              )}
             </Button>
           ) : null}
         </>
       }
-    >
-      {progress ? (
-        <div className="flex flex-col gap-1">
-          <div className="h-0.5 overflow-hidden rounded-full bg-border">
-            <div
-              className="h-full bg-foreground/80 transition-[width] duration-300"
-              style={{ width: `${progress.percent}%` }}
-            />
-          </div>
-          <span className="truncate font-mono text-[10px] text-muted-foreground">
-            {progress.message}
-          </span>
-        </div>
-      ) : null}
-    </ToolCardShell>
+    />
   )
 }

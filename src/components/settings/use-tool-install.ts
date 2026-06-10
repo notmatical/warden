@@ -69,21 +69,5 @@ export function useToolInstall({
     }
   }
 
-  return { busy, progress, action }
-}
-
-/** Connection-state label + tone — muted when fine, accented only when action
- *  is due. Used by both ToolRow and IntegrationCard. */
-export function connectionState(status: ProviderStatus): {
-  label: string
-  tone: string
-} {
-  if (!status.installed)
-    return { label: "Not installed", tone: "text-muted-foreground" }
-  if (!status.authed)
-    return {
-      label: "Not signed in",
-      tone: "text-amber-600 dark:text-amber-500",
-    }
-  return { label: "Connected", tone: "text-emerald-600 dark:text-emerald-500" }
+  return { busy, progress, action, runUpdate: () => void run(onUpdate) }
 }
