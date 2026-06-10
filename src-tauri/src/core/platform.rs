@@ -64,6 +64,53 @@ pub fn kill_process_tree(pid: u32) {
     }
 }
 
+/// The executable name behind `pid`, if such a process is running. Shells out
+/// (`tasklist`/`ps`) so we need no process-inspection crate; callers use it at
+/// startup recovery and on a slow reattach poll, never in a hot loop.
+pub fn process_name(pid: u32) -> Option<String> {
+    #[cfg(windows)]
+    {
+        let mut cmd = Command::new("tasklist");
+        cmd.args(["/FI", &format!("PID eq {pid}"), "/FO", "CSV", "/NH"]);
+        let output = silent_command(&mut cmd).output().ok()?;
+        let text = String::from_utf8_lossy(&output.stdout);
+        // CSV row: "name","pid",... — anything else means no match.
+        let name = text.trim().strip_prefix('"')?.split('"').next()?;
+        Some(name.to_string())
+    }
+    #[cfg(not(windows))]
+    {
+        let mut cmd = Command::new("ps");
+        cmd.args(["-p", &pid.to_string(), "-o", "comm="]);
+        let output = silent_command(&mut cmd).output().ok()?;
+        if !output.status.success() {
+            return None;
+        }
+        let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        (!name.is_empty()).then_some(name)
+    }
+}
+
+pub fn process_alive(pid: u32) -> bool {
+    process_name(pid).is_some()
+}
+
+/// Configure a session-agent command so the child can outlive this process:
+/// its own process group on Unix (no signal fan-out from ours), no console on
+/// Windows (children there survive parent death unless tied to a Job Object,
+/// which warden does not use for agents).
+pub fn detach_command(cmd: &mut tokio::process::Command) {
+    #[cfg(windows)]
+    {
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    #[cfg(unix)]
+    {
+        cmd.process_group(0);
+    }
+}
+
 /// Write a downloaded binary to `path` via a temp file + atomic rename, then make
 /// it runnable. On Windows a running binary holds a lock, so the existing file is
 /// moved aside first; elsewhere the rename swaps the directory entry to the new
