@@ -9,7 +9,6 @@ use specta::Type;
 
 use crate::domain::CheckStatus;
 use crate::error::{AppError, Result};
-use crate::git::MergeMode;
 
 /// A pull request's identity and state, as surfaced to the UI.
 #[derive(Debug, Clone, Serialize, Type)]
@@ -165,28 +164,6 @@ pub fn create_pr(
 
     status(worktree)?
         .ok_or_else(|| AppError::Git("PR created but could not be read back".to_string()))
-}
-
-/// Merge the worktree branch's open PR via `gh pr merge`, by the chosen method.
-/// `gh` itself refuses (non-zero) when the PR isn't mergeable (conflicts,
-/// blocked, not open) — that error is surfaced verbatim.
-pub fn merge(worktree: &Path, strategy: MergeMode) -> Result<()> {
-    let method = match strategy {
-        MergeMode::Squash => "--squash",
-        MergeMode::MergeCommit => "--merge",
-        MergeMode::Rebase => "--rebase",
-    };
-    let out = gh(worktree, &["pr", "merge", method])
-        .output()
-        .map_err(|e| AppError::Git(format!("failed to run gh: {e}")))?;
-    if !out.status.success() {
-        let stderr = String::from_utf8_lossy(&out.stderr);
-        return Err(AppError::Git(format!(
-            "gh pr merge failed: {}",
-            stderr.trim()
-        )));
-    }
-    Ok(())
 }
 
 /// The PR associated with the worktree's current branch, or `None` when there

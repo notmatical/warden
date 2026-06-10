@@ -184,13 +184,8 @@ export interface ProjectLabels {
 /** Aggregate CI-check state for a PR. */
 export type CheckStatus = "success" | "failure" | "pending"
 
-/** How a session's branch is folded into its base when merging. */
+/** How a worktree is brought up to date with its base or upstream. */
 export type MergeMode = "squash" | "merge" | "rebase"
-
-/** Result of merging a session's branch back into its base. */
-export type IntegrateOutcome =
-  | { status: "merged" }
-  | { status: "conflict"; files: string[] }
 
 /** Result of syncing a worktree with the latest base branch. */
 export type SyncOutcome =

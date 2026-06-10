@@ -445,19 +445,6 @@ async pullSession(sessionId: string) : Promise<Result<SyncOutcome, IpcError>> {
 }
 },
 /**
- * Fold a session's worktree branch back into its base branch, then remove the
- * worktree + branch and mark the session merged. On conflict nothing changes
- * and the clashing files are returned for the user to resolve.
- */
-async integrateSession(sessionId: string, message: string | null, mode: string | null) : Promise<Result<IntegrateOutcome, IpcError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("integrate_session", { sessionId, message, mode }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
  * Every change a session has made since it forked, for the diff view. Empty
  * when the session has no base commit (non-git or merged).
  */
@@ -778,18 +765,6 @@ async openPullRequest(sessionId: string, title: string, body: string, draft: boo
 async refreshPrStatus(sessionId: string) : Promise<Result<PrInfo | null, IpcError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("refresh_pr_status", { sessionId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Merge the session's open PR from the app, then clean up the worktree and
- * branch and mark the session merged — mirroring local integrate cleanup.
- */
-async mergePullRequest(sessionId: string, strategy: string) : Promise<Result<null, IpcError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("merge_pull_request", { sessionId, strategy }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -1226,14 +1201,6 @@ export type Group = { id: string; name: string;
  * assignments). The backend stores it verbatim; only the UI interprets it.
  */
 layout: string; createdAt: string }
-/**
- * The result of folding a session's branch into its base.
- */
-export type IntegrateOutcome = { status: "merged" } | 
-/**
- * The merge stopped on conflicts (and was aborted); these files clashed.
- */
-{ status: "conflict"; files: string[] }
 /**
  * What an agent node does. The intent carries a built-in instruction and the
  * right read/write posture, so downstream nodes need no hand-written task —

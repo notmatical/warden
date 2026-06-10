@@ -14,7 +14,6 @@ import {
 import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 
-import { LandSessionButton } from "@/components/land-session-dialog"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -325,6 +324,64 @@ function SyncButton({
   )
 }
 
+/** One-click PR, the way `claude /create-pr` does it: draft a title + body from
+ *  the branch's changes, commit everything, push, and open the PR against the
+ *  session's base — no dialog. */
+function CreatePrButton({
+  sessionId,
+  refresh,
+}: {
+  sessionId: string
+  refresh: () => void
+}) {
+  const session = useAppStore((s) => s.sessions[sessionId])
+  const openPr = useAppStore((s) => s.openPullRequest)
+  const [busy, setBusy] = useState(false)
+
+  const run = async () => {
+    setBusy(true)
+    // Best-effort AI draft; the backend already falls back to the session title.
+    const content = await ipc.generatePrContent(sessionId).catch(() => null)
+    const pr = await openPr(
+      sessionId,
+      content?.title ?? session?.title ?? "",
+      content?.body ?? "",
+      false
+    )
+    setBusy(false)
+    if (!pr) return
+    toast.success(`Opened pull request #${pr.number}`, {
+      action: { label: "View", onClick: () => void openUrl(pr.url) },
+    })
+    refresh()
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="xs"
+          onClick={() => void run()}
+          disabled={busy}
+          className="gap-1.5 text-muted-foreground hover:text-foreground"
+        >
+          {busy ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            <GitPullRequest className="size-3.5" />
+          )}
+          {busy ? "Creating PR…" : "Create PR"}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>
+        Commit, push, and open a pull request — the title and description are
+        drafted for you
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
 // The session's roots are exactly the git-status rows; non-primary project ids
 // are the editable set handed to `set_session_roots`.
 function nonPrimaryIds(statuses: RepoStatus[]): string[] {
@@ -416,6 +473,18 @@ export function GitStatusChips({
   // Any session that recorded a fork point can show its changes — isolation
   // is irrelevant; in-checkout sessions diff against HEAD-at-start.
   const canViewDiff = !!session?.baseSha && !session.mergedAt
+  // A PR can open once the branch has anything over its base (committed,
+  // uncommitted, or already pushed) and no PR exists yet.
+  const hasWork =
+    (primary?.added ?? 0) + (primary?.removed ?? 0) > 0 ||
+    (primary?.ahead ?? 0) > 0
+  const canCreatePr =
+    !!session?.isIsolated &&
+    !!session.branch &&
+    !session.mergedAt &&
+    !session.prNumber &&
+    hasRemote &&
+    hasWork
 
   // Re-check the PR's state whenever this session's view mounts.
   const prNumber = session?.prNumber ?? null
@@ -535,11 +604,9 @@ export function GitStatusChips({
             </TooltipContent>
           </Tooltip>
         ) : null}
-        <LandSessionButton
-          sessionId={sessionId}
-          hasRemote={hasRemote}
-          refresh={refresh}
-        />
+        {canCreatePr ? (
+          <CreatePrButton sessionId={sessionId} refresh={refresh} />
+        ) : null}
       </div>
     </div>
   )
