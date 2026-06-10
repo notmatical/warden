@@ -16,6 +16,7 @@ export interface ModelOption {
  */
 export const MODELS: ModelOption[] = [
   // Anthropic
+  { id: "claude-fable-5[1m]", label: "Fable 5 (1M)", provider: "Anthropic" },
   { id: "claude-fable-5", label: "Fable 5", provider: "Anthropic" },
   { id: "claude-opus-4-8[1m]", label: "Opus 4.8 (1M)", provider: "Anthropic" },
   { id: "claude-opus-4-8", label: "Opus 4.8", provider: "Anthropic" },
