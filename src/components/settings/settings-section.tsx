@@ -14,7 +14,7 @@ export function SettingsSection({
   children: ReactNode
 }) {
   return (
-    <div className="mx-auto w-full max-w-3xl">
+    <div className="w-full max-w-3xl">
       <header className="mb-6 border-border/60 border-b pb-4">
         <h2 className="font-semibold text-foreground text-lg leading-tight">
           {title}
