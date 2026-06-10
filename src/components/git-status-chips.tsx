@@ -469,7 +469,12 @@ export function GitStatusChips({
     }
   }, [sessionId, refresh])
 
-  // Constant padding — the row must not jump when statuses finish loading.
+  // Until the first status fetch lands there's nothing truthful to show —
+  // rendering controls early (the + add-root button) just flashes and shifts.
+  if (statuses.length === 0) {
+    return null
+  }
+
   return (
     <div className="flex flex-wrap items-center gap-1.5 px-1 pb-1.5 empty:hidden">
       {statuses.map((status) => (
