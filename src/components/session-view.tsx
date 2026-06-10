@@ -38,6 +38,7 @@ function SetupFailedState({ session }: { session: Session }) {
         </>
       }
       detail={session.setupError}
+      detailLabel="Setup output"
       actions={
         <>
           <Button size="sm" onClick={() => void retry()} disabled={retrying}>
