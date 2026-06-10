@@ -4,15 +4,12 @@ import tailwindcss from "@tailwindcss/vite"
 import react from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
 
-// Tauri exposes the dev host for mobile/remote development.
 const host = process.env.TAURI_DEV_HOST
 
 const pkg = JSON.parse(
   readFileSync(path.resolve(__dirname, "package.json"), "utf-8")
 ) as { version: string }
 
-// https://vite.dev/config/ — tuned for Tauri per
-// https://v2.tauri.app/start/frontend/vite/
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
@@ -24,9 +21,8 @@ export default defineConfig({
     },
   },
 
-  // Prevent Vite from clearing Rust compiler errors during `tauri dev`.
+  // Don't clear rust compiler errors in `tauri dev`
   clearScreen: false,
-  // Tauri expects a fixed port and fails if it is not available.
   server: {
     port: 1420,
     strictPort: true,
@@ -39,7 +35,7 @@ export default defineConfig({
         }
       : undefined,
     watch: {
-      ignored: ["**/src-tauri/**"],
+      ignored: ["**/src-tauri/**", "**/.warden/**", "**/.claude/**"],
     },
   },
 
@@ -54,8 +50,6 @@ export default defineConfig({
     },
     target:
       process.env.TAURI_ENV_PLATFORM === "windows" ? "chrome105" : "safari13",
-    // Vite 8 bundles rolldown; let it use its native (oxc) minifier rather than
-    // the now-separate esbuild. `false` in debug builds for readable output.
     minify: !process.env.TAURI_ENV_DEBUG,
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
   },
