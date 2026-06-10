@@ -52,6 +52,9 @@ pub struct CreateSessionOptions {
     pub backend: Option<String>,
     pub isolate: Option<bool>,
     pub native_command: Option<String>,
+    /// Run in this exact directory instead of provisioning one — e.g. a shell
+    /// opened inside another session's worktree. Implies no isolation.
+    pub working_dir: Option<String>,
 }
 
 #[tauri::command]
@@ -93,9 +96,21 @@ pub async fn create_session(
         .unwrap_or(SessionKind::Agent);
 
     // Worktree-first: agent sessions isolate by default. Plain terminals stay
-    // in the checkout — a fresh worktree per shell is noise, not safety.
-    let isolate = options.isolate.unwrap_or(kind != SessionKind::Terminal);
-    let dir = provision_working_dir(&app, &project, isolate, None)?;
+    // in the checkout — a fresh worktree per shell is noise, not safety. An
+    // explicit working_dir (a shell inside an existing worktree) wins outright.
+    let dir = match options.working_dir.filter(|d| !d.trim().is_empty()) {
+        Some(working_dir) => crate::git::ProvisionedDir {
+            working_dir,
+            branch: None,
+            base_sha: None,
+            base_branch: None,
+            is_isolated: false,
+        },
+        None => {
+            let isolate = options.isolate.unwrap_or(kind != SessionKind::Terminal);
+            provision_working_dir(&app, &project, isolate, None)?
+        }
+    };
     // An explicit backend wins; otherwise it follows from the model id, since
     // the model picks its own backend (codex/gpt ids run on Codex).
     let backend = options

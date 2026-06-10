@@ -1,16 +1,13 @@
 import {
   AlertTriangle,
   Check,
-  Copy,
   FolderGit2,
   FolderOpen,
   GitBranch,
   Loader2,
+  SquareTerminal,
 } from "lucide-react"
-import { useState } from "react"
-import { toast } from "sonner"
 
-import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,72 +15,73 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { copyText } from "@/lib/clipboard"
 import * as ipc from "@/lib/ipc"
+import { DEFAULT_CHAT_MODEL } from "@/lib/models"
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store/app-store"
 
-/** Where-am-I-running chip for the composer: shows the session's worktree
- *  branch (or "checkout") and opens a menu with the full identity — branch,
- *  base, on-disk path — plus reveal/copy actions and the isolation opt-out.
- *  Replaces the old bare icon toggle, which read as decoration. */
-export function WorktreeChip({ sessionId }: { sessionId: string }) {
+/** The primary status chip's identity segment: repo name + branch, opening a
+ *  menu with the session's where-am-I-running story — isolation state, base
+ *  branch, setup progress — plus reveal/terminal actions and the isolation
+ *  opt-out. Lives inside the chip so the worktree has exactly one home. */
+export function WorktreeIdentity({
+  sessionId,
+  name,
+  branch,
+}: {
+  sessionId: string
+  name: string
+  branch: string | null
+}) {
   const session = useAppStore((s) => s.sessions[sessionId])
   const setIsolation = useAppStore((s) => s.setIsolation)
-  const projectIsGit = useAppStore((s) => {
-    const projectId = session?.projectId
-    if (!projectId) return false
-    for (const roots of Object.values(s.rootsByGroup)) {
-      const root = roots.find((p) => p.id === projectId)
-      if (root) return root.isGit
-    }
-    return false
-  })
-  const [copied, setCopied] = useState(false)
+  const createSession = useAppStore((s) => s.createSession)
 
-  // No git, no worktree story to tell.
-  if (!session || !projectIsGit) return null
+  if (!session) return null
 
   const isolated = session.isIsolated
   const started = session.turns > 0
   const setup = session.setupStatus
 
-  const copyPath = async () => {
-    if (await copyText(session.workingDir)) {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    } else {
-      toast.error("Couldn't copy the path")
-    }
-  }
+  // A shell in this exact directory — worktree or checkout alike.
+  const openTerminal = () =>
+    void createSession({
+      projectId: session.projectId,
+      title: "Terminal",
+      model: DEFAULT_CHAT_MODEL,
+      permissionMode: "bypassPermissions",
+      role: "chat",
+      kind: "terminal",
+      workingDir: session.workingDir,
+    })
 
   return (
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="xs"
-          className={cn(
-            "max-w-48 gap-1.5 font-normal",
-            isolated ? "text-foreground/80" : "text-muted-foreground"
-          )}
+        <button
+          type="button"
+          className="-mx-1 inline-flex min-w-0 items-center gap-1.5 rounded px-1 transition hover:bg-muted hover:text-foreground"
         >
-          {isolated ? (
-            <GitBranch className="size-3 text-primary" />
-          ) : (
-            <FolderGit2 className="size-3" />
-          )}
-          <span className="truncate font-mono text-[11px]">
-            {isolated ? (session.branch ?? "worktree") : "checkout"}
-          </span>
-          {setup === "running" ? (
-            <Loader2 className="size-3 animate-spin text-muted-foreground" />
-          ) : setup === "failed" ? (
-            <AlertTriangle className="size-3 text-destructive" />
+          <span className="font-medium text-foreground/80">{name}</span>
+          {branch ? (
+            <span className="inline-flex min-w-0 items-center gap-1">
+              <GitBranch
+                className={cn(
+                  "size-3 shrink-0",
+                  isolated ? "text-primary" : "opacity-60"
+                )}
+              />
+              <span className="truncate">{branch}</span>
+            </span>
           ) : null}
-        </Button>
+          {setup === "running" ? (
+            <Loader2 className="size-3 shrink-0 animate-spin" />
+          ) : setup === "failed" ? (
+            <AlertTriangle className="size-3 shrink-0 text-destructive" />
+          ) : null}
+        </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-72">
+      <DropdownMenuContent align="start" className="w-72">
         <div className="px-2 py-1.5">
           <p className="text-xs font-medium">
             {isolated ? "Isolated worktree" : "Project checkout"}
@@ -117,31 +115,16 @@ export function WorktreeChip({ sessionId }: { sessionId: string }) {
           </div>
         ) : null}
         <DropdownMenuSeparator />
-        <div className="px-2 py-1.5">
-          <p className="text-[10px] font-medium tracking-wide text-muted-foreground/70 uppercase">
-            Path
-          </p>
-          <p
-            className="mt-0.5 cursor-text truncate font-mono text-[11px] text-muted-foreground select-text"
-            title={session.workingDir}
-          >
-            {session.workingDir}
-          </p>
-        </div>
-        <DropdownMenuItem onSelect={() => void copyPath()} className="gap-2">
-          {copied ? (
-            <Check className="size-3.5 text-emerald-500" />
-          ) : (
-            <Copy className="size-3.5 text-muted-foreground" />
-          )}
-          Copy path
-        </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() => void ipc.openIn("folder", session.workingDir)}
           className="gap-2"
         >
           <FolderOpen className="size-3.5 text-muted-foreground" />
           Reveal in file explorer
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={openTerminal} className="gap-2">
+          <SquareTerminal className="size-3.5 text-muted-foreground" />
+          Open in terminal
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         {started ? (

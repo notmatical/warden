@@ -39,6 +39,9 @@ export interface CreateSessionOptions {
   firstMessage?: string
   /** A provider CLI for a native terminal session to launch instead of the shell. */
   nativeCommand?: string
+  /** Run in this exact directory (e.g. a shell inside another session's
+   *  worktree) instead of provisioning one. */
+  workingDir?: string
 }
 
 export interface SessionSettingsPatch {

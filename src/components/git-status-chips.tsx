@@ -16,6 +16,7 @@ import { toast } from "sonner"
 
 import { LandSessionButton } from "@/components/land-session-dialog"
 import { Button } from "@/components/ui/button"
+import { WorktreeIdentity } from "@/components/worktree-chip"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -137,6 +138,7 @@ function AheadBehind({
 }
 
 function StatusChip({
+  sessionId,
   status,
   onRemove,
   onPush,
@@ -145,6 +147,7 @@ function StatusChip({
   pushing,
   pulling,
 }: {
+  sessionId: string
   status: RepoStatus
   onRemove?: () => void
   onPush?: () => void
@@ -161,17 +164,32 @@ function StatusChip({
       )}
       title={status.path}
     >
-      <span
-        className={cn("font-medium", status.isPrimary && "text-foreground/80")}
-      >
-        {status.name}
-      </span>
-      {status.branch ? (
-        <span className="inline-flex items-center gap-1">
-          <GitBranch className="size-3 opacity-60" />
-          {status.branch}
-        </span>
-      ) : null}
+      {/* The primary repo's identity opens the worktree menu — branch story,
+          reveal/terminal actions, isolation opt-out. */}
+      {status.isPrimary && status.isGit ? (
+        <WorktreeIdentity
+          sessionId={sessionId}
+          name={status.name}
+          branch={status.branch}
+        />
+      ) : (
+        <>
+          <span
+            className={cn(
+              "font-medium",
+              status.isPrimary && "text-foreground/80"
+            )}
+          >
+            {status.name}
+          </span>
+          {status.branch ? (
+            <span className="inline-flex items-center gap-1">
+              <GitBranch className="size-3 opacity-60" />
+              {status.branch}
+            </span>
+          ) : null}
+        </>
+      )}
       <Counter
         added={status.added}
         removed={status.removed}
@@ -461,6 +479,7 @@ export function GitStatusChips({
       {statuses.map((status) => (
         <StatusChip
           key={status.projectId}
+          sessionId={sessionId}
           status={status}
           onRemove={
             status.isPrimary ? undefined : () => remove(status.projectId)

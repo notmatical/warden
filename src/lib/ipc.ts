@@ -277,6 +277,9 @@ export interface CreateSessionInput {
   isolate?: boolean
   /** Provider CLI a native terminal session launches instead of the shell. */
   nativeCommand?: string
+  /** Run in this exact directory (e.g. a shell inside another session's
+   *  worktree) instead of provisioning one. Implies no isolation. */
+  workingDir?: string
 }
 
 export function createSession(input: CreateSessionInput): Promise<Session> {
@@ -293,6 +296,7 @@ export function createSession(input: CreateSessionInput): Promise<Session> {
       backend: input.backend ?? null,
       isolate: input.isolate ?? null,
       nativeCommand: input.nativeCommand ?? null,
+      workingDir: input.workingDir ?? null,
     },
   })
 }

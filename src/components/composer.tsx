@@ -19,7 +19,6 @@ import { MentionHighlight } from "@/components/mention-highlight"
 import { MentionPopover } from "@/components/mention-popover"
 import { PermissionApproval } from "@/components/permission-approval"
 import { Button } from "@/components/ui/button"
-import { WorktreeChip } from "@/components/worktree-chip"
 import { useFileDrop } from "@/hooks/use-file-drop"
 import { useGitStatus } from "@/hooks/use-git-status"
 import { useMentions } from "@/hooks/use-mentions"
@@ -306,7 +305,6 @@ export function Composer({ sessionId }: { sessionId: string }) {
           <div className="ml-auto flex items-center gap-1">
             <ContextMeter sessionId={sessionId} />
             <AgentToolbar sessionId={sessionId} />
-            <WorktreeChip sessionId={sessionId} />
           </div>
         </div>
       </div>
