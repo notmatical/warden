@@ -274,6 +274,11 @@ export interface CreateSessionInput {
   linearIssueId?: string
 }
 
+/** Report window focus; backend pollers tier their cadence off it. */
+export function setAppFocusState(focused: boolean): Promise<void> {
+  return invoke("set_app_focus_state", { focused })
+}
+
 export function createSession(input: CreateSessionInput): Promise<Session> {
   return invoke("create_session", {
     projectId: input.projectId,

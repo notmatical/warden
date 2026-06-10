@@ -125,6 +125,8 @@ pub fn run() {
         integrations::linear::commands::linear_binding,
         integrations::linear::commands::linear_bindings,
         integrations::linear::commands::linear_set_binding,
+        // core
+        core::poll_tier::set_app_focus_state,
         // terminal
         terminal::commands::start_terminal,
         terminal::commands::terminal_write,
@@ -218,6 +220,7 @@ pub fn run() {
                 store,
                 manager: AgentManager::new(),
                 workflow_cancels: Default::default(),
+                focus: Default::default(),
             });
 
             // Keep open PRs' state + CI checks fresh in the background.

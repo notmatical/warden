@@ -65,6 +65,15 @@ export const useAppStore = create<AppState>()(
           // Re-probe providers when the window regains focus, so installs or
           // logins done outside the app are reflected without a restart.
           window.addEventListener("focus", () => void get().loadProviders())
+          // Report focus to the backend; remote pollers tier their cadence
+          // (hot while focused, slow in background, crawl when idle).
+          window.addEventListener("focus", () =>
+            void ipc.setAppFocusState(true)
+          )
+          window.addEventListener("blur", () =>
+            void ipc.setAppFocusState(false)
+          )
+          void ipc.setAppFocusState(document.hasFocus())
         }
 
         void get().loadProviders()
