@@ -78,6 +78,11 @@
     "macOS": {
       "minimumSystemVersion": "10.15"
     },
+    "linux": {
+      "appimage": {
+        "bundleMediaFramework": false
+      }
+    },
     "android": {
       "debugApplicationIdSuffix": ".debug"
     }
