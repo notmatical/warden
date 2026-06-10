@@ -57,6 +57,7 @@ fn session_in_dir(
         is_isolated: dir.is_isolated,
         parent_id,
         workflow_id: None,
+        linear_issue_id: None,
     }
 }
 

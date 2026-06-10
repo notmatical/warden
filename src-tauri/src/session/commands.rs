@@ -55,6 +55,8 @@ pub struct CreateSessionOptions {
     /// Run in this exact directory instead of provisioning one — e.g. a shell
     /// opened inside another session's worktree. Implies no isolation.
     pub working_dir: Option<String>,
+    /// Linear issue this session works on; drives writeback on PR open/merge.
+    pub linear_issue_id: Option<String>,
 }
 
 #[tauri::command]
@@ -139,6 +141,7 @@ pub async fn create_session(
         is_isolated: dir.is_isolated,
         parent_id: None,
         workflow_id: None,
+        linear_issue_id: options.linear_issue_id,
     })?;
 
     emit_session(&app, &session);

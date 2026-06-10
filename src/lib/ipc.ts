@@ -281,6 +281,13 @@ export interface CreateSessionInput {
   /** Run in this exact directory (e.g. a shell inside another session's
    *  worktree) instead of provisioning one. Implies no isolation. */
   workingDir?: string
+  /** Linear issue this session works on; drives writeback on PR open/merge. */
+  linearIssueId?: string
+}
+
+/** Report window focus; backend pollers tier their cadence off it. */
+export function setAppFocusState(focused: boolean): Promise<void> {
+  return invoke("set_app_focus_state", { focused })
 }
 
 export function createSession(input: CreateSessionInput): Promise<Session> {
@@ -298,6 +305,7 @@ export function createSession(input: CreateSessionInput): Promise<Session> {
       isolate: input.isolate ?? null,
       nativeCommand: input.nativeCommand ?? null,
       workingDir: input.workingDir ?? null,
+      linearIssueId: input.linearIssueId ?? null,
     },
   })
 }

@@ -7,7 +7,7 @@ import {
   DEFAULT_CODEX_MODEL,
 } from "@/lib/models"
 import { refreshGitStatus } from "@/hooks/use-git-status"
-import { notify, windowFocused } from "@/lib/notify"
+import { notifyFor, windowFocused } from "@/lib/notify"
 import * as terminals from "@/lib/terminal-instances"
 import { detachRef, diffTabId, firstLeaf } from "@/lib/viewport"
 import { NATIVE_CLI, NATIVE_TITLE, reportError, showRef } from "../shared"
@@ -44,12 +44,14 @@ export const createSessionsSlice: StateCreator<
       return null
     }
     // The session belongs to the group that owns its root — not whatever group
-    // was last focused. Fall back to the active group only if the root isn't
-    // found (shouldn't happen).
+    // was last focused. An explicit groupId wins (a root can live in several
+    // groups); fall back to the active group only if the root isn't found.
     const groupId =
+      opts.groupId ??
       Object.entries(get().rootsByGroup).find(([, roots]) =>
         roots.some((root) => root.id === opts.projectId)
-      )?.[0] ?? get().activeGroupId
+      )?.[0] ??
+      get().activeGroupId
     if (!groupId) {
       reportError("No group selected", "Create a group first.")
       return null
@@ -68,6 +70,7 @@ export const createSessionsSlice: StateCreator<
         isolate: opts.isolate,
         nativeCommand: opts.nativeCommand,
         workingDir: opts.workingDir,
+        linearIssueId: opts.linearIssueId,
       })
       set((state) => ({
         sessions: { ...state.sessions, [session.id]: session },
@@ -281,9 +284,15 @@ export const createSessionsSlice: StateCreator<
   },
 
   onSessionUpdated: (session) => {
-    const finishedTurn =
-      get().sessions[session.id]?.status === "running" &&
-      session.status !== "running"
+    const prev = get().sessions[session.id]
+    const finishedTurn = prev?.status === "running" && session.status !== "running"
+    // CI checks settling (→ success/failure) on an open PR, via the poller.
+    const checksSettled =
+      prev !== undefined &&
+      session.prNumber !== null &&
+      prev.prCheckStatus !== session.prCheckStatus &&
+      (session.prCheckStatus === "success" ||
+        session.prCheckStatus === "failure")
     set((state) => {
       const wasRunning = state.sessions[session.id]?.status === "running"
       const isRunning = session.status === "running"
@@ -318,11 +327,21 @@ export const createSessionsSlice: StateCreator<
     // Nudge with a native notification when a turn finishes while you're away.
     if (finishedTurn && !windowFocused()) {
       const errored = session.status === "error"
-      void notify(
+      void notifyFor(
+        "sessionDone",
         errored ? `${session.title} stopped` : `${session.title} finished`,
         errored
           ? "The agent stopped on an error."
           : "The agent is ready for your next message."
+      )
+    }
+    if (checksSettled && !windowFocused()) {
+      void notifyFor(
+        "prChecks",
+        session.prCheckStatus === "failure"
+          ? `Checks failed on PR #${session.prNumber}`
+          : `Checks passed on PR #${session.prNumber}`,
+        session.title
       )
     }
   },

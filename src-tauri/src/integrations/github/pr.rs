@@ -2,13 +2,11 @@
 //! token so they work off the gh login warden manages.
 
 use std::path::Path;
-use std::process::Command;
 
 use serde::Serialize;
 use serde_json::Value;
 use specta::Type;
 
-use crate::cli::{self, Tool};
 use crate::domain::CheckStatus;
 use crate::error::{AppError, Result};
 use crate::git::MergeMode;
@@ -136,17 +134,7 @@ fn rollup_to_status(rollup: Option<&Value>) -> Option<CheckStatus> {
     })
 }
 
-/// A `gh` command rooted in `cwd`, with the brokered token injected so it's
-/// authenticated regardless of the ambient shell environment.
-fn gh(cwd: &Path, args: &[&str]) -> Command {
-    let mut cmd = Command::new(cli::resolve(Tool::Gh));
-    crate::platform::silent_command(&mut cmd);
-    cmd.current_dir(cwd).args(args);
-    if let Some(token) = super::resolve_token() {
-        cmd.env("GH_TOKEN", token);
-    }
-    cmd
-}
+use super::gh_command as gh;
 
 /// Open a PR for the worktree's current branch against `base`, then read it back
 /// as structured data. `draft` opens it as a draft PR.

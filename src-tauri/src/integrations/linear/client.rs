@@ -94,11 +94,141 @@ pub async fn fetch_assigned_issues(key: &str) -> Result<Vec<LinearIssue>> {
     Ok(all)
 }
 
+/// All comments on an issue, oldest first. Fetched live per issue (never part
+/// of the poll loop) so the peek panel is always current; capped at 5 pages.
+pub async fn fetch_issue_comments(key: &str, issue_id: &str) -> Result<Vec<LinearComment>> {
+    let mut all: Vec<LinearComment> = Vec::new();
+    let mut after: Option<String> = None;
+
+    for _ in 0..5 {
+        let vars = serde_json::json!({ "id": issue_id, "first": 50, "after": after });
+        let data: CommentsData = request(key, COMMENTS_QUERY, vars).await?;
+        let conn = data.issue.comments;
+        all.extend(conn.nodes);
+
+        if conn.page_info.has_next_page {
+            match conn.page_info.end_cursor {
+                Some(cursor) => after = Some(cursor),
+                None => break,
+            }
+        } else {
+            break;
+        }
+    }
+
+    all.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+    Ok(all)
+}
+
+/// Every team visible to the user, with its projects — for the repo-binding
+/// picker. One page of projects per team is plenty there.
+pub async fn fetch_teams(key: &str) -> Result<Vec<LinearTeam>> {
+    let mut all = Vec::new();
+    let mut after: Option<String> = None;
+
+    for _ in 0..10 {
+        let vars = serde_json::json!({ "first": 50, "after": after });
+        let data: TeamsData = request(key, TEAMS_QUERY, vars).await?;
+        all.extend(data.teams.nodes.into_iter().map(LinearTeam::from));
+
+        if data.teams.page_info.has_next_page {
+            match data.teams.page_info.end_cursor {
+                Some(cursor) => after = Some(cursor),
+                None => break,
+            }
+        } else {
+            break;
+        }
+    }
+
+    Ok(all)
+}
+
+/// A team's workflow states (Backlog, Todo, In Progress, Done…), for resolving
+/// writeback targets by state category.
+pub async fn fetch_team_states(key: &str, team_id: &str) -> Result<Vec<WorkflowState>> {
+    let vars = serde_json::json!({ "id": team_id });
+    let data: TeamStatesData = request(key, TEAM_STATES_QUERY, vars).await?;
+    Ok(data.team.states.nodes)
+}
+
+/// The team an issue currently belongs to (live, not from cache — the cached
+/// row may be gone by the time writeback fires).
+pub async fn fetch_issue_team_id(key: &str, issue_id: &str) -> Result<String> {
+    let vars = serde_json::json!({ "id": issue_id });
+    let data: IssueTeamData = request(key, ISSUE_TEAM_QUERY, vars).await?;
+    Ok(data.issue.team.id)
+}
+
+/// Move an issue to a workflow state.
+pub async fn update_issue_state(key: &str, issue_id: &str, state_id: &str) -> Result<()> {
+    let vars = serde_json::json!({ "id": issue_id, "stateId": state_id });
+    let data: IssueUpdateData = request(key, ISSUE_SET_STATE_MUTATION, vars).await?;
+    if !data.issue_update.success {
+        return Err(AppError::Integration("linear: issueUpdate failed".into()));
+    }
+    Ok(())
+}
+
+/// Attach a GitHub PR link to an issue (renders natively in Linear).
+pub async fn attach_github_url(key: &str, issue_id: &str, url: &str) -> Result<()> {
+    let vars = serde_json::json!({ "issueId": issue_id, "url": url });
+    let data: AttachGithubData = request(key, ATTACH_GITHUB_MUTATION, vars).await?;
+    if !data.attachment_link_git_hub.success {
+        return Err(AppError::Integration(
+            "linear: attachmentLinkGitHub failed".into(),
+        ));
+    }
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // GraphQL documents
 // ---------------------------------------------------------------------------
 
 const VIEWER_QUERY: &str = "query { viewer { id name email } }";
+
+const TEAM_STATES_QUERY: &str = r#"
+query TeamStates($id: String!) {
+  team(id: $id) { states(first: 50) { nodes { id type position } } }
+}
+"#;
+
+const ISSUE_TEAM_QUERY: &str = r#"
+query IssueTeam($id: String!) { issue(id: $id) { team { id } } }
+"#;
+
+const ISSUE_SET_STATE_MUTATION: &str = r#"
+mutation IssueSetState($id: String!, $stateId: String!) {
+  issueUpdate(id: $id, input: { stateId: $stateId }) { success }
+}
+"#;
+
+const ATTACH_GITHUB_MUTATION: &str = r#"
+mutation AttachPr($issueId: String!, $url: String!) {
+  attachmentLinkGitHub(issueId: $issueId, url: $url) { success }
+}
+"#;
+
+const TEAMS_QUERY: &str = r#"
+query Teams($first: Int!, $after: String) {
+  teams(first: $first, after: $after) {
+    pageInfo { hasNextPage endCursor }
+    nodes { id key name projects(first: 100) { nodes { id name } } }
+  }
+}
+"#;
+
+const COMMENTS_QUERY: &str = r#"
+query IssueComments($id: String!, $first: Int!, $after: String) {
+  issue(id: $id) {
+    comments(first: $first, after: $after) {
+      pageInfo { hasNextPage endCursor }
+      nodes { id body createdAt user { id name email avatarUrl } }
+    }
+  }
+}
+"#;
 
 const ISSUES_QUERY: &str = r#"
 query Issues($first: Int!, $after: String, $filter: IssueFilter) {
@@ -186,6 +316,47 @@ pub struct LinearIssue {
     pub labels: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct LinearTeam {
+    pub id: String,
+    pub key: String,
+    pub name: String,
+    pub projects: Vec<LinearProjectRef>,
+}
+
+impl From<RawTeam> for LinearTeam {
+    fn from(r: RawTeam) -> Self {
+        LinearTeam {
+            id: r.id,
+            key: r.key,
+            name: r.name,
+            projects: r.projects.nodes,
+        }
+    }
+}
+
+/// One of a team's workflow states. `state_type` is the Linear category
+/// (backlog | unstarted | started | completed | canceled); `position` orders
+/// states within a category (lowest = the team's primary state of that kind).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowState {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub state_type: String,
+    pub position: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct LinearComment {
+    pub id: String,
+    pub body: String,
+    pub created_at: String,
+    pub user: Option<LinearUserRef>,
+}
+
 impl From<RawIssue> for LinearIssue {
     fn from(r: RawIssue) -> Self {
         LinearIssue {
@@ -267,6 +438,95 @@ struct LabelConnection {
 }
 
 #[derive(Deserialize)]
+struct TeamsData {
+    teams: TeamConnection,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TeamConnection {
+    nodes: Vec<RawTeam>,
+    page_info: PageInfo,
+}
+
+#[derive(Deserialize)]
+struct RawTeam {
+    id: String,
+    key: String,
+    name: String,
+    projects: ProjectConnection,
+}
+
+#[derive(Deserialize)]
+struct ProjectConnection {
+    nodes: Vec<LinearProjectRef>,
+}
+
+#[derive(Deserialize)]
+struct TeamStatesData {
+    team: TeamStates,
+}
+
+#[derive(Deserialize)]
+struct TeamStates {
+    states: StateConnection,
+}
+
+#[derive(Deserialize)]
+struct StateConnection {
+    nodes: Vec<WorkflowState>,
+}
+
+#[derive(Deserialize)]
+struct IssueTeamData {
+    issue: IssueTeam,
+}
+
+#[derive(Deserialize)]
+struct IssueTeam {
+    team: TeamIdRef,
+}
+
+#[derive(Deserialize)]
+struct TeamIdRef {
+    id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct IssueUpdateData {
+    issue_update: MutationSuccess,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AttachGithubData {
+    attachment_link_git_hub: MutationSuccess,
+}
+
+#[derive(Deserialize)]
+struct MutationSuccess {
+    success: bool,
+}
+
+#[derive(Deserialize)]
+struct CommentsData {
+    issue: CommentIssue,
+}
+
+#[derive(Deserialize)]
+struct CommentIssue {
+    comments: CommentConnection,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CommentConnection {
+    nodes: Vec<LinearComment>,
+    page_info: PageInfo,
+}
+
+#[derive(Deserialize)]
 struct LabelNode {
     name: String,
 }
@@ -298,6 +558,17 @@ mod tests {
                 "  {} [{}] {}",
                 issue.identifier, issue.state.name, issue.title
             );
+        }
+
+        if let Some(issue) = issues.first() {
+            let comments = fetch_issue_comments(&key, &issue.id)
+                .await
+                .expect("fetch_issue_comments failed");
+            eprintln!("comments on {}: {}", issue.identifier, comments.len());
+            for c in &comments {
+                let who = c.user.as_ref().map(|u| u.name.as_str()).unwrap_or("?");
+                eprintln!("  {} at {}: {} chars", who, c.created_at, c.body.len());
+            }
         }
     }
 }

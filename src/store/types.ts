@@ -28,6 +28,9 @@ import type {
 
 export interface CreateSessionOptions {
   projectId: string
+  /** Explicit owning group — needed when the same root lives in several
+   *  groups; defaults to the first group containing the root. */
+  groupId?: string
   title: string
   model: string
   permissionMode: PermissionMode
@@ -42,6 +45,8 @@ export interface CreateSessionOptions {
   /** Run in this exact directory (e.g. a shell inside another session's
    *  worktree) instead of provisioning one. */
   workingDir?: string
+  /** Linear issue this session works on; drives writeback on PR open/merge. */
+  linearIssueId?: string
 }
 
 export interface SessionSettingsPatch {

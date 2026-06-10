@@ -117,12 +117,22 @@ pub fn run() {
         integrations::github::commands::generate_pr_content,
         integrations::github::commands::list_open_prs,
         integrations::github::commands::checkout_pr,
+        integrations::github::commands::list_my_issues,
+        integrations::github::commands::github_issue_comments,
         // linear
         integrations::linear::commands::linear_connect,
         integrations::linear::commands::linear_disconnect,
         integrations::linear::commands::linear_status,
         integrations::linear::commands::linear_cached_issues,
         integrations::linear::commands::linear_sync_now,
+        integrations::linear::commands::linear_issue_comments,
+        integrations::linear::commands::linear_start_issue,
+        integrations::linear::commands::linear_teams,
+        integrations::linear::commands::linear_binding,
+        integrations::linear::commands::linear_bindings,
+        integrations::linear::commands::linear_set_binding,
+        // core
+        core::poll_tier::set_app_focus_state,
         // terminal
         terminal::commands::start_terminal,
         terminal::commands::terminal_write,
@@ -216,6 +226,7 @@ pub fn run() {
                 store,
                 manager: AgentManager::new(),
                 workflow_cancels: Default::default(),
+                focus: Default::default(),
             });
 
             // Keep open PRs' state + CI checks fresh in the background.

@@ -1,9 +1,14 @@
 import { SettingsSection } from "@/components/settings/settings-section"
-import { ToolRow } from "@/components/settings/tool-row"
+import { ToolList, ToolRow } from "@/components/settings/tool-list"
 import { runInLoginTerminal, shellBin } from "@/lib/cli-login"
 import { PROVIDER_ICON } from "@/lib/provider-icons"
 import { useAppStore } from "@/store/app-store"
-import type { ProviderStatus } from "@/types"
+import type { Provider, ProviderStatus } from "@/types"
+
+const PROVIDER_DESCRIPTION: Record<Provider, string> = {
+  claude: "Runs your Claude model sessions.",
+  codex: "Runs your GPT model sessions.",
+}
 
 function signInProvider(status: ProviderStatus) {
   const bin = shellBin(status.path, status.id)
@@ -20,24 +25,25 @@ export function ProvidersSection() {
   return (
     <SettingsSection
       title="Providers"
-      description="Agent CLIs that power your sessions. Run warden's managed copy or the one on your PATH."
+      description="The agent CLIs that power your sessions."
     >
       {providers.length === 0 ? (
-        <p className="text-xs text-muted-foreground">No providers detected.</p>
+        <p className="text-muted-foreground text-xs">No providers detected.</p>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-border/60 divide-y divide-border/60">
+        <ToolList>
           {providers.map((status) => (
             <ToolRow
               key={status.id}
               status={status}
               icon={PROVIDER_ICON[status.id]}
+              description={PROVIDER_DESCRIPTION[status.id]}
               onInstall={() => installProvider(status.id)}
               onUpdate={() => updateProvider(status.id)}
               onSetSource={(source) => setProviderSource(status.id, source)}
               onSignIn={() => signInProvider(status)}
             />
           ))}
-        </div>
+        </ToolList>
       )}
     </SettingsSection>
   )

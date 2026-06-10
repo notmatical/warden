@@ -129,22 +129,6 @@ async setSessionRoots(sessionId: string, projectIds: string[]) : Promise<Result<
     else return { status: "error", error: e  as any };
 }
 },
-async getRepoConfig(projectId: string) : Promise<Result<RepoConfig, IpcError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("get_repo_config", { projectId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async updateRepoConfig(projectId: string, config: RepoConfig) : Promise<Result<RepoConfig, IpcError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("update_repo_config", { projectId, config }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
 async getEvents(sessionId: string) : Promise<Result<EventRecord[], IpcError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_events", { sessionId }) };
@@ -180,29 +164,6 @@ async updateSession(sessionId: string, model: string | null, permissionMode: str
 async setSessionIsolation(sessionId: string, isolate: boolean) : Promise<Result<Session, IpcError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("set_session_isolation", { sessionId, isolate }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Re-run the repo's worktree setup commands for a session (after a failure,
- * or after the user edits the commands).
- */
-async retryWorktreeSetup(sessionId: string) : Promise<Result<null, IpcError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("retry_worktree_setup", { sessionId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Clear a failed setup state so the session is usable as-is.
- */
-async dismissSetupError(sessionId: string) : Promise<Result<null, IpcError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("dismiss_setup_error", { sessionId }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -276,19 +237,9 @@ async setSessionLabels(sessionId: string, labelIds: string[]) : Promise<Result<n
     else return { status: "error", error: e  as any };
 }
 },
-async sessionDeleteCheck(sessionId: string) : Promise<Result<DeleteCheck, IpcError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("session_delete_check", { sessionId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
 /**
- * Permanently delete a session: stop its turn and PTY, tear down its isolated
- * worktree and branch (best-effort, in the background), and remove its rows
- * (events cascade). The worktree survives while sibling sessions share it, and
- * only paths under warden's own worktrees root are ever removed.
+ * Permanently delete a session: stop any running turn, tear down its isolated
+ * worktree (best-effort), and remove its rows (events cascade).
  */
 async deleteSession(sessionId: string) : Promise<Result<null, IpcError>> {
     try {
@@ -464,18 +415,6 @@ async integrateSession(sessionId: string, message: string | null, mode: string |
 async getSessionDiff(sessionId: string) : Promise<Result<DiffFile[], IpcError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_session_diff", { sessionId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Full before/after contents of one changed file, for the diff tab's
- * side-by-side rendering.
- */
-async getSessionFileVersions(sessionId: string, path: string) : Promise<Result<FileVersions, IpcError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("get_session_file_versions", { sessionId, path }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -831,6 +770,29 @@ async checkoutPr(projectId: string, number: number, model: string) : Promise<Res
 }
 },
 /**
+ * Open issues assigned to the user in one repo. Soft-fails to empty (no
+ * remote / unauthenticated) so multi-repo aggregation degrades per repo.
+ */
+async listMyIssues(projectId: string) : Promise<Result<GhIssue[], IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("list_my_issues", { projectId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Comments on one issue, fetched lazily for the detail view.
+ */
+async githubIssueComments(projectId: string, number: number) : Promise<Result<GhIssueComment[], IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("github_issue_comments", { projectId, number }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Validate a personal API key against Linear and, on success, store it in the
  * OS keychain and do a best-effort initial sync. Returns the authenticated user.
  */
@@ -881,6 +843,87 @@ async linearCachedIssues() : Promise<Result<LinearIssue[], IpcError>> {
 async linearSyncNow() : Promise<Result<LinearIssue[], IpcError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("linear_sync_now") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Comments for one issue, fetched live when the peek panel opens. Not cached:
+ * keeping comments out of the poll query keeps its complexity flat, and
+ * fetching on open means they are never stale.
+ */
+async linearIssueComments(issueId: string) : Promise<Result<LinearComment[], IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("linear_issue_comments", { issueId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Move an issue to its team's primary "started" state (writeback on
+ * send-to-agent). Freshens the cache afterwards so the inbox reflects it.
+ */
+async linearStartIssue(issueId: string, teamId: string) : Promise<Result<null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("linear_start_issue", { issueId, teamId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Teams (with their projects) visible to the user — for the binding picker.
+ */
+async linearTeams() : Promise<Result<LinearTeam[], IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("linear_teams") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * A project's Linear binding from its `.warden/config.json`, if any.
+ */
+async linearBinding(projectId: string) : Promise<Result<LinearBinding | null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("linear_binding", { projectId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Every known project that carries a Linear binding — for preselecting the
+ * repo when sending an issue to an agent.
+ */
+async linearBindings() : Promise<Result<ProjectLinearBinding[], IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("linear_bindings") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Write (or remove, with `None`) a project's Linear binding.
+ */
+async linearSetBinding(projectId: string, binding: LinearBinding | null) : Promise<Result<null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("linear_set_binding", { projectId, binding }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Frontend focus reporting: window focus/blur events land here.
+ */
+async setAppFocusState(focused: boolean) : Promise<Result<null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_app_focus_state", { focused }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -1000,29 +1043,9 @@ export type ContextSource =
  */
 export type CreateSessionOptions = { groupId: string | null; permissionMode: string | null; effort: string | null; role: string | null; kind: string | null; backend: string | null; isolate: boolean | null; nativeCommand: string | null; 
 /**
- * Run in this exact directory instead of provisioning one — e.g. a shell
- * opened inside another session's worktree. Implies no isolation.
+ * Linear issue this session works on; drives writeback on PR open/merge.
  */
-workingDir: string | null }
-/**
- * What deleting a session would destroy, so the UI can ask before — instead of
- * force-deleting work. All zeros when nothing is at risk: checkout sessions
- * (nothing is removed), merged sessions (already cleaned), shared worktrees
- * (kept for the siblings).
- */
-export type DeleteCheck = { 
-/**
- * Files with uncommitted changes in the worktree (untracked included).
- */
-dirtyFiles: number; 
-/**
- * Commits on the session's branch its base doesn't have.
- */
-unmergedCommits: number; 
-/**
- * Other sessions running in the same worktree — it stays while they exist.
- */
-sharedSessions: number }
+linearIssueId: string | null }
 /**
  * One changed file's stats and unified-diff patch (vs the session's base).
  */
@@ -1091,17 +1114,10 @@ export type FileEntry = {
  */
 path: string; name: string }
 /**
- * One file's full before/after contents, for a rich (side-by-side) diff.
+ * An open issue assigned to the user, from `gh issue list`.
  */
-export type FileVersions = { 
-/**
- * Contents at the base commit; `None` when the file was added.
- */
-oldText: string | null; 
-/**
- * Working-tree contents; `None` when the file was deleted.
- */
-newText: string | null }
+export type GhIssue = { number: number; title: string; url: string; body: string; labels: string[]; author: string; updatedAt: string }
+export type GhIssueComment = { author: string; body: string; createdAt: string }
 /**
  * The top-level workspace: a named set of project roots plus a saved pane
  * layout. Sessions are opened against a group and may pull any of its roots
@@ -1161,6 +1177,8 @@ export type Label = { id: string; projectId: string; name: string;
  * A palette token the frontend maps to fill/text/ring classes.
  */
 color: string; createdAt: string }
+export type LinearBinding = { teamId: string; projectId: string | null }
+export type LinearComment = { id: string; body: string; createdAt: string; user: LinearUserRef | null }
 export type LinearIssue = { id: string; identifier: string; title: string; description: string | null; priority: number; url: string; updatedAt: string; state: LinearState; assignee: LinearUserRef | null; team: LinearTeamRef; project: LinearProjectRef | null; labels: string[] }
 export type LinearProjectRef = { id: string; name: string }
 export type LinearState = { id: string; name: string; color: string; 
@@ -1172,6 +1190,7 @@ type: string }
  * Connection state for the Tasks UI.
  */
 export type LinearStatus = { connected: boolean }
+export type LinearTeam = { id: string; key: string; name: string; projects: LinearProjectRef[] }
 export type LinearTeamRef = { id: string; key: string; name: string }
 export type LinearUserRef = { id: string; name: string; email: string | null; avatarUrl: string | null }
 /**
@@ -1240,21 +1259,8 @@ export type Project = { id: string; name: string; path: string; isGit: boolean; 
  * for the folder view. `assignments` maps a session id to its label ids.
  */
 export type ProjectLabels = { labels: Label[]; assignments: Partial<{ [key in string]: string[] }> }
+export type ProjectLinearBinding = { projectId: string; binding: LinearBinding }
 export type RepoComment = { author: string; body: string }
-/**
- * Per-repo config. All fields default so a partial file stays valid.
- */
-export type RepoConfig = { 
-/**
- * Commands run in a fresh worktree right after it is created (e.g.
- * `pnpm install`, copying `.env`). Joined with `&&`, so the first
- * failure stops the chain.
- */
-setup: string[]; 
-/**
- * Commands run in a worktree just before it is removed.
- */
-teardown: string[] }
 export type RepoRef = { number: number; title: string; 
 /**
  * "issue" or "pr".
@@ -1264,12 +1270,7 @@ export type RepoRefBody = { title: string; body: string; comments: RepoComment[]
 /**
  * Branch and divergence summary for one of a session's repo roots.
  */
-export type RepoStatus = { projectId: string; name: string; path: string; isPrimary: boolean; isGit: boolean; branch: string | null; ahead: number; behind: number; 
-/**
- * Lines changed: everything since the session's base for the primary root
- * (committed + uncommitted), uncommitted-only for other roots.
- */
-added: number; removed: number; 
+export type RepoStatus = { projectId: string; name: string; path: string; isPrimary: boolean; isGit: boolean; branch: string | null; ahead: number; behind: number; uncommittedAdded: number; uncommittedRemoved: number; 
 /**
  * Whether this root's repo has a remote — i.e. a PR can be opened from it.
  */
@@ -1319,14 +1320,6 @@ workingDir: string; branch: string | null; baseSha: string | null;
  */
 baseBranch: string | null; isIsolated: boolean; 
 /**
- * Worktree setup-commands lifecycle; `None` when none are configured.
- */
-setupStatus: SetupStatus | null; 
-/**
- * Tail of the failing setup output, when `setup_status` is `Failed`.
- */
-setupError: string | null; 
-/**
  * Tool patterns the user has approved for this session (`--allowedTools`),
  * accumulated as denied tools are approved.
  */
@@ -1340,6 +1333,11 @@ parentId: string | null;
  * workflow in the sidebar).
  */
 workflowId: string | null; 
+/**
+ * Linear issue this session was spawned from; drives writeback on PR
+ * open (attachment) and merge (completed state).
+ */
+linearIssueId: string | null; 
 /**
  * When the session's branch was merged back into its base — `None` until
  * then. A merged session's worktree is gone, so it becomes read-only.
@@ -1379,11 +1377,6 @@ export type SessionRole = "chat" | "planner" | "coder"
  * Lifecycle state of a session.
  */
 export type SessionStatus = "idle" | "running" | "error"
-/**
- * Lifecycle of the worktree setup commands run for a session. Absent when the
- * repo configures none.
- */
-export type SetupStatus = "running" | "failed" | "done"
 export type SlashCommand = { name: string; description: string | null; 
 /**
  * "project" or "user".

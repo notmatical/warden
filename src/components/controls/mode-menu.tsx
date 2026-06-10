@@ -81,6 +81,9 @@ interface ModeMenuProps {
   disabled?: boolean
   open?: boolean
   onOpenChange?: (open: boolean) => void
+  /** "toolbar" (default): compact ghost trigger with shortcut tooltip, for the
+   *  composer. "form": full-width field-style trigger, for dialogs. */
+  variant?: "toolbar" | "form"
 }
 
 export function ModeMenu({
@@ -89,12 +92,27 @@ export function ModeMenu({
   disabled,
   open: controlledOpen,
   onOpenChange,
+  variant = "toolbar",
 }: ModeMenuProps) {
   const [open, setOpen] = useControllableOpen(controlledOpen, onOpenChange)
   const active = MODE_META[value as ExecutionMode] ?? MODE_META.acceptEdits
 
-  return (
-    <DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
+  const trigger =
+    variant === "form" ? (
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="outline"
+          disabled={disabled}
+          className="h-9 w-full justify-between gap-2 border-input bg-transparent px-3 font-normal hover:bg-input/30 dark:bg-input/30 dark:hover:bg-input/50"
+        >
+          <span className="flex min-w-0 items-center gap-2">
+            <span className={cn("size-1.5 shrink-0 rounded-full", active.dot)} />
+            <span className="truncate text-sm">{active.label}</span>
+          </span>
+          <ChevronDown className="size-3.5 shrink-0 text-muted-foreground/60" />
+        </Button>
+      </DropdownMenuTrigger>
+    ) : (
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
@@ -115,6 +133,15 @@ export function ModeMenu({
           <Shortcut combo={{ key: "Tab", shift: true }} />
         </TooltipContent>
       </Tooltip>
+    )
+
+  return (
+    <DropdownMenu
+      open={open}
+      onOpenChange={setOpen}
+      modal={variant === "form"}
+    >
+      {trigger}
       <DropdownMenuContent align="start" className="w-64">
         {MODE_ORDER.map((mode) => {
           const meta = MODE_META[mode]

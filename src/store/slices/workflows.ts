@@ -3,7 +3,7 @@ import type { StateCreator } from "zustand"
 
 import { copyText } from "@/lib/clipboard"
 import * as ipc from "@/lib/ipc"
-import { notify, windowFocused } from "@/lib/notify"
+import { notifyFor, windowFocused } from "@/lib/notify"
 import { workflowTabId } from "@/lib/viewport"
 import { decodeWorkflow, encodeWorkflow } from "@/lib/workflow-share"
 import type { WorkflowRunView } from "@/types/workflow"
@@ -330,7 +330,7 @@ export const createWorkflowsSlice: StateCreator<
           ? { label: "Open workflow", onClick: openTarget }
           : undefined,
       })
-      if (!windowFocused()) void notify(title, description)
+      if (!windowFocused()) void notifyFor("workflowDone", title, description)
     }
 
     // Hit a gate → run paused, needs your sign-off. The toast carries the
@@ -352,7 +352,8 @@ export const createWorkflowsSlice: StateCreator<
         },
       })
       if (!windowFocused())
-        void notify(
+        void notifyFor(
+          "workflowDone",
           "Workflow waiting for your approval",
           "A gate is holding the run."
         )

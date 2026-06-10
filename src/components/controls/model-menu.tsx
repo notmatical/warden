@@ -43,6 +43,9 @@ interface ModelMenuProps {
   disabled?: boolean
   open?: boolean
   onOpenChange?: (open: boolean) => void
+  /** "toolbar" (default): compact ghost trigger with shortcut tooltip, for the
+   *  composer. "form": full-width field-style trigger, for dialogs. */
+  variant?: "toolbar" | "form"
 }
 
 interface ProviderEntry {
@@ -63,6 +66,7 @@ export function ModelMenu({
   disabled,
   open: controlledOpen,
   onOpenChange,
+  variant = "toolbar",
 }: ModelMenuProps) {
   const [open, setOpen] = useControllableOpen(controlledOpen, onOpenChange)
   const providers = useAppStore((s) => s.providers)
@@ -118,8 +122,24 @@ export function ModelMenu({
       !q || m.label.toLowerCase().includes(q) || m.id.toLowerCase().includes(q)
   )
 
-  return (
-    <DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
+  const ValueIcon = PROVIDER_ICON[backendForModel(value)]
+  const trigger =
+    variant === "form" ? (
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="outline"
+          disabled={disabled}
+          className="h-9 w-full justify-between gap-2 border-input bg-transparent px-3 font-normal hover:bg-input/30 dark:bg-input/30 dark:hover:bg-input/50"
+        >
+          <span className="flex min-w-0 items-center gap-2">
+            <ValueIcon className="size-3.5 shrink-0 text-muted-foreground" />
+            <span className="truncate text-sm">{formatModelName(value)}</span>
+            {fast && <AnimatedZap active className="size-3" />}
+          </span>
+          <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground/60" />
+        </Button>
+      </DropdownMenuTrigger>
+    ) : (
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
@@ -140,9 +160,25 @@ export function ModelMenu({
           <Shortcut combo={{ key: "e", mod: true }} />
         </TooltipContent>
       </Tooltip>
+    )
+
+  return (
+    // Non-modal in the composer so typing stays live; modal in dialogs so the
+    // menu (not the dialog's scroll lock) owns wheel events over its list.
+    <DropdownMenu
+      open={open}
+      onOpenChange={setOpen}
+      modal={variant === "form"}
+    >
+      {trigger}
       <DropdownMenuContent
         align="start"
-        className={cn("p-0", showRail ? "w-[22rem]" : "w-72")}
+        className={cn(
+          "p-0",
+          showRail ? "w-[22rem]" : "w-72",
+          variant === "form" &&
+            "min-w-[var(--radix-dropdown-menu-trigger-width)]"
+        )}
       >
         <div className="flex items-center gap-2 border-b border-border/50 px-2.5">
           <Search className="size-3.5 shrink-0 text-muted-foreground" />

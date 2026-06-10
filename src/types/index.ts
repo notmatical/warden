@@ -148,6 +148,8 @@ export interface Session {
   parentId: string | null
   /** Set when a workflow run spawned this session. */
   workflowId: string | null
+  /** Linear issue this session was spawned from (drives PR writeback). */
+  linearIssueId: string | null
   /** Set once the session's branch has been merged back; the worktree is gone. */
   mergedAt: string | null
   /** The pull request opened for this session's branch, if any. */

@@ -6,13 +6,12 @@ import {
   MoreHorizontal,
   Pin,
   PinOff,
-  Plus,
   SquareTerminal,
   Tag,
   Trash2,
   Wrench,
 } from "lucide-react"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { AgentProvidersIcon } from "@/components/agent-providers-icon"
 import {
@@ -24,7 +23,12 @@ import { useConfirm } from "@/components/confirm-dialog"
 import { ClaudeIcon, CodexIcon } from "@/components/icons/brand"
 import { LabelChip, LabelPicker, labelColor } from "@/components/label-picker"
 import { SessionFavicon } from "@/components/session-favicon"
-import { Badge } from "@/components/ui/badge"
+import { CountChip } from "@/components/common/count-chip"
+import {
+  FILTER_SURFACE,
+  FilterMenu,
+  SwatchStack,
+} from "@/components/common/filter-menu"
 import { Button } from "@/components/ui/button"
 import {
   ContextMenu,
@@ -35,7 +39,6 @@ import {
 } from "@/components/ui/context-menu"
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -48,6 +51,9 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { WorktreeSetupDialog } from "@/components/worktree-setup-dialog"
+import { BindLinearBanner } from "@/integrations/linear/components/bind-linear-banner"
+import { FolderTasksSection } from "@/integrations/linear/components/folder-tasks-section"
+import { useFolderLinearBinding } from "@/integrations/linear/hooks"
 import * as ipc from "@/lib/ipc"
 import { DEFAULT_CHAT_MODEL } from "@/lib/models"
 import { relativeTime } from "@/lib/time"
@@ -61,8 +67,8 @@ const COLS =
 
 const MENU_ITEM = "gap-2 text-[13px]"
 
-/** Filter-bar control surface — shared by search + status (matches Workflows). */
-const FILTER_SURFACE = "border-border/60 bg-input/50 dark:bg-input/50"
+/** Sessions rendered per infinite-scroll page. */
+const PAGE = 15
 
 const STATUS: Record<
   SessionStatus,
@@ -113,18 +119,27 @@ function subtitle(session: Session): string {
   return session.model
 }
 
-/** A folder's session list — every session for one project (repo root). Click a
- *  row to open it; right-click or the kebab for pin/labels/delete. */
+/** A folder's dashboard: its sessions, and — when the repo is bound to a
+ *  Linear team — its tasks. Header anchors where you are (group · folder ·
+ *  path) plus live stats, and always offers session creation. */
 export function FolderView({ projectId }: { projectId: string }) {
   const project = useAppStore((s) =>
     Object.values(s.rootsByGroup)
       .flat()
       .find((p) => p.id === projectId)
   )
-  const sessionsMap = useAppStore((s) => s.sessions)
-  const openSession = useAppStore((s) => s.openSession)
-  const deleteSession = useAppStore((s) => s.deleteSession)
-  const setSessionPinned = useAppStore((s) => s.setSessionPinned)
+  const groupNames = useAppStore((s) =>
+    s.groups
+      .filter((g) => (s.rootsByGroup[g.id] ?? []).some((p) => p.id === projectId))
+      .map((g) => g.name)
+      .join(" · ")
+  )
+  const runningCount = useAppStore(
+    (s) =>
+      Object.values(s.sessions).filter(
+        (x) => x.projectId === projectId && x.status === "running"
+      ).length
+  )
   const createSession = useAppStore((s) => s.createSession)
   const createNativeSession = useAppStore((s) => s.createNativeSession)
   const claudeAuthed = useAppStore((s) =>
@@ -133,6 +148,139 @@ export function FolderView({ projectId }: { projectId: string }) {
   const codexAuthed = useAppStore((s) =>
     s.providers.some((p) => p.id === "codex" && p.authed)
   )
+  const linear = useFolderLinearBinding(projectId)
+  const [setupOpen, setSetupOpen] = useState(false)
+
+  const newSession = (kind: SessionKind) => {
+    void createSession({
+      projectId,
+      title: kind === "terminal" ? "Terminal" : "New session",
+      model: DEFAULT_CHAT_MODEL,
+      permissionMode: "bypassPermissions",
+      role: "chat",
+      kind,
+    })
+  }
+
+  return (
+    <div className="h-full overflow-y-auto">
+      <div className="flex flex-col gap-6 p-6">
+        <div className="flex shrink-0 items-center gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted/60 ring-1 ring-border/50">
+            <FolderGit2 className="size-5 text-muted-foreground" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate font-semibold text-foreground text-lg leading-tight">
+              {project?.name ?? "Folder"}
+            </h1>
+            <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground/70">
+              {groupNames ? (
+                <>
+                  <span className="shrink-0 truncate">{groupNames}</span>
+                  <span className="shrink-0 text-muted-foreground/40">·</span>
+                </>
+              ) : null}
+              {project ? (
+                <span className="truncate font-mono">{project.path}</span>
+              ) : null}
+            </div>
+          </div>
+          {runningCount > 0 ? (
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-blue-500/10 px-2 py-0.5 font-medium text-[11px] text-blue-400 ring-1 ring-blue-500/30 ring-inset">
+              <span className="size-1.5 animate-pulse rounded-full bg-blue-500" />
+              {runningCount} running
+            </span>
+          ) : null}
+          {project?.isGit ? (
+            <>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Worktree commands"
+                    onClick={() => setSetupOpen(true)}
+                    className="shrink-0 text-muted-foreground"
+                  >
+                    <Wrench className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  Worktree setup/teardown commands
+                </TooltipContent>
+              </Tooltip>
+              <WorktreeSetupDialog
+                projectId={projectId}
+                open={setupOpen}
+                onOpenChange={setSetupOpen}
+              />
+            </>
+          ) : null}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" className="shrink-0 gap-1.5">
+                New session
+                <ChevronDown className="size-3.5 opacity-70" />
+              </Button>
+            </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuItem onSelect={() => newSession("agent")}>
+              <AgentProvidersIcon />
+              Agent session
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => newSession("terminal")}>
+              <SquareTerminal />
+              Terminal session
+            </DropdownMenuItem>
+            {claudeAuthed || codexAuthed ? <DropdownMenuSeparator /> : null}
+            {claudeAuthed ? (
+              <DropdownMenuItem
+                onSelect={() => void createNativeSession(projectId, "claude")}
+              >
+                <ClaudeIcon />
+                Native Claude
+              </DropdownMenuItem>
+            ) : null}
+            {codexAuthed ? (
+              <DropdownMenuItem
+                onSelect={() => void createNativeSession(projectId, "codex")}
+              >
+                <CodexIcon />
+                Native Codex
+              </DropdownMenuItem>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
+        </div>
+
+        {linear.phase === "unbound" ? (
+          <BindLinearBanner
+            projectId={projectId}
+            onBound={() => void linear.refresh()}
+          />
+        ) : null}
+
+        <SessionsSection projectId={projectId} />
+
+        {linear.phase === "bound" && linear.binding ? (
+          <FolderTasksSection
+            projectId={projectId}
+            binding={linear.binding}
+            onBindingChanged={() => void linear.refresh()}
+          />
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+/** Every session for one project (repo root). Click a row to open it;
+ *  right-click or the kebab for pin/labels/delete. */
+function SessionsSection({ projectId }: { projectId: string }) {
+  const sessionsMap = useAppStore((s) => s.sessions)
+  const openSession = useAppStore((s) => s.openSession)
+  const deleteSession = useAppStore((s) => s.deleteSession)
+  const setSessionPinned = useAppStore((s) => s.setSessionPinned)
   const labels = useAppStore((s) => s.labelsByProject[projectId])
   const labelIdsBySession = useAppStore((s) => s.labelIdsBySession)
   const loadProjectLabels = useAppStore((s) => s.loadProjectLabels)
@@ -147,17 +295,6 @@ export function FolderView({ projectId }: { projectId: string }) {
     [labels]
   )
 
-  const newSession = (kind: SessionKind) => {
-    void createSession({
-      projectId,
-      title: kind === "terminal" ? "Terminal" : "New session",
-      model: DEFAULT_CHAT_MODEL,
-      permissionMode: "bypassPermissions",
-      role: "chat",
-      kind,
-    })
-  }
-
   // Suppress the fall-through row click when a menu item is selected.
   const skipNextOpen = useRef(false)
   const runAction = (fn: () => void) => {
@@ -168,30 +305,43 @@ export function FolderView({ projectId }: { projectId: string }) {
     fn()
   }
 
-  const [setupOpen, setSetupOpen] = useState(false)
+  // Long histories render incrementally: an in-table sentinel grows the limit
+  // as it scrolls into view, so the dashboard stays light without a button.
+  const [limit, setLimit] = useState(PAGE)
+  const sentinelIo = useRef<IntersectionObserver | null>(null)
+  // Callback ref + key={limit}: every bump remounts the sentinel, re-arming a
+  // fresh observer that fires immediately if it is still in view (auto-fill).
+  const observeSentinel = useCallback((el: HTMLDivElement | null) => {
+    sentinelIo.current?.disconnect()
+    sentinelIo.current = null
+    if (!el) return
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) setLimit((l) => l + PAGE)
+      },
+      { rootMargin: "240px" }
+    )
+    io.observe(el)
+    sentinelIo.current = io
+  }, [])
+
   const [search, setSearch] = useState("")
-  const [statusFilter, setStatusFilter] = useState<Set<SessionStatus>>(
-    () => new Set(STATUS_ORDER)
+  // Empty selection = no filter, matching the shared FilterMenu convention.
+  const [statusFilter, setStatusFilter] = useState<Set<string>>(
+    () => new Set()
   )
   const [labelFilter, setLabelFilter] = useState<Set<string>>(() => new Set())
-  const selectedStatusCount = STATUS_ORDER.filter((s) =>
-    statusFilter.has(s)
-  ).length
-  const allStatuses = selectedStatusCount === STATUS_ORDER.length
+  const allStatuses = statusFilter.size === 0
 
-  const toggleStatus = (s: SessionStatus, on: boolean) =>
-    setStatusFilter((prev) => {
+  const toggleIn = (
+    set: (fn: (prev: Set<string>) => Set<string>) => void,
+    value: string,
+    on: boolean
+  ) =>
+    set((prev) => {
       const next = new Set(prev)
-      if (on) next.add(s)
-      else next.delete(s)
-      return next
-    })
-
-  const toggleLabelFilter = (id: string, on: boolean) =>
-    setLabelFilter((prev) => {
-      const next = new Set(prev)
-      if (on) next.add(id)
-      else next.delete(id)
+      if (on) next.add(value)
+      else next.delete(value)
       return next
     })
 
@@ -221,204 +371,58 @@ export function FolderView({ projectId }: { projectId: string }) {
   ])
 
   return (
-    <div className="flex h-full flex-col gap-4 p-6">
-      <div className="flex shrink-0 items-center gap-2.5">
-        <FolderGit2 className="size-4 shrink-0 text-muted-foreground" />
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate font-medium text-foreground">
-            {project?.name ?? "Folder"}
-          </h1>
-          {project ? (
-            <p className="truncate font-mono text-[11px] text-muted-foreground/70">
-              {project.path}
-            </p>
-          ) : null}
-        </div>
-        <span className="shrink-0 text-muted-foreground text-xs">
-          {rows.length} session{rows.length === 1 ? "" : "s"}
-        </span>
-        {project?.isGit ? (
-          <>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Worktree commands"
-                  onClick={() => setSetupOpen(true)}
-                  className="shrink-0 text-muted-foreground"
-                >
-                  <Wrench className="size-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                Worktree setup/teardown commands
-              </TooltipContent>
-            </Tooltip>
-            <WorktreeSetupDialog
-              projectId={projectId}
-              open={setupOpen}
-              onOpenChange={setSetupOpen}
-            />
-          </>
-        ) : null}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button size="sm" className="shrink-0 gap-1.5">
-              <Plus className="size-4" />
-              New session
-              <ChevronDown className="size-3.5 opacity-70" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
-            <DropdownMenuItem onSelect={() => newSession("agent")}>
-              <AgentProvidersIcon />
-              Agent session
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => newSession("terminal")}>
-              <SquareTerminal />
-              Terminal session
-            </DropdownMenuItem>
-            {claudeAuthed || codexAuthed ? <DropdownMenuSeparator /> : null}
-            {claudeAuthed ? (
-              <DropdownMenuItem
-                onSelect={() => void createNativeSession(projectId, "claude")}
-              >
-                <ClaudeIcon />
-                Native Claude
-              </DropdownMenuItem>
-            ) : null}
-            {codexAuthed ? (
-              <DropdownMenuItem
-                onSelect={() => void createNativeSession(projectId, "codex")}
-              >
-                <CodexIcon />
-                Native Codex
-              </DropdownMenuItem>
-            ) : null}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
-      <div className="flex shrink-0 flex-wrap items-center gap-2">
+    <section className="flex flex-col gap-3">
+      <div className="flex h-7 shrink-0 flex-wrap items-center gap-2">
+        <h2 className="font-semibold text-base text-foreground">Sessions</h2>
+        <CountChip>{rows.length}</CountChip>
+        <div className="flex-1" />
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search sessions…"
-          className={cn("h-8 w-56", FILTER_SURFACE)}
+          className={cn("h-8 w-48", FILTER_SURFACE)}
         />
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              className={cn(
-                "h-8 gap-2 hover:bg-input/70 dark:hover:bg-input/70",
-                FILTER_SURFACE
-              )}
-            >
-              <span className="flex items-center">
-                {STATUS_ORDER.filter((s) => statusFilter.has(s)).map((s, i) => (
-                  <span
-                    key={s}
-                    className={cn(
-                      "size-2 rounded-full ring-2 ring-background",
-                      STATUS[s].dot,
-                      i > 0 && "-ml-1"
-                    )}
-                  />
-                ))}
-              </span>
-              Status
-              <Badge
-                variant="secondary"
-                className="h-[18px] justify-center rounded-[5px] px-1 font-mono text-[10px] tabular-nums"
-              >
-                {selectedStatusCount}/{STATUS_ORDER.length}
-              </Badge>
-              <ChevronDown className="size-3.5 text-muted-foreground/60" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-44">
-            {STATUS_ORDER.map((s) => (
-              <DropdownMenuCheckboxItem
-                key={s}
-                checked={statusFilter.has(s)}
-                onCheckedChange={(c) => toggleStatus(s, c === true)}
-                onSelect={(e) => e.preventDefault()}
-                className="gap-2 text-[13px]"
-              >
-                <span className={cn("size-2 rounded-full", STATUS[s].dot)} />
-                {STATUS[s].label}
-              </DropdownMenuCheckboxItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              className={cn(
-                "h-8 gap-2 hover:bg-input/70 dark:hover:bg-input/70",
-                FILTER_SURFACE
-              )}
-            >
-              <Tag className="size-3.5 text-muted-foreground/70" />
-              Labels
-              {labelFilter.size > 0 ? (
-                <Badge
-                  variant="secondary"
-                  className="h-[18px] justify-center rounded-[5px] px-1 font-mono text-[10px] tabular-nums"
-                >
-                  {labelFilter.size}
-                </Badge>
-              ) : null}
-              <ChevronDown className="size-3.5 text-muted-foreground/60" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-52">
-            {(labels ?? []).length === 0 ? (
-              <div className="px-2 py-1.5 text-muted-foreground text-xs">
-                No labels in this folder yet.
-              </div>
-            ) : (
-              (labels ?? []).map((l) => (
-                <DropdownMenuCheckboxItem
-                  key={l.id}
-                  checked={labelFilter.has(l.id)}
-                  onCheckedChange={(c) => toggleLabelFilter(l.id, c === true)}
-                  onSelect={(e) => e.preventDefault()}
-                  className="gap-2 text-[13px]"
-                >
-                  <span
-                    className={cn(
-                      "size-2 rounded-full",
-                      labelColor(l.color).dot
-                    )}
-                  />
-                  {l.name}
-                </DropdownMenuCheckboxItem>
-              ))
-            )}
-            {labelFilter.size > 0 ? (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onSelect={() => setLabelFilter(new Set())}
-                  className="text-[13px] text-muted-foreground"
-                >
-                  Clear filter
-                </DropdownMenuItem>
-              </>
-            ) : null}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <FilterMenu
+          label="Status"
+          icon={
+            <SwatchStack
+              swatches={STATUS_ORDER.map((s) => (
+                <span
+                  key={s}
+                  className={cn("size-2.5 rounded-full", STATUS[s].dot)}
+                />
+              ))}
+            />
+          }
+          options={STATUS_ORDER.map((s) => ({
+            value: s,
+            label: STATUS[s].label,
+            swatch: (
+              <span className={cn("size-2 rounded-full", STATUS[s].dot)} />
+            ),
+          }))}
+          selected={statusFilter}
+          onToggle={(v, on) => toggleIn(setStatusFilter, v, on)}
+          onClear={() => setStatusFilter(new Set())}
+        />
+        <FilterMenu
+          label="Labels"
+          options={(labels ?? []).map((l) => ({
+            value: l.id,
+            label: l.name,
+            swatch: (
+              <span
+                className={cn("size-2 rounded-full", labelColor(l.color).dot)}
+              />
+            ),
+          }))}
+          selected={labelFilter}
+          onToggle={(v, on) => toggleIn(setLabelFilter, v, on)}
+          onClear={() => setLabelFilter(new Set())}
+        />
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <DataTable>
+      <DataTable>
           {rows.length === 0 ? (
             <DataTableEmpty>
               {search || !allStatuses || labelFilter.size > 0
@@ -426,7 +430,7 @@ export function FolderView({ projectId }: { projectId: string }) {
                 : "No sessions in this folder yet."}
             </DataTableEmpty>
           ) : (
-            rows.map((session) => {
+            rows.slice(0, limit).map((session) => {
               const attached = labelIdsBySession[session.id] ?? []
               const chips = attached
                 .map((id) => labelsById.get(id))
@@ -621,8 +625,16 @@ export function FolderView({ projectId }: { projectId: string }) {
               )
             })
           )}
-        </DataTable>
-      </div>
-    </div>
+        {rows.length > limit ? (
+          <div
+            key={limit}
+            ref={observeSentinel}
+            className="flex items-center justify-center border-foreground/5 border-t px-4 py-2.5 text-muted-foreground/70 text-xs tabular-nums"
+          >
+            {limit} of {rows.length}
+          </div>
+        ) : null}
+      </DataTable>
+    </section>
   )
 }

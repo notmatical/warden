@@ -4,6 +4,7 @@
 pub mod error;
 pub mod events;
 pub mod platform;
+pub mod poll_tier;
 pub mod state;
 pub mod util;
 

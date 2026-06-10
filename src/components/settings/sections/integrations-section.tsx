@@ -1,8 +1,9 @@
 import { useEffect } from "react"
 
 import { GitHubIcon } from "@/components/icons/brand"
-import { IntegrationCard } from "@/components/settings/integration-card"
 import { SettingsSection } from "@/components/settings/settings-section"
+import { ToolList, ToolRow } from "@/components/settings/tool-list"
+import { LinearIntegrationRow } from "@/integrations/linear/components/linear-integration-row"
 import { runInLoginTerminal, shellBin } from "@/lib/cli-login"
 import { useAppStore } from "@/store/app-store"
 
@@ -20,11 +21,11 @@ export function IntegrationsSection() {
   return (
     <SettingsSection
       title="Integrations"
-      description="Connect 3rd-party services so warden can read and write on your behalf."
+      description="Services warden can read and act on for you."
     >
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <ToolList>
         {status ? (
-          <IntegrationCard
+          <ToolRow
             status={status}
             icon={GitHubIcon}
             description="Open issues, pull requests, and reviews from your sessions."
@@ -38,12 +39,9 @@ export function IntegrationsSection() {
               )
             }
           />
-        ) : (
-          <p className="col-span-full text-xs text-muted-foreground">
-            Checking GitHub CLI…
-          </p>
-        )}
-      </div>
+        ) : null}
+        <LinearIntegrationRow />
+      </ToolList>
     </SettingsSection>
   )
 }

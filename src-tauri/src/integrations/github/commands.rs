@@ -10,6 +10,7 @@ use crate::cli::{self, Source, Tool, ToolStatus};
 use crate::domain::{Backend, EffortLevel, PermissionMode, Session, SessionKind, SessionRole};
 use crate::error::{AppError, CommandResult};
 use crate::events::emit_session;
+use crate::integrations::github::issues::{self, GhIssue, GhIssueComment};
 use crate::integrations::github::pr::{self, PrInfo};
 use crate::state::AppState;
 use crate::store::NewSession;
@@ -108,6 +109,10 @@ pub async fn open_pull_request(
     if let Ok(updated) = state.store.get_session(&session_id) {
         emit_session(&app, &updated);
     }
+    // Linear writeback: surface the PR on the originating issue (best-effort).
+    if let Some(issue_id) = session.linear_issue_id.as_deref() {
+        crate::integrations::linear::writeback::attach_pr(issue_id, &info.url).await;
+    }
     Ok(info)
 }
 
@@ -169,14 +174,54 @@ pub async fn merge_pull_request(
     crate::terminal::kill(&session_id);
     crate::integrations::github::pr::merge(worktree, mode)?;
 
-    // Land & clean up locally (best-effort; the PR is already merged).
-    let _ = crate::git::remove_worktree(repo, worktree);
-    let _ = crate::git::delete_branch(repo, &branch);
+    // Land & clean up locally (best-effort; the PR is already merged). Runs
+    // the repo's teardown commands before removal, like every other cleanup.
+    crate::git::setup::spawn_teardown_and_remove(
+        repo.to_path_buf(),
+        worktree.to_path_buf(),
+        Some(branch),
+    );
     state.store.mark_session_merged(&session_id)?;
     if let Ok(updated) = state.store.get_session(&session_id) {
         emit_session(&app, &updated);
     }
+    // Linear writeback: the work landed, so complete the issue (best-effort).
+    if let Some(issue_id) = session.linear_issue_id.as_deref() {
+        crate::integrations::linear::writeback::complete_issue(issue_id).await;
+        if let Ok(Some(key)) = crate::integrations::linear::key::load() {
+            if matches!(
+                crate::integrations::linear::sync::sync_once(&state.store, &key).await,
+                Ok(true)
+            ) {
+                crate::events::emit_linear_changed(&app);
+            }
+        }
+    }
     Ok(())
+}
+
+/// Open issues assigned to the user in one repo. Soft-fails to empty (no
+/// remote / unauthenticated) so multi-repo aggregation degrades per repo.
+#[tauri::command]
+#[specta::specta]
+pub async fn list_my_issues(
+    state: State<'_, AppState>,
+    project_id: String,
+) -> CommandResult<Vec<GhIssue>> {
+    let project = state.store.get_project(&project_id)?;
+    Ok(issues::list_assigned_issues(Path::new(&project.path)))
+}
+
+/// Comments on one issue, fetched lazily for the detail view.
+#[tauri::command]
+#[specta::specta]
+pub async fn github_issue_comments(
+    state: State<'_, AppState>,
+    project_id: String,
+    number: i64,
+) -> CommandResult<Vec<GhIssueComment>> {
+    let project = state.store.get_project(&project_id)?;
+    Ok(issues::issue_comments(Path::new(&project.path), number)?)
 }
 
 /// Generate a suggested PR title and body from the session branch's changes,
@@ -261,6 +306,7 @@ pub async fn checkout_pr(
         is_isolated: dir.is_isolated,
         parent_id: None,
         workflow_id: None,
+        linear_issue_id: None,
     })?;
 
     // Light up the PR chip + merge controls for the reviewed PR.

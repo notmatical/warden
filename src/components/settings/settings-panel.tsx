@@ -1,9 +1,10 @@
-import { Boxes, type LucideIcon, Plug2 } from "lucide-react"
+import { Bell, Boxes, type LucideIcon, Plug2 } from "lucide-react"
 import type { ComponentType } from "react"
 
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store/app-store"
 import { IntegrationsSection } from "./sections/integrations-section"
+import { NotificationsSection } from "./sections/notifications-section"
 import { ProvidersSection } from "./sections/providers-section"
 
 interface Section {
@@ -27,6 +28,12 @@ const SECTIONS: Section[] = [
     icon: Plug2,
     Component: IntegrationsSection,
   },
+  {
+    id: "notifications",
+    label: "Notifications",
+    icon: Bell,
+    Component: NotificationsSection,
+  },
 ]
 
 /** The Settings tab body — the same nav + content the old dialog had, sized to
@@ -47,8 +54,8 @@ export function SettingsPanel() {
   // content — a preferences-style layout (macOS System Settings, Linear,
   // Vercel) rather than a panel-in-a-panel.
   return (
-    <div className="grid h-full min-h-0 grid-cols-[180px_1fr]">
-      <nav className="flex flex-col gap-0.5 pt-2">
+    <div className="grid h-full min-h-0 grid-cols-[200px_1fr]">
+      <nav className="flex flex-col gap-0.5 border-border/40 border-r p-3">
         {SECTIONS.map((section) => {
           const Icon = section.icon
           const isActive = section.id === active
@@ -58,19 +65,24 @@ export function SettingsPanel() {
               type="button"
               onClick={() => setActive(section.id)}
               className={cn(
-                "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors",
+                "relative flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors",
                 isActive
-                  ? "bg-muted text-foreground"
+                  ? "bg-muted font-medium text-foreground"
                   : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
               )}
             >
-              <Icon className="size-4 shrink-0" />
+              <Icon
+                className={cn(
+                  "size-4 shrink-0",
+                  isActive ? "text-foreground" : "text-muted-foreground/70"
+                )}
+              />
               {section.label}
             </button>
           )
         })}
       </nav>
-      <div className="min-w-0 overflow-y-auto px-2 py-3">
+      <div className="min-w-0 overflow-y-auto px-8 py-6">
         <Active />
       </div>
     </div>

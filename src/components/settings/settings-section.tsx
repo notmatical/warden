@@ -14,11 +14,13 @@ export function SettingsSection({
   children: ReactNode
 }) {
   return (
-    <div className="w-full max-w-4xl px-2 py-2">
-      <header className="mb-5 flex flex-col gap-1">
-        <h2 className="text-base font-semibold text-foreground">{title}</h2>
+    <div className="w-full max-w-3xl">
+      <header className="mb-6 border-border/60 border-b pb-4">
+        <h2 className="font-semibold text-foreground text-lg leading-tight">
+          {title}
+        </h2>
         {description ? (
-          <p className="max-w-prose text-xs text-muted-foreground">
+          <p className="mt-1 max-w-prose text-[13px] text-muted-foreground">
             {description}
           </p>
         ) : null}

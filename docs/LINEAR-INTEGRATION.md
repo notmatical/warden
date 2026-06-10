@@ -159,9 +159,10 @@ Feature-folder `src/integrations/linear/` (co-located; mirrors a relocated `src/
 
 ## Phasing
 
-- **P1 — v1 (this cut): connection + read-only inbox.** Keychain key entry, poll/cache sync loop, global filterable Tasks list, manual refresh. Read-only. Validates the sync engine end-to-end.
-- **P2 — writeback.** Outbound mutations (status change, reassign, create issue) with optimistic updates + `updatedAt`-guarded last-write-wins.
-- **P3 — repo binding + agent handoff.** `.warden/config.json` repo→team/project binding; FolderView **Sessions | Issues** tabs (reusing the shared issue-list component); issue → session/workflow with branch/prompt seeding and status writeback.
+- **P1 — v1 (shipped): connection + read-only inbox.** Keychain key entry, poll/cache sync loop, global filterable Tasks list, manual refresh. Read-only. Validates the sync engine end-to-end.
+- **P1.5 — v1.5 (shipped): in-app task view + send to agent + bindings.** Issue peek panel (markdown description + live-fetched comments — comments stay out of the poll query to keep its complexity flat, fetched per-issue on panel open instead), "Send to Agent" (repo/model/mode/isolate → chat session seeded with the full issue), `.warden/config.json` repo→team/project binding, FolderView **Sessions | Tasks** tabs on the shared issue-list component. Note: the cache is assigned-to-me only, so a folder's Tasks tab shows *your* issues in the bound team, not the team's whole board.
+- **P2 — writeback.** Outbound mutations (status change, reassign, create issue) with optimistic updates + `updatedAt`-guarded last-write-wins. (Includes moving an issue to "started" when sent to an agent.)
+- **P3 — remaining agent handoff.** Branch pre-fill (`feature/<identifier>`), send to *workflow* (seed a node-graph run from an issue), status writeback on commit/PR.
 - **P4 — group saved views.** Optional per-group default Linear filter.
 
 ---
