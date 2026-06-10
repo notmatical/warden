@@ -276,9 +276,19 @@ async setSessionLabels(sessionId: string, labelIds: string[]) : Promise<Result<n
     else return { status: "error", error: e  as any };
 }
 },
+async sessionDeleteCheck(sessionId: string) : Promise<Result<DeleteCheck, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("session_delete_check", { sessionId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 /**
- * Permanently delete a session: stop any running turn, tear down its isolated
- * worktree (best-effort), and remove its rows (events cascade).
+ * Permanently delete a session: stop its turn and PTY, tear down its isolated
+ * worktree and branch (best-effort, in the background), and remove its rows
+ * (events cascade). The worktree survives while sibling sessions share it, and
+ * only paths under warden's own worktrees root are ever removed.
  */
 async deleteSession(sessionId: string) : Promise<Result<null, IpcError>> {
     try {
@@ -994,6 +1004,25 @@ export type CreateSessionOptions = { groupId: string | null; permissionMode: str
  * opened inside another session's worktree. Implies no isolation.
  */
 workingDir: string | null }
+/**
+ * What deleting a session would destroy, so the UI can ask before — instead of
+ * force-deleting work. All zeros when nothing is at risk: checkout sessions
+ * (nothing is removed), merged sessions (already cleaned), shared worktrees
+ * (kept for the siblings).
+ */
+export type DeleteCheck = { 
+/**
+ * Files with uncommitted changes in the worktree (untracked included).
+ */
+dirtyFiles: number; 
+/**
+ * Commits on the session's branch its base doesn't have.
+ */
+unmergedCommits: number; 
+/**
+ * Other sessions running in the same worktree — it stays while they exist.
+ */
+sharedSessions: number }
 /**
  * One changed file's stats and unified-diff patch (vs the session's base).
  */
