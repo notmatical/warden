@@ -60,11 +60,41 @@ fn open_terminal(path: &str) -> Result<()> {
     Ok(())
 }
 
+/// Linux has no canonical terminal: honor the user's `$TERMINAL`, then the
+/// Debian alternatives shim, then well-known emulators with their workdir
+/// flag. `current_dir` covers the flagless entries.
 #[cfg(all(not(windows), not(target_os = "macos")))]
 fn open_terminal(path: &str) -> Result<()> {
-    Command::new("x-terminal-emulator")
-        .current_dir(path)
-        .spawn()
-        .map_err(|e| AppError::Agent(format!("failed to open terminal: {e}")))?;
-    Ok(())
+    let user_term = std::env::var("TERMINAL").unwrap_or_default();
+    let candidates: [(&str, &[&str]); 10] = [
+        (user_term.as_str(), &[]),
+        ("x-terminal-emulator", &[]),
+        ("gnome-terminal", &["--working-directory", path]),
+        ("konsole", &["--workdir", path]),
+        ("xfce4-terminal", &["--working-directory", path]),
+        ("kitty", &["--directory", path]),
+        ("alacritty", &["--working-directory", path]),
+        ("wezterm", &["start", "--cwd", path]),
+        ("ghostty", &[]),
+        ("xterm", &[]),
+    ];
+    for (bin, args) in candidates {
+        if bin.is_empty() {
+            continue;
+        }
+        let Ok(exe) = which::which(bin) else {
+            continue;
+        };
+        if Command::new(exe)
+            .args(args)
+            .current_dir(path)
+            .spawn()
+            .is_ok()
+        {
+            return Ok(());
+        }
+    }
+    Err(AppError::NotFound(
+        "no terminal emulator found; set $TERMINAL to your preferred one".into(),
+    ))
 }
