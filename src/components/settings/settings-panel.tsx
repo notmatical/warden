@@ -1,9 +1,10 @@
-import { Boxes, type LucideIcon, Plug2 } from "lucide-react"
+import { Bell, Boxes, type LucideIcon, Plug2 } from "lucide-react"
 import type { ComponentType } from "react"
 
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store/app-store"
 import { IntegrationsSection } from "./sections/integrations-section"
+import { NotificationsSection } from "./sections/notifications-section"
 import { ProvidersSection } from "./sections/providers-section"
 
 interface Section {
@@ -26,6 +27,12 @@ const SECTIONS: Section[] = [
     label: "Integrations",
     icon: Plug2,
     Component: IntegrationsSection,
+  },
+  {
+    id: "notifications",
+    label: "Notifications",
+    icon: Bell,
+    Component: NotificationsSection,
   },
 ]
 
