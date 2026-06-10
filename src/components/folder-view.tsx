@@ -135,7 +135,7 @@ export function FolderView({ projectId }: { projectId: string }) {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
+      <div className="flex flex-col gap-6 p-6">
         <div className="flex shrink-0 items-center gap-2.5">
           <FolderGit2 className="size-4 shrink-0 text-muted-foreground" />
           <div className="min-w-0 flex-1">
@@ -222,6 +222,10 @@ function SessionsSection({ projectId }: { projectId: string }) {
     }, 350)
     fn()
   }
+
+  // Long histories render incrementally — the dashboard stacks Tasks below.
+  const PAGE = 25
+  const [limit, setLimit] = useState(PAGE)
 
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<Set<SessionStatus>>(
@@ -311,12 +315,14 @@ function SessionsSection({ projectId }: { projectId: string }) {
                 ))}
               </span>
               Status
-              <Badge
-                variant="secondary"
-                className="h-[18px] justify-center rounded-[5px] px-1 font-mono text-[10px] tabular-nums"
-              >
-                {selectedStatusCount}/{STATUS_ORDER.length}
-              </Badge>
+              {!allStatuses ? (
+                <Badge
+                  variant="secondary"
+                  className="h-[18px] justify-center rounded-[5px] px-1 font-mono text-[10px] tabular-nums"
+                >
+                  {selectedStatusCount}
+                </Badge>
+              ) : null}
               <ChevronDown className="size-3.5 text-muted-foreground/60" />
             </Button>
           </DropdownMenuTrigger>
@@ -406,7 +412,7 @@ function SessionsSection({ projectId }: { projectId: string }) {
                 : "No sessions in this folder yet."}
             </DataTableEmpty>
           ) : (
-            rows.map((session) => {
+            rows.slice(0, limit).map((session) => {
               const attached = labelIdsBySession[session.id] ?? []
               const chips = attached
                 .map((id) => labelsById.get(id))
@@ -579,6 +585,16 @@ function SessionsSection({ projectId }: { projectId: string }) {
               )
             })
           )}
+        {rows.length > limit ? (
+          <button
+            type="button"
+            onClick={() => setLimit((l) => l + PAGE)}
+            className="w-full border-foreground/5 border-t px-4 py-2.5 text-center text-muted-foreground text-xs transition-colors hover:bg-accent/40 hover:text-foreground"
+          >
+            Show {Math.min(PAGE, rows.length - limit)} more (
+            {rows.length - limit} hidden)
+          </button>
+        ) : null}
       </DataTable>
     </section>
   )
