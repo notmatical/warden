@@ -14,21 +14,21 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { AgentProvidersIcon } from "@/components/agent-providers-icon"
+import { CountChip } from "@/components/common/count-chip"
 import {
   DataTable,
   DataTableEmpty,
   DataTableRow,
 } from "@/components/common/data-table"
-import { useConfirm } from "@/components/confirm-dialog"
-import { ClaudeIcon, CodexIcon } from "@/components/icons/brand"
-import { LabelChip, LabelPicker, labelColor } from "@/components/label-picker"
-import { SessionFavicon } from "@/components/session-favicon"
-import { CountChip } from "@/components/common/count-chip"
 import {
   FILTER_SURFACE,
   FilterMenu,
   SwatchStack,
 } from "@/components/common/filter-menu"
+import { useConfirm } from "@/components/confirm-dialog"
+import { ClaudeIcon, CodexIcon } from "@/components/icons/brand"
+import { LabelChip, LabelPicker, labelColor } from "@/components/label-picker"
+import { SessionFavicon } from "@/components/session-favicon"
 import { Button } from "@/components/ui/button"
 import {
   ContextMenu,
@@ -130,7 +130,9 @@ export function FolderView({ projectId }: { projectId: string }) {
   )
   const groupNames = useAppStore((s) =>
     s.groups
-      .filter((g) => (s.rootsByGroup[g.id] ?? []).some((p) => p.id === projectId))
+      .filter((g) =>
+        (s.rootsByGroup[g.id] ?? []).some((p) => p.id === projectId)
+      )
       .map((g) => g.name)
       .join(" · ")
   )
@@ -223,34 +225,34 @@ export function FolderView({ projectId }: { projectId: string }) {
                 <ChevronDown className="size-3.5 opacity-70" />
               </Button>
             </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
-            <DropdownMenuItem onSelect={() => newSession("agent")}>
-              <AgentProvidersIcon />
-              Agent session
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => newSession("terminal")}>
-              <SquareTerminal />
-              Terminal session
-            </DropdownMenuItem>
-            {claudeAuthed || codexAuthed ? <DropdownMenuSeparator /> : null}
-            {claudeAuthed ? (
-              <DropdownMenuItem
-                onSelect={() => void createNativeSession(projectId, "claude")}
-              >
-                <ClaudeIcon />
-                Native Claude
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem onSelect={() => newSession("agent")}>
+                <AgentProvidersIcon />
+                Agent session
               </DropdownMenuItem>
-            ) : null}
-            {codexAuthed ? (
-              <DropdownMenuItem
-                onSelect={() => void createNativeSession(projectId, "codex")}
-              >
-                <CodexIcon />
-                Native Codex
+              <DropdownMenuItem onSelect={() => newSession("terminal")}>
+                <SquareTerminal />
+                Terminal session
               </DropdownMenuItem>
-            ) : null}
-          </DropdownMenuContent>
-        </DropdownMenu>
+              {claudeAuthed || codexAuthed ? <DropdownMenuSeparator /> : null}
+              {claudeAuthed ? (
+                <DropdownMenuItem
+                  onSelect={() => void createNativeSession(projectId, "claude")}
+                >
+                  <ClaudeIcon />
+                  Native Claude
+                </DropdownMenuItem>
+              ) : null}
+              {codexAuthed ? (
+                <DropdownMenuItem
+                  onSelect={() => void createNativeSession(projectId, "codex")}
+                >
+                  <CodexIcon />
+                  Native Codex
+                </DropdownMenuItem>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {linear.phase === "unbound" ? (
@@ -327,9 +329,7 @@ function SessionsSection({ projectId }: { projectId: string }) {
 
   const [search, setSearch] = useState("")
   // Empty selection = no filter, matching the shared FilterMenu convention.
-  const [statusFilter, setStatusFilter] = useState<Set<string>>(
-    () => new Set()
-  )
+  const [statusFilter, setStatusFilter] = useState<Set<string>>(() => new Set())
   const [labelFilter, setLabelFilter] = useState<Set<string>>(() => new Set())
   const allStatuses = statusFilter.size === 0
 
@@ -423,208 +423,205 @@ function SessionsSection({ projectId }: { projectId: string }) {
       </div>
 
       <DataTable>
-          {rows.length === 0 ? (
-            <DataTableEmpty>
-              {search || !allStatuses || labelFilter.size > 0
-                ? "No sessions match your filters."
-                : "No sessions in this folder yet."}
-            </DataTableEmpty>
-          ) : (
-            rows.slice(0, limit).map((session) => {
-              const attached = labelIdsBySession[session.id] ?? []
-              const chips = attached
-                .map((id) => labelsById.get(id))
-                .filter((l): l is Label => !!l)
-              const onOpen = () => runAction(() => openSession(session.id))
-              const onTogglePin = () =>
-                runAction(
-                  () => void setSessionPinned(session.id, !session.pinned)
-                )
-              const onDelete = () =>
-                runAction(async () => {
-                  // Name what deletion destroys: dirty files / unmerged
-                  // commits mean the worktree+branch teardown loses work.
-                  const check = await ipc
-                    .sessionDeleteCheck(session.id)
-                    .catch(() => null)
-                  const risks: string[] = []
-                  if (check?.dirtyFiles) {
-                    risks.push(
-                      `${check.dirtyFiles} file${check.dirtyFiles === 1 ? "" : "s"} of uncommitted changes`
-                    )
-                  }
-                  if (check?.unmergedCommits) {
-                    risks.push(
-                      `${check.unmergedCommits} unmerged commit${check.unmergedCommits === 1 ? "" : "s"}`
-                    )
-                  }
-                  if (
-                    await confirm({
-                      title:
-                        risks.length > 0
-                          ? "Delete session and unsaved work?"
-                          : "Delete session?",
-                      description:
-                        risks.length > 0
-                          ? `"${session.title}" will be permanently deleted. Its worktree still holds ${risks.join(" and ")} — deleting removes the worktree and its branch, and that work is lost.`
-                          : `"${session.title}" and its history will be permanently deleted.`,
-                      confirmLabel: "Delete",
-                      destructive: true,
-                    })
-                  ) {
-                    void deleteSession(session.id)
-                  }
-                })
-              return (
-                <ContextMenu key={session.id}>
-                  <ContextMenuTrigger asChild>
-                    <DataTableRow
-                      className={COLS}
-                      onClick={() => {
-                        if (skipNextOpen.current) return
-                        openSession(session.id)
-                      }}
-                    >
-                      <div className="flex min-w-0 items-center gap-2.5">
-                        {session.pinned ? (
-                          <Pin className="size-3 shrink-0 rotate-45 fill-current text-muted-foreground/70" />
-                        ) : null}
-                        <SessionFavicon
-                          kind={session.kind}
-                          backend={session.backend}
-                          status={session.status}
-                          terminalCommand={session.terminalCommand}
-                          className="size-[18px] shrink-0"
-                        />
-                        <div className="flex min-w-0 flex-col leading-tight">
-                          <span className="truncate font-medium text-[13px] text-foreground">
-                            {session.title}
-                          </span>
-                          <span className="truncate text-[11px] text-muted-foreground/70">
-                            {subtitle(session)}
-                          </span>
-                        </div>
+        {rows.length === 0 ? (
+          <DataTableEmpty>
+            {search || !allStatuses || labelFilter.size > 0
+              ? "No sessions match your filters."
+              : "No sessions in this folder yet."}
+          </DataTableEmpty>
+        ) : (
+          rows.slice(0, limit).map((session) => {
+            const attached = labelIdsBySession[session.id] ?? []
+            const chips = attached
+              .map((id) => labelsById.get(id))
+              .filter((l): l is Label => !!l)
+            const onOpen = () => runAction(() => openSession(session.id))
+            const onTogglePin = () =>
+              runAction(
+                () => void setSessionPinned(session.id, !session.pinned)
+              )
+            const onDelete = () =>
+              runAction(async () => {
+                // Name what deletion destroys: dirty files / unmerged
+                // commits mean the worktree+branch teardown loses work.
+                const check = await ipc
+                  .sessionDeleteCheck(session.id)
+                  .catch(() => null)
+                const risks: string[] = []
+                if (check?.dirtyFiles) {
+                  risks.push(
+                    `${check.dirtyFiles} file${check.dirtyFiles === 1 ? "" : "s"} of uncommitted changes`
+                  )
+                }
+                if (check?.unmergedCommits) {
+                  risks.push(
+                    `${check.unmergedCommits} unmerged commit${check.unmergedCommits === 1 ? "" : "s"}`
+                  )
+                }
+                if (
+                  await confirm({
+                    title:
+                      risks.length > 0
+                        ? "Delete session and unsaved work?"
+                        : "Delete session?",
+                    description:
+                      risks.length > 0
+                        ? `"${session.title}" will be permanently deleted. Its worktree still holds ${risks.join(" and ")} — deleting removes the worktree and its branch, and that work is lost.`
+                        : `"${session.title}" and its history will be permanently deleted.`,
+                    confirmLabel: "Delete",
+                    destructive: true,
+                  })
+                ) {
+                  void deleteSession(session.id)
+                }
+              })
+            return (
+              <ContextMenu key={session.id}>
+                <ContextMenuTrigger asChild>
+                  <DataTableRow
+                    className={COLS}
+                    onClick={() => {
+                      if (skipNextOpen.current) return
+                      openSession(session.id)
+                    }}
+                  >
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      {session.pinned ? (
+                        <Pin className="size-3 shrink-0 rotate-45 fill-current text-muted-foreground/70" />
+                      ) : null}
+                      <SessionFavicon
+                        kind={session.kind}
+                        backend={session.backend}
+                        status={session.status}
+                        terminalCommand={session.terminalCommand}
+                        className="size-[18px] shrink-0"
+                      />
+                      <div className="flex min-w-0 flex-col leading-tight">
+                        <span className="truncate font-medium text-[13px] text-foreground">
+                          {session.title}
+                        </span>
+                        <span className="truncate text-[11px] text-muted-foreground/70">
+                          {subtitle(session)}
+                        </span>
                       </div>
+                    </div>
 
-                      {/* Labels — packed wrap (no awkward gaps from short chips),
+                    {/* Labels — packed wrap (no awkward gaps from short chips),
                           capped at 6 with a +N overflow badge. */}
-                      {chips.length > 0 ? (
-                        <div className="flex flex-wrap content-center items-center gap-1">
-                          {chips.slice(0, 6).map((l) => (
-                            <LabelChip key={l.id} label={l} />
-                          ))}
-                          {chips.length > 6 ? (
-                            <span className="inline-flex items-center rounded-md bg-muted/60 px-2 py-0.5 font-medium text-[11px] text-muted-foreground tabular-nums ring-1 ring-border ring-inset">
-                              +{chips.length - 6}
-                            </span>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <span />
-                      )}
-
-                      {session.branch ? (
-                        <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground text-xs">
-                          <GitBranch className="size-3 shrink-0 opacity-60" />
-                          <span className="truncate font-mono">
-                            {session.branch}
+                    {chips.length > 0 ? (
+                      <div className="flex flex-wrap content-center items-center gap-1">
+                        {chips.slice(0, 6).map((l) => (
+                          <LabelChip key={l.id} label={l} />
+                        ))}
+                        {chips.length > 6 ? (
+                          <span className="inline-flex items-center rounded-md bg-muted/60 px-2 py-0.5 font-medium text-[11px] text-muted-foreground tabular-nums ring-1 ring-border ring-inset">
+                            +{chips.length - 6}
                           </span>
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground/40 text-xs">
-                          —
-                        </span>
-                      )}
+                        ) : null}
+                      </div>
+                    ) : (
+                      <span />
+                    )}
 
-                      <StatusBadge status={session.status} />
-
-                      <span className="text-muted-foreground text-xs tabular-nums">
-                        {relativeTime(session.updatedAt)}
+                    {session.branch ? (
+                      <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground text-xs">
+                        <GitBranch className="size-3 shrink-0 opacity-60" />
+                        <span className="truncate font-mono">
+                          {session.branch}
+                        </span>
                       </span>
+                    ) : (
+                      <span className="text-muted-foreground/40 text-xs">
+                        —
+                      </span>
+                    )}
 
-                      <div className="flex items-center justify-end gap-0.5">
-                        <LabelPicker
-                          projectId={projectId}
-                          sessionId={session.id}
-                          attached={attached}
+                    <StatusBadge status={session.status} />
+
+                    <span className="text-muted-foreground text-xs tabular-nums">
+                      {relativeTime(session.updatedAt)}
+                    </span>
+
+                    <div className="flex items-center justify-end gap-0.5">
+                      <LabelPicker
+                        projectId={projectId}
+                        sessionId={session.id}
+                        attached={attached}
+                      >
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label="Edit labels"
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 data-[state=open]:opacity-100"
                         >
+                          <Tag className="size-3.5" />
+                        </Button>
+                      </LabelPicker>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
                           <Button
                             variant="ghost"
                             size="icon-sm"
-                            aria-label="Edit labels"
+                            aria-label="Session actions"
                             onClick={(e) => e.stopPropagation()}
                             className="text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 data-[state=open]:opacity-100"
                           >
-                            <Tag className="size-3.5" />
+                            <MoreHorizontal className="size-4" />
                           </Button>
-                        </LabelPicker>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label="Session actions"
-                              onClick={(e) => e.stopPropagation()}
-                              className="text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 data-[state=open]:opacity-100"
-                            >
-                              <MoreHorizontal className="size-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-40">
-                            <DropdownMenuItem
-                              onSelect={onOpen}
-                              className={MENU_ITEM}
-                            >
-                              <ExternalLink />
-                              Open
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onSelect={onTogglePin}
-                              className={MENU_ITEM}
-                            >
-                              {session.pinned ? <PinOff /> : <Pin />}
-                              {session.pinned ? "Unpin" : "Pin to top"}
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              variant="destructive"
-                              onSelect={onDelete}
-                              className={MENU_ITEM}
-                            >
-                              <Trash2 />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </DataTableRow>
-                  </ContextMenuTrigger>
-                  <ContextMenuContent className="w-40">
-                    <ContextMenuItem onSelect={onOpen} className={MENU_ITEM}>
-                      <ExternalLink />
-                      Open
-                    </ContextMenuItem>
-                    <ContextMenuItem
-                      onSelect={onTogglePin}
-                      className={MENU_ITEM}
-                    >
-                      {session.pinned ? <PinOff /> : <Pin />}
-                      {session.pinned ? "Unpin" : "Pin to top"}
-                    </ContextMenuItem>
-                    <ContextMenuSeparator />
-                    <ContextMenuItem
-                      variant="destructive"
-                      onSelect={onDelete}
-                      className={MENU_ITEM}
-                    >
-                      <Trash2 />
-                      Delete
-                    </ContextMenuItem>
-                  </ContextMenuContent>
-                </ContextMenu>
-              )
-            })
-          )}
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-40">
+                          <DropdownMenuItem
+                            onSelect={onOpen}
+                            className={MENU_ITEM}
+                          >
+                            <ExternalLink />
+                            Open
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onSelect={onTogglePin}
+                            className={MENU_ITEM}
+                          >
+                            {session.pinned ? <PinOff /> : <Pin />}
+                            {session.pinned ? "Unpin" : "Pin to top"}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            variant="destructive"
+                            onSelect={onDelete}
+                            className={MENU_ITEM}
+                          >
+                            <Trash2 />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </DataTableRow>
+                </ContextMenuTrigger>
+                <ContextMenuContent className="w-40">
+                  <ContextMenuItem onSelect={onOpen} className={MENU_ITEM}>
+                    <ExternalLink />
+                    Open
+                  </ContextMenuItem>
+                  <ContextMenuItem onSelect={onTogglePin} className={MENU_ITEM}>
+                    {session.pinned ? <PinOff /> : <Pin />}
+                    {session.pinned ? "Unpin" : "Pin to top"}
+                  </ContextMenuItem>
+                  <ContextMenuSeparator />
+                  <ContextMenuItem
+                    variant="destructive"
+                    onSelect={onDelete}
+                    className={MENU_ITEM}
+                  >
+                    <Trash2 />
+                    Delete
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
+            )
+          })
+        )}
         {rows.length > limit ? (
           <div
             key={limit}

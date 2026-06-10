@@ -33,8 +33,8 @@ function SetupFailedState({ session }: { session: Session }) {
       description={
         <>
           The setup commands from{" "}
-          <span className="font-mono text-xs">.warden/config.json</span>{" "}
-          stopped on an error, so this worktree may be missing dependencies.
+          <span className="font-mono text-xs">.warden/config.json</span> stopped
+          on an error, so this worktree may be missing dependencies.
         </>
       }
       detail={session.setupError}

@@ -61,8 +61,7 @@ export function FolderPicker({
         ...g,
         roots: g.roots.filter(
           (p) =>
-            p.name.toLowerCase().includes(q) ||
-            p.path.toLowerCase().includes(q)
+            p.name.toLowerCase().includes(q) || p.path.toLowerCase().includes(q)
         ),
       }))
       .filter((g) => g.roots.length > 0)
@@ -106,9 +105,7 @@ export function FolderPicker({
               </span>
             </span>
           ) : (
-            <span className="text-muted-foreground text-sm">
-              Pick a folder
-            </span>
+            <span className="text-muted-foreground text-sm">Pick a folder</span>
           )}
           <ChevronDown className="size-3.5 shrink-0 text-muted-foreground/60" />
         </Button>

@@ -1,12 +1,11 @@
 import type { StateCreator } from "zustand"
-
+import { refreshGitStatus } from "@/hooks/use-git-status"
 import * as ipc from "@/lib/ipc"
 import {
   backendForModel,
   DEFAULT_CHAT_MODEL,
   DEFAULT_CODEX_MODEL,
 } from "@/lib/models"
-import { refreshGitStatus } from "@/hooks/use-git-status"
 import { notifyFor, windowFocused } from "@/lib/notify"
 import * as terminals from "@/lib/terminal-instances"
 import { detachRef, diffTabId, firstLeaf } from "@/lib/viewport"
@@ -285,7 +284,8 @@ export const createSessionsSlice: StateCreator<
 
   onSessionUpdated: (session) => {
     const prev = get().sessions[session.id]
-    const finishedTurn = prev?.status === "running" && session.status !== "running"
+    const finishedTurn =
+      prev?.status === "running" && session.status !== "running"
     // CI checks settling (→ success/failure) on an open PR, via the poller.
     const checksSettled =
       prev !== undefined &&

@@ -1,10 +1,6 @@
 import { SettingsSection } from "@/components/settings/settings-section"
 import { Switch } from "@/components/ui/switch"
-import {
-  NOTIFY_EVENTS,
-  setNotifyEnabled,
-  useNotifyPrefs,
-} from "@/lib/notify"
+import { NOTIFY_EVENTS, setNotifyEnabled, useNotifyPrefs } from "@/lib/notify"
 
 export function NotificationsSection() {
   const prefs = useNotifyPrefs()

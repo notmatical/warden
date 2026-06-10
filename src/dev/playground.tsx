@@ -32,7 +32,11 @@ const NEW_A = `fn main() {
 
 const OLD_B = Array.from({ length: 120 }, (_, i) => `line ${i}`).join("\n")
 const NEW_B = Array.from({ length: 120 }, (_, i) =>
-  i === 40 ? "line forty — changed" : i === 90 ? "line ninety — changed" : `line ${i}`
+  i === 40
+    ? "line forty — changed"
+    : i === 90
+      ? "line ninety — changed"
+      : `line ${i}`
 ).join("\n")
 
 const FILES = [
@@ -130,7 +134,9 @@ function Tree() {
   useEffect(() => {
     model.resetPaths(TREE_PATHS)
   }, [model])
-  return <FileTree model={model} className="min-h-0 border-r border-border/60" />
+  return (
+    <FileTree model={model} className="min-h-0 border-r border-border/60" />
+  )
 }
 
 createRoot(document.getElementById("root")!).render(
@@ -148,8 +154,8 @@ createRoot(document.getElementById("root")!).render(
             virtualizer. */}
         <div className="grid h-[800px] grid-rows-[auto_minmax(0,1fr)] bg-background text-foreground">
           <p className="px-3 py-2 text-xs text-muted-foreground">
-            diff accordion playground — toggle the chevrons and watch the
-            header geometry
+            diff accordion playground — toggle the chevrons and watch the header
+            geometry
           </p>
           <div className="grid min-h-0 grid-cols-[240px_minmax(0,1fr)]">
             <Tree />

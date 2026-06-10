@@ -16,7 +16,6 @@ import { toast } from "sonner"
 
 import { LandSessionButton } from "@/components/land-session-dialog"
 import { Button } from "@/components/ui/button"
-import { WorktreeIdentity } from "@/components/worktree-chip"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,6 +28,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { WorktreeIdentity } from "@/components/worktree-chip"
 import * as ipc from "@/lib/ipc"
 import { cn } from "@/lib/utils"
 import { diffTabId } from "@/lib/viewport"

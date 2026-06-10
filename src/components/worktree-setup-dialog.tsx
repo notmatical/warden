@@ -9,13 +9,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { SegmentedTabs } from "@/components/ui/segmented-tabs"
 import { Textarea } from "@/components/ui/textarea"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { SegmentedTabs } from "@/components/ui/segmented-tabs"
 import * as ipc from "@/lib/ipc"
 import { isWindows } from "@/lib/platform"
 

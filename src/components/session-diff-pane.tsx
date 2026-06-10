@@ -1,9 +1,6 @@
 import { type CodeViewItem, parseDiffFromFile } from "@pierre/diffs"
 import { CodeView } from "@pierre/diffs/react"
-import {
-  FileTree as PierreFileTree,
-  useFileTree,
-} from "@pierre/trees/react"
+import { FileTree as PierreFileTree, useFileTree } from "@pierre/trees/react"
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   ChevronDown,
@@ -32,7 +29,6 @@ import * as ipc from "@/lib/ipc"
 import { cn } from "@/lib/utils"
 import { diffSessionIdOf } from "@/lib/viewport"
 import { useAppStore } from "@/store/app-store"
-import type { FileEntry } from "@/types"
 import type { DiffFile } from "@/types/git-diff"
 
 type Tab = "files" | "browse"

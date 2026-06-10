@@ -34,7 +34,12 @@ interface CalloutProps extends VariantProps<typeof calloutVariants> {
   className?: string
 }
 
-function Callout({ variant = "info", size, children, className }: CalloutProps) {
+function Callout({
+  variant = "info",
+  size,
+  children,
+  className,
+}: CalloutProps) {
   const Icon = ICON_MAP[variant ?? "info"]
 
   return (
