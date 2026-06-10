@@ -44,7 +44,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
+import { BindLinearBanner } from "@/integrations/linear/components/bind-linear-banner"
 import { FolderTasksSection } from "@/integrations/linear/components/folder-tasks-section"
+import { useFolderLinearBinding } from "@/integrations/linear/hooks"
 import { DEFAULT_CHAT_MODEL } from "@/lib/models"
 import { relativeTime } from "@/lib/time"
 import { cn } from "@/lib/utils"
@@ -110,12 +112,29 @@ function subtitle(session: Session): string {
 }
 
 /** A folder's dashboard: its sessions, and — when the repo is bound to a
- *  Linear team — its tasks. Header always offers session creation. */
+ *  Linear team — its tasks. Header anchors where you are (group · folder ·
+ *  path) plus live stats, and always offers session creation. */
 export function FolderView({ projectId }: { projectId: string }) {
   const project = useAppStore((s) =>
     Object.values(s.rootsByGroup)
       .flat()
       .find((p) => p.id === projectId)
+  )
+  const groupNames = useAppStore((s) =>
+    s.groups
+      .filter((g) => (s.rootsByGroup[g.id] ?? []).some((p) => p.id === projectId))
+      .map((g) => g.name)
+      .join(" · ")
+  )
+  const sessionCount = useAppStore(
+    (s) =>
+      Object.values(s.sessions).filter((x) => x.projectId === projectId).length
+  )
+  const runningCount = useAppStore(
+    (s) =>
+      Object.values(s.sessions).filter(
+        (x) => x.projectId === projectId && x.status === "running"
+      ).length
   )
   const createSession = useAppStore((s) => s.createSession)
   const createNativeSession = useAppStore((s) => s.createNativeSession)
@@ -125,6 +144,7 @@ export function FolderView({ projectId }: { projectId: string }) {
   const codexAuthed = useAppStore((s) =>
     s.providers.some((p) => p.id === "codex" && p.authed)
   )
+  const linear = useFolderLinearBinding(projectId)
 
   const newSession = (kind: SessionKind) => {
     void createSession({
@@ -140,18 +160,35 @@ export function FolderView({ projectId }: { projectId: string }) {
   return (
     <div className="h-full overflow-y-auto">
       <div className="flex flex-col gap-6 p-6">
-        <div className="flex shrink-0 items-center gap-2.5">
-          <FolderGit2 className="size-4 shrink-0 text-muted-foreground" />
+        <div className="flex shrink-0 items-center gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted/60 ring-1 ring-border/50">
+            <FolderGit2 className="size-5 text-muted-foreground" />
+          </div>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate font-medium text-foreground">
+            <h1 className="truncate font-semibold text-foreground text-lg leading-tight">
               {project?.name ?? "Folder"}
             </h1>
-            {project ? (
-              <p className="truncate font-mono text-[11px] text-muted-foreground/70">
-                {project.path}
-              </p>
-            ) : null}
+            <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground/70">
+              {groupNames ? (
+                <>
+                  <span className="shrink-0 truncate">{groupNames}</span>
+                  <span className="shrink-0 text-muted-foreground/40">·</span>
+                </>
+              ) : null}
+              {project ? (
+                <span className="truncate font-mono">{project.path}</span>
+              ) : null}
+            </div>
           </div>
+          {runningCount > 0 ? (
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-blue-500/10 px-2 py-0.5 font-medium text-[11px] text-blue-400 ring-1 ring-blue-500/30 ring-inset">
+              <span className="size-1.5 animate-pulse rounded-full bg-blue-500" />
+              {runningCount} running
+            </span>
+          ) : null}
+          <CountChip className="shrink-0">
+            {sessionCount} session{sessionCount === 1 ? "" : "s"}
+          </CountChip>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button size="sm" className="shrink-0 gap-1.5">
@@ -189,8 +226,22 @@ export function FolderView({ projectId }: { projectId: string }) {
         </DropdownMenu>
         </div>
 
+        {linear.phase === "unbound" ? (
+          <BindLinearBanner
+            projectId={projectId}
+            onBound={() => void linear.refresh()}
+          />
+        ) : null}
+
         <SessionsSection projectId={projectId} />
-        <FolderTasksSection projectId={projectId} />
+
+        {linear.phase === "bound" && linear.binding ? (
+          <FolderTasksSection
+            projectId={projectId}
+            binding={linear.binding}
+            onBindingChanged={() => void linear.refresh()}
+          />
+        ) : null}
       </div>
     </div>
   )
