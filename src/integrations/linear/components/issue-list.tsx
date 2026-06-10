@@ -15,6 +15,7 @@ import {
   SwatchStack,
 } from "@/components/common/filter-menu"
 import { Input } from "@/components/ui/input"
+import { relativeTime } from "@/lib/time"
 import { cn } from "@/lib/utils"
 
 import type { LinearIssue, LinearState } from "../types"
@@ -84,7 +85,6 @@ export function IssueList({
   const [search, setSearch] = useState("")
   const [statusSel, setStatusSel] = useState<Set<string>>(new Set())
   const [prioritySel, setPrioritySel] = useState<Set<string>>(new Set())
-  const [assigneeSel, setAssigneeSel] = useState<Set<string>>(new Set())
   const [labelSel, setLabelSel] = useState<Set<string>>(new Set())
 
   // ----- filter options derived from the cached data ----------------------
@@ -112,20 +112,6 @@ export function IssueList({
     []
   )
 
-  const assigneeOptions = useMemo<FilterOption[]>(() => {
-    const seen = new Map<string, string>()
-    let unassigned = false
-    for (const i of issues) {
-      if (i.assignee) seen.set(i.assignee.id, i.assignee.name)
-      else unassigned = true
-    }
-    const opts = [...seen.entries()]
-      .map(([value, label]) => ({ value, label }))
-      .sort((a, b) => a.label.localeCompare(b.label))
-    if (unassigned) opts.push({ value: "none", label: "No assignee" })
-    return opts
-  }, [issues])
-
   const labelOptions = useMemo<FilterOption[]>(() => {
     const seen = new Set<string>()
     for (const i of issues) for (const l of i.labels) seen.add(l)
@@ -144,13 +130,11 @@ export function IssueList({
       if (statusSel.size > 0 && !statusSel.has(i.state.name)) return false
       if (prioritySel.size > 0 && !prioritySel.has(String(i.priority)))
         return false
-      if (assigneeSel.size > 0 && !assigneeSel.has(i.assignee?.id ?? "none"))
-        return false
       if (labelSel.size > 0 && !i.labels.some((l) => labelSel.has(l)))
         return false
       return true
     })
-  }, [issues, search, statusSel, prioritySel, assigneeSel, labelSel])
+  }, [issues, search, statusSel, prioritySel, labelSel])
 
   const groups = useMemo<Group[]>(() => {
     const byName = new Map<string, Group>()
@@ -283,13 +267,6 @@ export function IssueList({
           onClear={() => setPrioritySel(new Set())}
         />
         <FilterMenu
-          label="Assignee"
-          options={assigneeOptions}
-          selected={assigneeSel}
-          onToggle={(v, on) => setAssigneeSel((p) => toggleIn(p, v, on))}
-          onClear={() => setAssigneeSel(new Set())}
-        />
-        <FilterMenu
           label="Label"
           options={labelOptions}
           selected={labelSel}
@@ -352,8 +329,11 @@ function IssueRow({
       ) : (
         <span className="size-5 shrink-0" />
       )}
-      <span className="w-14 shrink-0 text-right text-muted-foreground text-xs tabular-nums">
-        {formatDate(issue.updatedAt)}
+      <span
+        title={formatExact(issue.updatedAt)}
+        className="w-16 shrink-0 text-right text-muted-foreground text-xs tabular-nums"
+      >
+        {relativeTime(issue.updatedAt)}
       </span>
     </DataTableRow>
   )
@@ -384,6 +364,14 @@ export function Avatar({
 export function formatDate(iso: string): string {
   const date = new Date(iso)
   return Number.isNaN(date.getTime()) ? "" : format(date, "MMM d")
+}
+
+/** Full local timestamp for hover tooltips. */
+export function formatExact(iso: string): string {
+  const date = new Date(iso)
+  return Number.isNaN(date.getTime())
+    ? ""
+    : format(date, "MMM d, yyyy 'at' h:mm a")
 }
 
 /** A translucent rgba derived from a Linear "#rrggbb" state color, for tinting. */
