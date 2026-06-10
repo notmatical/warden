@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager};
 
 use crate::core::poll_tier::TierIntervals;
-use crate::events::emit_session;
+use crate::events::{emit_notification, emit_session, Notification, NotifyTarget};
 use crate::state::AppState;
 
 const INTERVALS: TierIntervals = TierIntervals {
@@ -83,6 +83,19 @@ fn poll_once(app: &AppHandle) {
                 }
             }
             let _ = store.mark_session_merged(&session.id);
+            emit_notification(
+                app,
+                &Notification {
+                    title: format!("PR #{} merged", info.number),
+                    body: Some(format!("{} was retired.", session.title)),
+                    event: Some("prChecks".into()),
+                    tone: None,
+                    sound: None,
+                    target: Some(NotifyTarget::Session {
+                        id: session.id.clone(),
+                    }),
+                },
+            );
         }
 
         if changed {
