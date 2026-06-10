@@ -1,34 +1,33 @@
-import {
-  type CodeViewItem,
-  type CodeViewOptions,
-  parseDiffFromFile,
-} from "@pierre/diffs"
+import { type CodeViewItem, parseDiffFromFile } from "@pierre/diffs"
 import { CodeView } from "@pierre/diffs/react"
+import {
+  FileTree as PierreFileTree,
+  useFileTree,
+} from "@pierre/trees/react"
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   ChevronDown,
   ChevronRight,
-  FileCode2,
   FileDiff,
-  FolderOpen as FolderOpenIcon,
-  Folder as FolderIcon,
   FolderTree,
   Loader2,
   RefreshCw,
 } from "lucide-react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 
-import { useTheme } from "@/components/theme-provider"
 import { Button } from "@/components/ui/button"
+import { FileTypeIcon } from "@/components/ui/file-type-icon"
+import {
+  type SegmentedTabItem,
+  SegmentedTabs,
+} from "@/components/ui/segmented-tabs"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import {
-  SegmentedTabs,
-  type SegmentedTabItem,
-} from "@/components/ui/segmented-tabs"
+import { useCodeViewOptions } from "@/hooks/use-code-view-options"
+import { hashVersion } from "@/lib/hash"
 import * as ipc from "@/lib/ipc"
 import { cn } from "@/lib/utils"
 import { diffSessionIdOf } from "@/lib/viewport"
@@ -37,118 +36,6 @@ import type { FileEntry } from "@/types"
 import type { DiffFile } from "@/types/git-diff"
 
 type Tab = "files" | "browse"
-
-/** Cheap content-version hash (FNV-1a) so CodeView re-renders an item only
- *  when its diff data or collapsed state actually changed. */
-function hashVersion(value: string): number {
-  let hash = 2166136261
-  for (let i = 0; i < value.length; i++) {
-    hash ^= value.charCodeAt(i)
-    hash = Math.imul(hash, 16777619)
-  }
-  return hash >>> 0
-}
-
-function useResolvedTheme(): "dark" | "light" {
-  const { theme } = useTheme()
-  if (theme !== "system") return theme
-  return window.matchMedia("(prefers-color-scheme: dark)").matches
-    ? "dark"
-    : "light"
-}
-
-/** Shared CodeView config for the diff accordion and the file viewer, so both
- *  render with identical themes, wrapping, and large-file degradation. The
- *  diff variant draws each file as a padded card; the file variant sits flush
- *  against the pane on the app background. */
-function useCodeViewOptions(
-  variant: "diff" | "file" = "diff"
-): CodeViewOptions<undefined> {
-  const themeType = useResolvedTheme()
-  return useMemo<CodeViewOptions<undefined>>(
-    () => ({
-      diffStyle: "unified",
-      overflow: "wrap",
-      // A transparent (file-variant) sticky header would smear over scrolled
-      // code; the single file's header reads fine pinned at the top.
-      stickyHeaders: variant === "diff",
-      theme: { dark: "vitesse-dark", light: "vitesse-light" },
-      themeType,
-      layout:
-        variant === "diff"
-          ? { paddingTop: 8, paddingBottom: 16, gap: 10 }
-          : { paddingTop: 0, paddingBottom: 0, gap: 0 },
-      // Degrade gracefully on lockfiles / minified bundles instead of
-      // blocking the highlighter worker.
-      tokenizeMaxLineLength: 5_000,
-      tokenizeMaxLength: 200_000,
-      maxLineDiffLength: 5_000,
-      // Pierre layers its CSS (base, theme, rendered, unsafe) with unsafe
-      // last, and the shiki theme declares its canvas color via
-      // --diffs-light-bg/--diffs-dark-bg ON :host — where --diffs-bg and all
-      // derived tints are computed. So theming must happen at :host; rules on
-      // [data-diff]/[data-file] can only re-point already-computed values.
-      unsafeCSS:
-        variant === "diff"
-          ? `
-        * { user-select: text; -webkit-user-select: text; }
-        /* Each item is its own shadow host wrapping header + code, so the
-           card chrome lives on :host — bordering [data-diff] alone rounds
-           only the code half. overflow: clip (not hidden) keeps sticky
-           headers working. */
-        :host {
-          /* Drive every computed tint (line bgs, gutters, +/- shades) from
-             the app's card color instead of the shiki theme's canvas. */
-          --diffs-light-bg: var(--card);
-          --diffs-dark-bg: var(--card);
-          /* Lines wrap — the reserved horizontal-scrollbar gutter is a dead
-             strip around the code. */
-          --diffs-scrollbar-gutter-override: 0px;
-          /* Hunk-expand strips: the default mixes 15% toward white; keep
-             them a whisper above the card instead. */
-          --diffs-bg-separator-override: color-mix(in lab, var(--diffs-bg) 95%, var(--diffs-mixer));
-          background-color: var(--card);
-          border: 1px solid var(--border);
-          border-radius: 10px;
-          overflow: clip;
-        }
-        /* Wrapped lines never scroll sideways — drop the dead gutter padding
-           pierre reserves under the code. */
-        [data-code] { scrollbar-width: none; padding-bottom: 0; }
-        [data-code]::-webkit-scrollbar { display: none; }
-        /* GitHub-style file header: compact, bold name, quietly separated.
-           The separator is an inset shadow, NOT a border — the virtualizer
-           positions expanded content from an estimated 44px header height,
-           and a real border would make it 45px, shifting layout on expand. */
-        [data-diffs-header='default'] {
-          font-size: 12px;
-          padding-inline: 10px;
-          box-shadow: inset 0 -1px 0 var(--border);
-        }
-        [data-header-content] [data-title] { font-weight: 600; }
-        [data-diffs-header='default'] [data-change-icon] { display: none; }
-        [data-diffs-header='default'] [data-additions-count] { color: var(--positive, #3fb950); }
-        [data-diffs-header='default'] [data-deletions-count] { color: var(--destructive, #f85149); }
-        /* Expand controls read as affordances, not banners. */
-        [data-separator-content], [data-expand-button] { font-size: 11px; }
-      `
-          : `
-        * { user-select: text; -webkit-user-select: text; }
-        :host {
-          /* Fully transparent: the pane's own background shows through. */
-          --diffs-light-bg: transparent;
-          --diffs-dark-bg: transparent;
-          background-color: transparent;
-          --diffs-scrollbar-gutter-override: 0px;
-        }
-        [data-code] { scrollbar-width: none; padding-bottom: 0; }
-        [data-code]::-webkit-scrollbar { display: none; }
-        [data-header-content] [data-title] { font-weight: 600; }
-      `,
-    }),
-    [themeType, variant]
-  )
-}
 
 /** The Zed-style stacked diff: every changed file as a collapsible section with
  *  a sticky header (name, +N/−N) over its rendered diff. */
@@ -207,19 +94,21 @@ function FilesView({
         { name: file.path, contents: data.oldText ?? "" },
         { name: file.path, contents: data.newText ?? "" }
       )
-      const isCollapsed = collapsed.has(file.path)
+      // `collapsed` must NOT feed the version hash: pierre observes it as a
+      // reactive item option and transitions in place. Bumping version on
+      // toggle tears the item down and re-creates it at its *estimated*
+      // (dehydrated) height — a huge empty card until re-measure.
       out.push({
         id: file.path,
         type: "diff",
         fileDiff,
-        collapsed: isCollapsed,
+        collapsed: collapsed.has(file.path),
         version: hashVersion(
           [
             file.path,
             file.added,
             file.removed,
             versionQueries[i]?.dataUpdatedAt ?? 0,
-            isCollapsed ? "1" : "0",
           ].join("\0")
         ),
       })
@@ -244,7 +133,7 @@ function FilesView({
             <ChevronDown className="size-3.5" />
           )}
         </button>
-        <FileCode2 className="size-3.5 shrink-0 text-muted-foreground/70" />
+        <FileTypeIcon path={item.id} className="size-3.5" />
       </span>
     ),
     [collapsed, toggleCollapsed]
@@ -279,7 +168,7 @@ function FilesView({
   return (
     <div className="flex min-h-0 flex-col">
       <CodeView<undefined>
-        className="h-full w-full overflow-y-auto overflow-x-clip overscroll-contain px-3 [overflow-anchor:none]"
+        className="h-full w-full overflow-y-auto overflow-x-clip overscroll-contain px-2 [overflow-anchor:none]"
         style={{ "--diffs-font-size": "12px" } as React.CSSProperties}
         items={items}
         options={options}
@@ -297,120 +186,26 @@ function FilesView({
 
 // ----- browse: file tree + read-only viewer ---------------------------------
 
-interface DirNode {
-  name: string
-  path: string
-  dirs: DirNode[]
-  files: { name: string; path: string }[]
-}
-
-/** Fold the walker's flat `a/b/c.ts` list into a sorted directory tree. */
-function buildTree(entries: FileEntry[]): DirNode {
-  const root: DirNode = { name: "", path: "", dirs: [], files: [] }
-  const index = new Map<string, DirNode>([["", root]])
-  const ensureDir = (path: string): DirNode => {
-    const existing = index.get(path)
-    if (existing) return existing
-    const cut = path.lastIndexOf("/")
-    const parent = ensureDir(cut === -1 ? "" : path.slice(0, cut))
-    const node: DirNode = {
-      name: cut === -1 ? path : path.slice(cut + 1),
-      path,
-      dirs: [],
-      files: [],
-    }
-    parent.dirs.push(node)
-    index.set(path, node)
-    return node
-  }
-  for (const entry of entries) {
-    const cut = entry.path.lastIndexOf("/")
-    const dir = ensureDir(cut === -1 ? "" : entry.path.slice(0, cut))
-    dir.files.push({ name: entry.name, path: entry.path })
-  }
-  const sortNode = (node: DirNode) => {
-    node.dirs.sort((a, b) => a.name.localeCompare(b.name))
-    node.files.sort((a, b) => a.name.localeCompare(b.name))
-    node.dirs.forEach(sortNode)
-  }
-  sortNode(root)
-  return root
-}
-
-function TreeLevel({
-  node,
-  depth,
-  expanded,
-  onToggle,
-  selected,
-  onSelect,
-}: {
-  node: DirNode
-  depth: number
-  expanded: ReadonlySet<string>
-  onToggle: (path: string) => void
-  selected: string | null
-  onSelect: (path: string) => void
-}) {
-  const indent = { paddingLeft: `${depth * 12 + 8}px` }
-  return (
-    <>
-      {node.dirs.map((dir) => {
-        const open = expanded.has(dir.path)
-        return (
-          <div key={dir.path}>
-            <button
-              type="button"
-              onClick={() => onToggle(dir.path)}
-              style={indent}
-              className="flex h-6 w-full items-center gap-1.5 pr-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-            >
-              {open ? (
-                <ChevronDown className="size-3 shrink-0" />
-              ) : (
-                <ChevronRight className="size-3 shrink-0" />
-              )}
-              {open ? (
-                <FolderOpenIcon className="size-3.5 shrink-0 opacity-70" />
-              ) : (
-                <FolderIcon className="size-3.5 shrink-0 opacity-70" />
-              )}
-              <span className="truncate">{dir.name}</span>
-            </button>
-            {open ? (
-              <TreeLevel
-                node={dir}
-                depth={depth + 1}
-                expanded={expanded}
-                onToggle={onToggle}
-                selected={selected}
-                onSelect={onSelect}
-              />
-            ) : null}
-          </div>
-        )
-      })}
-      {node.files.map((file) => (
-        <button
-          key={file.path}
-          type="button"
-          onClick={() => onSelect(file.path)}
-          style={{ paddingLeft: `${depth * 12 + 8 + 16}px` }}
-          className={cn(
-            "flex h-6 w-full items-center gap-1.5 pr-2 text-left text-xs transition-colors",
-            selected === file.path
-              ? "bg-accent text-foreground"
-              : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-          )}
-          title={file.path}
-        >
-          <FileCode2 className="size-3.5 shrink-0 opacity-60" />
-          <span className="truncate">{file.name}</span>
-        </button>
-      ))}
-    </>
-  )
-}
+/** Map pierre's tree theming onto warden's tokens (superset's pattern). */
+const TREE_STYLE = {
+  "--trees-row-height-override": "24px",
+  "--trees-padding-inline-override": "4px",
+  "--trees-item-row-gap-override": "6px",
+  "--trees-border-radius-override": "4px",
+  "--trees-bg-override": "var(--background)",
+  "--trees-fg-override": "var(--foreground)",
+  "--trees-fg-muted-override": "var(--muted-foreground)",
+  "--trees-bg-muted-override":
+    "color-mix(in oklab, var(--accent) 50%, transparent)",
+  "--trees-accent-override": "var(--accent)",
+  "--trees-border-color-override": "var(--border)",
+  "--trees-selected-bg-override": "var(--accent)",
+  "--trees-selected-fg-override": "var(--accent-foreground)",
+  "--trees-selected-focused-border-color-override": "var(--ring)",
+  "--trees-focus-ring-color-override": "var(--ring)",
+  "--trees-focus-ring-offset-override": "0px",
+  "--trees-font-size-override": "12px",
+} as React.CSSProperties
 
 /** Read-only contents of one worktree file, highlighted by the same CodeView
  *  pipeline as the diffs. */
@@ -463,22 +258,12 @@ function FileViewer({ sessionId, path }: { sessionId: string; path: string }) {
   )
 }
 
-/** Explorer for the session's working tree: gitignore-aware file tree on the
- *  left, read-only viewer on the right. */
+/** Explorer for the session's working tree: pierre's virtualized file tree
+ *  (colored per-language icons, sticky folders) on the left, read-only viewer
+ *  on the right — superset's explorer, themed to warden. */
 function BrowseView({ sessionId }: { sessionId: string }) {
   const workingDir = useAppStore((s) => s.sessions[sessionId]?.workingDir)
   const [selected, setSelected] = useState<string | null>(null)
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(
-    () => new Set<string>()
-  )
-  const toggle = useCallback((path: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev)
-      if (next.has(path)) next.delete(path)
-      else next.add(path)
-      return next
-    })
-  }, [])
 
   const filesQuery = useQuery({
     queryKey: ["session-browse", sessionId, workingDir],
@@ -486,10 +271,28 @@ function BrowseView({ sessionId }: { sessionId: string }) {
     enabled: !!workingDir,
     staleTime: 30_000,
   })
-  const tree = useMemo(
-    () => buildTree(filesQuery.data ?? []),
-    [filesQuery.data]
-  )
+
+  const { model } = useFileTree({
+    paths: [],
+    initialExpansion: "closed",
+    search: false,
+    icons: { set: "complete", colored: true },
+    itemHeight: 24,
+    overscan: 20,
+    stickyFolders: true,
+    onSelectionChange: (paths) => {
+      const last = paths[paths.length - 1]
+      if (!last || last.endsWith("/")) return
+      setSelected(last)
+    },
+  })
+
+  // The model is created once; feed it (and re-feed on refetch) imperatively.
+  useEffect(() => {
+    if (filesQuery.data) {
+      model.resetPaths(filesQuery.data.map((f) => f.path))
+    }
+  }, [filesQuery.data, model])
 
   if (filesQuery.isPending) {
     return (
@@ -501,16 +304,11 @@ function BrowseView({ sessionId }: { sessionId: string }) {
 
   return (
     <div className="grid h-full min-h-0 grid-cols-[240px_minmax(0,1fr)]">
-      <div className="min-h-0 overflow-y-auto border-r border-border/60 py-1">
-        <TreeLevel
-          node={tree}
-          depth={0}
-          expanded={expanded}
-          onToggle={toggle}
-          selected={selected}
-          onSelect={setSelected}
-        />
-      </div>
+      <PierreFileTree
+        model={model}
+        className="min-h-0 border-r border-border/60"
+        style={TREE_STYLE}
+      />
       {selected ? (
         <FileViewer sessionId={sessionId} path={selected} />
       ) : (
@@ -540,11 +338,15 @@ export function SessionDiffPane({ refId }: { refId: string }) {
   const running = session?.status === "running"
   useEffect(() => {
     if (running) return
-    void queryClient.invalidateQueries({ queryKey: ["session-diff", sessionId] })
+    void queryClient.invalidateQueries({
+      queryKey: ["session-diff", sessionId],
+    })
   }, [running, sessionId, queryClient])
 
   const refresh = () => {
-    void queryClient.invalidateQueries({ queryKey: ["session-diff", sessionId] })
+    void queryClient.invalidateQueries({
+      queryKey: ["session-diff", sessionId],
+    })
     void queryClient.invalidateQueries({
       queryKey: ["session-diff-file", sessionId],
     })
