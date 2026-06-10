@@ -1,4 +1,4 @@
-import { CornerDownLeft, GitBranch, GitMerge, Square } from "lucide-react"
+import { CornerDownLeft, GitMerge, Square } from "lucide-react"
 import {
   type KeyboardEvent,
   useCallback,
@@ -19,11 +19,7 @@ import { MentionHighlight } from "@/components/mention-highlight"
 import { MentionPopover } from "@/components/mention-popover"
 import { PermissionApproval } from "@/components/permission-approval"
 import { Button } from "@/components/ui/button"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
+import { WorktreeChip } from "@/components/worktree-chip"
 import { useFileDrop } from "@/hooks/use-file-drop"
 import { useGitStatus } from "@/hooks/use-git-status"
 import { useMentions } from "@/hooks/use-mentions"
@@ -45,16 +41,6 @@ export function Composer({ sessionId }: { sessionId: string }) {
   const sendMessage = useAppStore((s) => s.sendMessage)
   const cancel = useAppStore((s) => s.cancel)
   const updateSession = useAppStore((s) => s.updateSession)
-  const setIsolation = useAppStore((s) => s.setIsolation)
-  const projectIsGit = useAppStore((s) => {
-    const projectId = session?.projectId
-    if (!projectId) return false
-    for (const roots of Object.values(s.rootsByGroup)) {
-      const root = roots.find((p) => p.id === projectId)
-      if (root) return root.isGit
-    }
-    return false
-  })
   const [value, setValue] = useState("")
 
   // Drag-and-drop attachments staged for the next message.
@@ -161,16 +147,7 @@ export function Composer({ sessionId }: { sessionId: string }) {
     )
   }
 
-  const isolated = session.isIsolated
   const started = session.turns > 0
-  const canToggleIsolation = projectIsGit && !started
-  const isolationTip = !projectIsGit
-    ? "Worktree isolation needs a git repository."
-    : started
-      ? `This session runs in ${isolated ? "an isolated worktree" : "the project checkout"} — fixed once it has started.`
-      : isolated
-        ? "Isolated in a git worktree (default). Click to run in the project checkout instead."
-        : "Runs in the project checkout — changes land directly on your branch. Click to isolate in a git worktree."
 
   const submit = () => {
     if (!canSend) return
@@ -329,28 +306,7 @@ export function Composer({ sessionId }: { sessionId: string }) {
           <div className="ml-auto flex items-center gap-1">
             <ContextMeter sessionId={sessionId} />
             <AgentToolbar sessionId={sessionId} />
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="inline-flex">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    disabled={!canToggleIsolation}
-                    aria-pressed={isolated}
-                    onClick={() => void setIsolation(sessionId, !isolated)}
-                    className={cn(
-                      isolated ? "text-primary" : "text-muted-foreground"
-                    )}
-                  >
-                    <GitBranch />
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent className="max-w-56">
-                {isolationTip}
-              </TooltipContent>
-            </Tooltip>
+            <WorktreeChip sessionId={sessionId} />
           </div>
         </div>
       </div>

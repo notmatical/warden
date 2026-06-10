@@ -41,6 +41,9 @@ export type EffortLevel = "low" | "medium" | "high" | "xhigh" | "max"
 
 export type SessionStatus = "idle" | "running" | "error"
 
+/** Lifecycle of the worktree setup commands run for a session. */
+export type SetupStatus = "running" | "failed" | "done"
+
 export interface FileEntry {
   path: string
   name: string
@@ -135,6 +138,10 @@ export interface Session {
   baseSha: string | null
   baseBranch: string | null
   isIsolated: boolean
+  /** Worktree setup-commands lifecycle; null when none are configured. */
+  setupStatus: SetupStatus | null
+  /** Tail of the failing setup output, when setupStatus is "failed". */
+  setupError: string | null
   allowedTools: string[]
   turns: number
   costUsd: number
@@ -220,8 +227,10 @@ export interface RepoStatus {
   branch: string | null
   ahead: number
   behind: number
-  uncommittedAdded: number
-  uncommittedRemoved: number
+  /** Lines changed: vs the session's base for the primary root (committed +
+   *  uncommitted), uncommitted-only for other roots. */
+  added: number
+  removed: number
   hasRemote: boolean
 }
 

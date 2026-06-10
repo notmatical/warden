@@ -430,6 +430,16 @@ export function setSessionIsolation(
   return invoke("set_session_isolation", { sessionId, isolate })
 }
 
+/** Re-run the repo's worktree setup commands for a session. */
+export function retryWorktreeSetup(sessionId: string): Promise<void> {
+  return invoke("retry_worktree_setup", { sessionId })
+}
+
+/** Clear a failed setup state so the session is usable as-is. */
+export function dismissSetupError(sessionId: string): Promise<void> {
+  return invoke("dismiss_setup_error", { sessionId })
+}
+
 export type OpenTarget = "folder" | "terminal" | "zed" | "vscode"
 
 export function openIn(target: OpenTarget, path: string): Promise<void> {
