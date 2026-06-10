@@ -136,7 +136,11 @@ export function ModeMenu({
     )
 
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
+    <DropdownMenu
+      open={open}
+      onOpenChange={setOpen}
+      modal={variant === "form"}
+    >
       {trigger}
       <DropdownMenuContent align="start" className="w-64">
         {MODE_ORDER.map((mode) => {
