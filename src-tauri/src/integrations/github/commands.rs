@@ -10,6 +10,7 @@ use crate::cli::{self, Source, Tool, ToolStatus};
 use crate::domain::{Backend, EffortLevel, PermissionMode, Session, SessionKind, SessionRole};
 use crate::error::{AppError, CommandResult};
 use crate::events::emit_session;
+use crate::integrations::github::issues::{self, GhIssue, GhIssueComment};
 use crate::integrations::github::pr::{self, PrInfo};
 use crate::state::AppState;
 use crate::store::NewSession;
@@ -193,6 +194,30 @@ pub async fn merge_pull_request(
         }
     }
     Ok(())
+}
+
+/// Open issues assigned to the user in one repo. Soft-fails to empty (no
+/// remote / unauthenticated) so multi-repo aggregation degrades per repo.
+#[tauri::command]
+#[specta::specta]
+pub async fn list_my_issues(
+    state: State<'_, AppState>,
+    project_id: String,
+) -> CommandResult<Vec<GhIssue>> {
+    let project = state.store.get_project(&project_id)?;
+    Ok(issues::list_assigned_issues(Path::new(&project.path)))
+}
+
+/// Comments on one issue, fetched lazily for the detail view.
+#[tauri::command]
+#[specta::specta]
+pub async fn github_issue_comments(
+    state: State<'_, AppState>,
+    project_id: String,
+    number: i64,
+) -> CommandResult<Vec<GhIssueComment>> {
+    let project = state.store.get_project(&project_id)?;
+    Ok(issues::issue_comments(Path::new(&project.path), number)?)
 }
 
 /// Generate a suggested PR title and body from the session branch's changes,
