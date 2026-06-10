@@ -8,24 +8,17 @@ import {
   DataTableEmpty,
   DataTableRow,
 } from "@/components/common/data-table"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+  FILTER_SURFACE,
+  FilterMenu,
+  type FilterOption,
+  SwatchStack,
+} from "@/components/common/filter-menu"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 
 import type { LinearIssue, LinearState } from "../types"
 import { PriorityIcon, StatusIcon } from "./issue-icons"
-
-/** Filter-bar control surface — shared with the Workflows/Folder filter rows. */
-const FILTER_SURFACE = "border-border/60 bg-input/50 dark:bg-input/50"
 
 // Group order follows Linear: in-progress first, then todo, backlog, done, canceled.
 const TYPE_ORDER: Record<string, number> = {
@@ -52,12 +45,6 @@ interface Group {
   issues: LinearIssue[]
 }
 
-interface FilterOption {
-  value: string
-  label: string
-  swatch?: ReactNode
-}
-
 function toggleIn(set: Set<string>, value: string, on: boolean): Set<string> {
   const next = new Set(set)
   if (on) next.add(value)
@@ -76,6 +63,8 @@ export function IssueList({
   emptyMessage = "No issues assigned to you.",
   scroll = true,
   className,
+  leading,
+  trailing,
 }: {
   issues: LinearIssue[]
   onSelect: (issue: LinearIssue) => void
@@ -85,6 +74,10 @@ export function IssueList({
   /** Scroll the table internally (full-height views); off for stacked pages. */
   scroll?: boolean
   className?: string
+  /** Header-row content left of the filters (title, count chip…). */
+  leading?: ReactNode
+  /** Header-row content after the filters (refresh, menus…). */
+  trailing?: ReactNode
 }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
@@ -266,14 +259,17 @@ export function IssueList({
       )}
     >
       <div className="flex shrink-0 flex-wrap items-center gap-2">
+        {leading}
+        <div className="flex-1" />
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search issues…"
-          className={cn("h-8 w-56", FILTER_SURFACE)}
+          className={cn("h-8 w-48", FILTER_SURFACE)}
         />
         <FilterMenu
           label="Status"
+          icon={<SwatchStack swatches={statusOptions.map((o) => o.swatch)} />}
           options={statusOptions}
           selected={statusSel}
           onToggle={(v, on) => setStatusSel((p) => toggleIn(p, v, on))}
@@ -300,6 +296,7 @@ export function IssueList({
           onToggle={(v, on) => setLabelSel((p) => toggleIn(p, v, on))}
           onClear={() => setLabelSel(new Set())}
         />
+        {trailing}
       </div>
 
       {scroll ? (
@@ -308,75 +305,6 @@ export function IssueList({
         table
       )}
     </div>
-  )
-}
-
-function FilterMenu({
-  label,
-  options,
-  selected,
-  onToggle,
-  onClear,
-}: {
-  label: string
-  options: FilterOption[]
-  selected: Set<string>
-  onToggle: (value: string, on: boolean) => void
-  onClear: () => void
-}) {
-  if (options.length === 0) return null
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="secondary"
-          size="sm"
-          className={cn(
-            "h-8 gap-1.5 hover:bg-input/70 dark:hover:bg-input/70",
-            FILTER_SURFACE
-          )}
-        >
-          {label}
-          {selected.size > 0 ? (
-            <Badge
-              variant="secondary"
-              className="h-[18px] justify-center rounded-[5px] px-1 font-mono text-[10px] tabular-nums"
-            >
-              {selected.size}
-            </Badge>
-          ) : null}
-          <ChevronDown className="size-3.5 text-muted-foreground/60" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="start"
-        className="max-h-72 w-52 overflow-y-auto"
-      >
-        {options.map((o) => (
-          <DropdownMenuCheckboxItem
-            key={o.value}
-            checked={selected.has(o.value)}
-            onCheckedChange={(c) => onToggle(o.value, c === true)}
-            onSelect={(e) => e.preventDefault()}
-            className="gap-2 text-[13px]"
-          >
-            {o.swatch}
-            <span className="truncate">{o.label}</span>
-          </DropdownMenuCheckboxItem>
-        ))}
-        {selected.size > 0 ? (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onSelect={() => onClear()}
-              className="text-[13px] text-muted-foreground"
-            >
-              Clear
-            </DropdownMenuItem>
-          </>
-        ) : null}
-      </DropdownMenuContent>
-    </DropdownMenu>
   )
 }
 
