@@ -91,6 +91,12 @@ function subscribe(
   }
 }
 
+/** Force an immediate refresh for a session — e.g. right after its working
+ *  directory changed — instead of waiting out the poll interval. */
+export function refreshGitStatus(sessionId: string) {
+  load(sessionId)
+}
+
 /** Per-session git status across the session's roots, polled and shared. */
 export function useGitStatus(sessionId: string) {
   const [statuses, setStatuses] = useState<RepoStatus[]>(

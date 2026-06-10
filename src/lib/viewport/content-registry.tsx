@@ -1,5 +1,6 @@
 import {
   CircleDot,
+  FileDiff,
   FolderGit2,
   ListTodo,
   type LucideIcon,
@@ -11,6 +12,7 @@ import type { ComponentType } from "react"
 
 import { FolderView } from "@/components/folder-view"
 import { IssuesView } from "@/components/issues-view"
+import { SessionDiffPane } from "@/components/session-diff-pane"
 import { SessionPane } from "@/components/session-view"
 import { SettingsPanel } from "@/components/settings/settings-panel"
 import { WorkflowEditor } from "@/components/workflow/workflow-editor"
@@ -19,6 +21,7 @@ import { LinearTasksView } from "@/integrations/linear/components/linear-tasks-v
 import type { AppState } from "@/store/types"
 import {
   type ContentKind,
+  diffSessionIdOf,
   folderIdOf,
   kindOf,
   workflowIdOf,
@@ -78,6 +81,14 @@ const REGISTRY: Partial<Record<ContentKind, Entry>> = {
     icon: CircleDot,
     View: () => <IssuesView />,
     title: () => "Issues",
+  },
+  diff: {
+    icon: FileDiff,
+    View: ({ refId }) => <SessionDiffPane refId={refId} />,
+    title: (s, ref) => {
+      const title = s.sessions[diffSessionIdOf(ref)]?.title
+      return title ? `Changes · ${title}` : "Changes"
+    },
   },
 }
 

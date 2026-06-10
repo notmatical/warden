@@ -106,7 +106,9 @@ export function ModeMenu({
           className="h-9 w-full justify-between gap-2 border-input bg-transparent px-3 font-normal hover:bg-input/30 dark:bg-input/30 dark:hover:bg-input/50"
         >
           <span className="flex min-w-0 items-center gap-2">
-            <span className={cn("size-1.5 shrink-0 rounded-full", active.dot)} />
+            <span
+              className={cn("size-1.5 shrink-0 rounded-full", active.dot)}
+            />
             <span className="truncate text-sm">{active.label}</span>
           </span>
           <ChevronDown className="size-3.5 shrink-0 text-muted-foreground/60" />
@@ -136,11 +138,7 @@ export function ModeMenu({
     )
 
   return (
-    <DropdownMenu
-      open={open}
-      onOpenChange={setOpen}
-      modal={variant === "form"}
-    >
+    <DropdownMenu open={open} onOpenChange={setOpen} modal={variant === "form"}>
       {trigger}
       <DropdownMenuContent align="start" className="w-64">
         {MODE_ORDER.map((mode) => {

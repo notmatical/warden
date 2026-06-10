@@ -3,6 +3,7 @@ import {
   ArrowDown,
   ArrowUp,
   CheckCircle2,
+  FileDiff,
   GitBranch,
   GitPullRequest,
   Loader2,
@@ -14,7 +15,6 @@ import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 
 import { LandSessionButton } from "@/components/land-session-dialog"
-import { SessionDiffButton } from "@/components/session-diff-dialog"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -28,18 +28,30 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { WorktreeIdentity } from "@/components/worktree-chip"
 import * as ipc from "@/lib/ipc"
 import { cn } from "@/lib/utils"
+import { diffTabId } from "@/lib/viewport"
 import { useAppStore } from "@/store/app-store"
 import type { CheckStatus, Project, RepoStatus } from "@/types"
 
 // Stable empty reference so the `?? EMPTY` fallback doesn't allocate each run.
 const EMPTY: Project[] = []
 
-function Counter({ added, removed }: { added: number; removed: number }) {
+/** The chip's +N/−N changed-lines counter. With `onClick` (the primary repo of
+ *  a session with a diff base) it's the doorway to the Changes tab. */
+function Counter({
+  added,
+  removed,
+  onClick,
+}: {
+  added: number
+  removed: number
+  onClick?: () => void
+}) {
   if (added === 0 && removed === 0) return null
-  return (
-    <span className="inline-flex items-center gap-1 tabular-nums">
+  const inner = (
+    <>
       <span
         className={cn(
           added > 0 ? "text-emerald-500" : "text-muted-foreground/60"
@@ -54,7 +66,28 @@ function Counter({ added, removed }: { added: number; removed: number }) {
       >
         −{removed}
       </span>
-    </span>
+    </>
+  )
+  if (!onClick) {
+    return (
+      <span className="inline-flex items-center gap-1 tabular-nums">
+        {inner}
+      </span>
+    )
+  }
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={onClick}
+          className="-mx-0.5 inline-flex items-center gap-1 rounded px-0.5 tabular-nums transition hover:bg-muted hover:text-foreground"
+        >
+          {inner}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>View the session's changes</TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -105,17 +138,21 @@ function AheadBehind({
 }
 
 function StatusChip({
+  sessionId,
   status,
   onRemove,
   onPush,
   onPull,
+  onOpenDiff,
   pushing,
   pulling,
 }: {
+  sessionId: string
   status: RepoStatus
   onRemove?: () => void
   onPush?: () => void
   onPull?: () => void
+  onOpenDiff?: () => void
   pushing?: boolean
   pulling?: boolean
 }) {
@@ -127,20 +164,36 @@ function StatusChip({
       )}
       title={status.path}
     >
-      <span
-        className={cn("font-medium", status.isPrimary && "text-foreground/80")}
-      >
-        {status.name}
-      </span>
-      {status.branch ? (
-        <span className="inline-flex items-center gap-1">
-          <GitBranch className="size-3 opacity-60" />
-          {status.branch}
-        </span>
-      ) : null}
+      {/* The primary repo's identity opens the worktree menu — branch story,
+          reveal/terminal actions, isolation opt-out. */}
+      {status.isPrimary && status.isGit ? (
+        <WorktreeIdentity
+          sessionId={sessionId}
+          name={status.name}
+          branch={status.branch}
+        />
+      ) : (
+        <>
+          <span
+            className={cn(
+              "font-medium",
+              status.isPrimary && "text-foreground/80"
+            )}
+          >
+            {status.name}
+          </span>
+          {status.branch ? (
+            <span className="inline-flex items-center gap-1">
+              <GitBranch className="size-3 opacity-60" />
+              {status.branch}
+            </span>
+          ) : null}
+        </>
+      )}
       <Counter
-        added={status.uncommittedAdded}
-        removed={status.uncommittedRemoved}
+        added={status.added}
+        removed={status.removed}
+        onClick={onOpenDiff}
       />
       {status.ahead > 0 ? (
         <AheadBehind
@@ -355,10 +408,14 @@ export function GitStatusChips({
 }: GitStatusChipsProps) {
   const session = useAppStore((s) => s.sessions[sessionId])
   const refreshPrStatus = useAppStore((s) => s.refreshPrStatus)
+  const openTab = useAppStore((s) => s.openTab)
   const primary = statuses.find((s) => s.isPrimary)
   const hasRemote = primary?.hasRemote ?? false
   const canSync =
     !!session?.isIsolated && !session.mergedAt && (primary?.behind ?? 0) > 0
+  // Any session that recorded a fork point can show its changes — isolation
+  // is irrelevant; in-checkout sessions diff against HEAD-at-start.
+  const canViewDiff = !!session?.baseSha && !session.mergedAt
 
   // Re-check the PR's state whenever this session's view mounts.
   const prNumber = session?.prNumber ?? null
@@ -412,22 +469,29 @@ export function GitStatusChips({
     }
   }, [sessionId, refresh])
 
+  // Until the first status fetch lands there's nothing truthful to show —
+  // rendering controls early (the + add-root button) just flashes and shifts.
+  if (statuses.length === 0) {
+    return null
+  }
+
   return (
-    <div
-      className={cn(
-        "flex flex-wrap items-center gap-1.5 px-1",
-        statuses.length > 0 ? "pb-1.5" : "empty:hidden"
-      )}
-    >
+    <div className="flex flex-wrap items-center gap-1.5 px-1 pb-1.5 empty:hidden">
       {statuses.map((status) => (
         <StatusChip
           key={status.projectId}
+          sessionId={sessionId}
           status={status}
           onRemove={
             status.isPrimary ? undefined : () => remove(status.projectId)
           }
           onPush={status.isPrimary && status.hasRemote ? push : undefined}
           onPull={status.isPrimary && status.hasRemote ? pull : undefined}
+          onOpenDiff={
+            status.isPrimary && canViewDiff
+              ? () => openTab(diffTabId(sessionId))
+              : undefined
+          }
           pushing={status.isPrimary && pending === "push"}
           pulling={status.isPrimary && pending === "pull"}
         />
@@ -453,8 +517,23 @@ export function GitStatusChips({
             checkStatus={session.prCheckStatus}
           />
         ) : null}
-        {session?.isIsolated && !session.mergedAt ? (
-          <SessionDiffButton sessionId={sessionId} />
+        {canViewDiff ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="secondary"
+                size="xs"
+                onClick={() => openTab(diffTabId(sessionId))}
+                className="gap-1.5"
+              >
+                <FileDiff className="size-3.5" />
+                Changes
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              Browse the session's diff, commits, and files
+            </TooltipContent>
+          </Tooltip>
         ) : null}
         <LandSessionButton
           sessionId={sessionId}

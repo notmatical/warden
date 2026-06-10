@@ -6,14 +6,13 @@ import { FILTER_SURFACE } from "@/components/common/filter-menu"
 import { DestinationEmpty } from "@/components/destination-empty"
 import { GitHubIcon } from "@/components/icons/brand"
 import { Button } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
-import { useAppStore } from "@/store/app-store"
-
 import { GithubIssueList } from "@/integrations/github/components/github-issue-list"
 import { GithubIssuePeek } from "@/integrations/github/components/github-issue-peek"
 import { SendGithubIssueDialog } from "@/integrations/github/components/send-github-issue-dialog"
 import { listMyIssues } from "@/integrations/github/ipc"
 import type { GhIssueComment, RepoIssue } from "@/integrations/github/types"
+import { cn } from "@/lib/utils"
+import { useAppStore } from "@/store/app-store"
 
 /** Issues destination: open GitHub issues assigned to you, aggregated across
  *  every git root (per-repo soft-fail), grouped by repo. */

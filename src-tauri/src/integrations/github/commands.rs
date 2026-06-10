@@ -174,9 +174,13 @@ pub async fn merge_pull_request(
     crate::terminal::kill(&session_id);
     crate::integrations::github::pr::merge(worktree, mode)?;
 
-    // Land & clean up locally (best-effort; the PR is already merged).
-    let _ = crate::git::remove_worktree(repo, worktree);
-    let _ = crate::git::delete_branch(repo, &branch);
+    // Land & clean up locally (best-effort; the PR is already merged). Runs
+    // the repo's teardown commands before removal, like every other cleanup.
+    crate::git::setup::spawn_teardown_and_remove(
+        repo.to_path_buf(),
+        worktree.to_path_buf(),
+        Some(branch),
+    );
     state.store.mark_session_merged(&session_id)?;
     if let Ok(updated) = state.store.get_session(&session_id) {
         emit_session(&app, &updated);
@@ -317,5 +321,6 @@ pub async fn checkout_pr(
     }
     let session = state.store.get_session(&session.id)?;
     emit_session(&app, &session);
+    crate::git::setup::spawn_session_setup(&app, &state.store, &session, &project.path);
     Ok(session)
 }

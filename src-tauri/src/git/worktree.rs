@@ -29,6 +29,15 @@ fn worktrees_root(app: &AppHandle) -> Result<PathBuf> {
     Ok(app.path().home_dir()?.join("warden"))
 }
 
+/// Whether `path` lives under warden's worktrees root — the only place warden
+/// is allowed to delete. A session pointed at any external directory (explicit
+/// working_dir, imported checkout) is never removed.
+pub fn is_managed_worktree(app: &AppHandle, path: &Path) -> bool {
+    worktrees_root(app)
+        .map(|root| path.starts_with(&root))
+        .unwrap_or(false)
+}
+
 /// Provision an isolated worktree checked out to an existing PR's head branch,
 /// for reviewing it. `base` is the PR's base branch (its merge target).
 pub fn provision_pr_worktree(

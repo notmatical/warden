@@ -42,6 +42,9 @@ export interface CreateSessionOptions {
   firstMessage?: string
   /** A provider CLI for a native terminal session to launch instead of the shell. */
   nativeCommand?: string
+  /** Run in this exact directory (e.g. a shell inside another session's
+   *  worktree) instead of provisioning one. */
+  workingDir?: string
   /** Linear issue this session works on; drives writeback on PR open/merge. */
   linearIssueId?: string
 }
@@ -207,6 +210,9 @@ export interface AppState {
     patch: SessionSettingsPatch
   ) => Promise<void>
   setIsolation: (sessionId: string, isolate: boolean) => Promise<void>
+  /** Sessions mid-switch between worktree and checkout (provisioning takes a
+   *  beat); the value is the side being switched *to*, for the pending badge. */
+  isolationPending: Record<string, "worktree" | "checkout">
   renameSession: (sessionId: string, title: string) => Promise<void>
   deleteSessions: (sessionIds: string[]) => Promise<void>
   deleteSession: (sessionId: string) => Promise<void>

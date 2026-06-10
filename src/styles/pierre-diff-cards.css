@@ -1,0 +1,78 @@
+/* Injected into @pierre/diffs shadow roots (CodeView `unsafeCSS`) for the
+ * Changes accordion — each item host is one rounded file card.
+ *
+ * Pierre layers its CSS (base, theme, rendered, unsafe) with unsafe last, and
+ * the shiki theme declares its canvas color via --diffs-light-bg/--diffs-dark-bg
+ * ON :host — where --diffs-bg and all derived tints are computed. So theming
+ * must happen at :host; rules on [data-diff]/[data-file] can only re-point
+ * already-computed values. */
+
+* {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Each item is its own shadow host wrapping header + code, so the card chrome
+ * lives on :host — bordering [data-diff] alone would round only the code half.
+ * overflow: clip (not hidden) keeps sticky headers working. */
+:host {
+  /* Drive every computed tint (line bgs, gutters, +/- shades) from the app's
+   * card color instead of the shiki theme's canvas. */
+  --diffs-light-bg: var(--card);
+  --diffs-dark-bg: var(--card);
+  /* Lines wrap — the reserved horizontal-scrollbar gutter is a dead strip. */
+  --diffs-scrollbar-gutter-override: 0px;
+  /* Hunk-expand strips: the default mixes 15% toward white; keep them a
+   * whisper above the card instead. */
+  --diffs-bg-separator-override: color-mix(
+    in lab,
+    var(--diffs-bg) 95%,
+    var(--diffs-mixer)
+  );
+  background-color: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: clip;
+}
+
+/* Wrapped lines never scroll sideways — drop the dead gutter padding pierre
+ * reserves under the code. */
+[data-code] {
+  scrollbar-width: none;
+  padding-bottom: 0;
+}
+[data-code]::-webkit-scrollbar {
+  display: none;
+}
+
+/* GitHub-style file header: compact, bold name. */
+[data-diffs-header="default"] {
+  font-size: 12px;
+  padding-inline: 10px;
+}
+/* The header↔code separator lives on the CONTENT's top edge as an inset
+ * shadow: zero height impact (a real border would shift the virtualizer's
+ * estimated offsets), and a collapsed card — header only — gets no stray
+ * hairline above its bottom border. */
+[data-diffs-header] ~ [data-diff],
+[data-diffs-header] ~ [data-file] {
+  box-shadow: inset 0 1px 0 var(--border);
+}
+[data-diffs-header="default"] [data-change-icon] {
+  display: none;
+}
+[data-diffs-header="default"] [data-additions-count] {
+  color: var(--positive, #3fb950);
+}
+[data-diffs-header="default"] [data-deletions-count] {
+  color: var(--destructive, #f85149);
+}
+[data-header-content] [data-title] {
+  font-weight: 600;
+}
+
+/* Expand controls read as affordances, not banners. */
+[data-separator-content],
+[data-expand-button] {
+  font-size: 11px;
+}

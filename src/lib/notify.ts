@@ -42,29 +42,32 @@ export type NotifyEvent =
   | "prChecks"
   | "linearAssigned"
 
-export const NOTIFY_EVENTS: { event: NotifyEvent; label: string; hint: string }[] =
-  [
-    {
-      event: "sessionDone",
-      label: "Agent finished",
-      hint: "A session's turn completed or stopped on an error.",
-    },
-    {
-      event: "workflowDone",
-      label: "Workflow updates",
-      hint: "A workflow finished, failed, or is waiting at a gate.",
-    },
-    {
-      event: "prChecks",
-      label: "PR checks",
-      hint: "CI checks on one of your open PRs passed or failed.",
-    },
-    {
-      event: "linearAssigned",
-      label: "Linear assignments",
-      hint: "A Linear issue was newly assigned to you.",
-    },
-  ]
+export const NOTIFY_EVENTS: {
+  event: NotifyEvent
+  label: string
+  hint: string
+}[] = [
+  {
+    event: "sessionDone",
+    label: "Agent finished",
+    hint: "A session's turn completed or stopped on an error.",
+  },
+  {
+    event: "workflowDone",
+    label: "Workflow updates",
+    hint: "A workflow finished, failed, or is waiting at a gate.",
+  },
+  {
+    event: "prChecks",
+    label: "PR checks",
+    hint: "CI checks on one of your open PRs passed or failed.",
+  },
+  {
+    event: "linearAssigned",
+    label: "Linear assignments",
+    hint: "A Linear issue was newly assigned to you.",
+  },
+]
 
 const PREFS_KEY = "warden:notification-prefs"
 
