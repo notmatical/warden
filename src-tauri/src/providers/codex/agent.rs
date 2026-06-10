@@ -2,25 +2,32 @@
 //! JSON-RPC 2.0 server speaking newline-delimited JSON over stdio.
 //!
 //! One app-server process is shared across every Codex session; each warden
-//! session maps to one Codex *thread*. Requests are matched to responses by
-//! their numeric `id`; notifications (no `id`) are routed to the owning session
-//! by their `threadId`. Codex events are translated into warden's normalized
-//! [`AgentEvent`] so Codex turns render in the existing transcript unchanged.
+//! session maps to one Codex *thread*. The JSON-RPC plumbing (request
+//! correlation, notification routing) lives in [`crate::providers::jsonrpc`];
+//! this module does protocol translation only — Codex events become warden's
+//! normalized [`AgentEvent`] so Codex turns render in the existing transcript
+//! unchanged.
+//!
+//! Unlike Claude session processes, the app-server is NOT left running across
+//! app shutdown. Verified empirically (codex 0.136): the server aborts the
+//! in-flight turn and exits the moment its client's pipes close, recording a
+//! clean `turn_aborted` in its rollout file — so there is nothing to survive
+//! *to*. Conversation state persists on disk (`~/.codex/sessions`) and the next
+//! turn resumes the thread via `thread/resume`. True turn survival needs
+//! `codex app-server daemon` + `proxy`, which is Unix-only today; revisit when
+//! it ships on Windows.
 
 use std::collections::HashMap;
-use std::process::Stdio;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, LazyLock, Mutex};
 
 use serde_json::{json, Value};
 use tauri::AppHandle;
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
-use tokio::process::{Child, ChildStdin};
-use tokio::sync::{mpsc, oneshot, Mutex as AsyncMutex};
+use tokio::sync::Mutex as AsyncMutex;
 
 use crate::domain::{AgentEvent, EffortLevel, PermissionMode, Session, SessionStatus, TokenUsage};
 use crate::error::{AppError, Result};
 use crate::events::{emit_delta, emit_event, emit_session};
+use crate::providers::jsonrpc::Client;
 use crate::store::Store;
 
 /// Tool-result content larger than this is clipped to keep the event log and
@@ -28,30 +35,15 @@ use crate::store::Store;
 const MAX_TOOL_RESULT_CHARS: usize = 16_000;
 const TRUNCATION_NOTE: &str = "… (truncated)";
 
-/// A notification the reader routed to a thread's owner.
-struct Notification {
-    method: String,
-    params: Value,
-}
-
-/// The shared app-server process and its JSON-RPC plumbing.
-struct CodexServer {
-    /// Writer half of the process stdin; serialized requests are written here.
-    stdin: AsyncMutex<ChildStdin>,
-    /// The child handle, kept so the process can be killed on app exit.
-    child: Mutex<Child>,
-    /// Monotonic JSON-RPC request id.
-    next_id: AtomicU64,
-    /// In-flight requests awaiting a response, keyed by id.
-    pending: Mutex<HashMap<u64, oneshot::Sender<std::result::Result<Value, String>>>>,
-    /// Active threads: threadId → notification sink for the owning turn.
-    threads: Mutex<HashMap<String, mpsc::UnboundedSender<Notification>>>,
-    /// In-flight turns: session id → (threadId, turnId). The turnId is empty
-    /// until `turn/started`; used to send `turn/interrupt` on cancel.
-    turns: Mutex<HashMap<String, (String, String)>>,
-}
-
-static SERVER: OnceLock<CodexServer> = OnceLock::new();
+/// The shared app-server client. A dead server (crash, kill) is replaced on
+/// the next turn rather than wedging Codex until app restart.
+static SERVER: Mutex<Option<Arc<Client>>> = Mutex::new(None);
+/// Serializes spawn + `initialize` so racing first turns can't double-spawn.
+static INIT: AsyncMutex<()> = AsyncMutex::const_new(());
+/// In-flight turns: session id → (threadId, turnId). The turnId is empty
+/// until `turn/started`; used to send `turn/interrupt` on cancel.
+static TURNS: LazyLock<Mutex<HashMap<String, (String, String)>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// The `codex` binary to run — warden's managed copy or the system PATH one,
 /// per the tool's source preference.
@@ -59,345 +51,104 @@ fn resolve_codex() -> std::path::PathBuf {
     crate::cli::resolve(crate::cli::Tool::Codex)
 }
 
-/// Spawn + initialize the app-server if it isn't already running. Idempotent;
-/// safe to call before every turn. The handshake (`initialize` request +
-/// `initialized` notification) completes before this returns.
-pub async fn ensure_running() -> Result<()> {
-    if SERVER.get().is_some() {
-        return Ok(());
-    }
-
-    let bin = resolve_codex();
-    let mut child = tokio::process::Command::new(bin)
-        .arg("app-server")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true)
-        .spawn()?;
-
-    let stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| AppError::Agent("failed to capture codex stdin".to_string()))?;
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| AppError::Agent("failed to capture codex stdout".to_string()))?;
-    let stderr = child
-        .stderr
-        .take()
-        .ok_or_else(|| AppError::Agent("failed to capture codex stderr".to_string()))?;
-
-    let server = CodexServer {
-        stdin: AsyncMutex::new(stdin),
-        child: Mutex::new(child),
-        next_id: AtomicU64::new(1),
-        pending: Mutex::new(HashMap::new()),
-        threads: Mutex::new(HashMap::new()),
-        turns: Mutex::new(HashMap::new()),
-    };
-
-    // Another task may have raced us here; if so, drop ours (its child is killed
-    // on drop) and use the winner.
-    if SERVER.set(server).is_err() {
-        return Ok(());
-    }
-
-    tauri::async_runtime::spawn(drain_stderr(stderr));
-    tauri::async_runtime::spawn(reader_loop(stdout));
-
-    initialize().await
+fn current() -> Option<Arc<Client>> {
+    SERVER.lock().unwrap_or_else(|p| p.into_inner()).clone()
 }
 
-fn server() -> Result<&'static CodexServer> {
-    SERVER
-        .get()
-        .ok_or_else(|| AppError::Agent("codex app-server is not running".to_string()))
+/// The live app-server client, spawning and initializing one if there is none
+/// — or if the previous one died. The handshake (`initialize` request +
+/// `initialized` notification) completes before this returns.
+async fn server() -> Result<Arc<Client>> {
+    if let Some(client) = current() {
+        if client.is_alive() {
+            return Ok(client);
+        }
+    }
+    let _guard = INIT.lock().await;
+    if let Some(client) = current() {
+        if client.is_alive() {
+            return Ok(client);
+        }
+    }
+
+    let mut cmd = tokio::process::Command::new(resolve_codex());
+    cmd.arg("app-server");
+    let client = Client::spawn("codex app-server", cmd, route)?;
+    initialize(&client).await?;
+    *SERVER.lock().unwrap_or_else(|p| p.into_inner()) = Some(client.clone());
+    Ok(client)
+}
+
+/// Notification routing key: most carry `threadId`; `thread/started` nests it
+/// under `thread.id`.
+fn route(_method: &str, params: &Value) -> Option<String> {
+    params
+        .get("threadId")
+        .or_else(|| params.get("thread").and_then(|t| t.get("id")))
+        .and_then(Value::as_str)
+        .map(str::to_string)
 }
 
 /// Run the `initialize` handshake. Must be called once, right after spawn.
-async fn initialize() -> Result<()> {
+async fn initialize(client: &Client) -> Result<()> {
     let params = json!({
         "clientInfo": { "name": "warden", "title": "Warden", "version": "0.1.0" },
         "capabilities": { "experimentalApi": true }
     });
-    send_request("initialize", params).await?;
-
-    // The `initialized` notification carries no id and expects no response.
-    write_message(&json!({
-        "jsonrpc": "2.0",
-        "method": "initialized",
-        "params": {}
-    }))
-    .await
+    client.request("initialize", params).await?;
+    client.notify("initialized", json!({})).await
 }
 
-/// Serialize and write one JSON-RPC message to the server's stdin.
-async fn write_message(msg: &Value) -> Result<()> {
-    let line = serde_json::to_string(msg)?;
-    let server = server()?;
-    let mut stdin = server.stdin.lock().await;
-    stdin.write_all(line.as_bytes()).await?;
-    stdin.write_all(b"\n").await?;
-    stdin.flush().await?;
-    Ok(())
-}
-
-/// Send a JSON-RPC request and await its response. Errors carry the server's
-/// error message when the response is an error object.
-pub async fn send_request(method: &str, params: Value) -> Result<Value> {
-    let server = server()?;
-    let id = server.next_id.fetch_add(1, Ordering::SeqCst);
-
-    let (tx, rx) = oneshot::channel();
-    server
-        .pending
-        .lock()
-        .unwrap_or_else(|p| p.into_inner())
-        .insert(id, tx);
-
-    let request = json!({
-        "jsonrpc": "2.0",
-        "id": id,
-        "method": method,
-        "params": params,
-    });
-    if let Err(e) = write_message(&request).await {
-        server
-            .pending
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .remove(&id);
-        return Err(e);
-    }
-
-    // A control RPC (initialize / thread / turn start) always responds promptly;
-    // the turn's actual work streams as notifications. A missing response means
-    // something is wrong — time out rather than hang the turn forever.
-    match tokio::time::timeout(std::time::Duration::from_secs(60), rx).await {
-        Ok(Ok(Ok(value))) => Ok(value),
-        Ok(Ok(Err(message))) => Err(AppError::Agent(message)),
-        Ok(Err(_)) => Err(AppError::Agent(format!(
-            "codex app-server dropped the response to {method}"
-        ))),
-        Err(_) => {
-            server
-                .pending
-                .lock()
-                .unwrap_or_else(|p| p.into_inner())
-                .remove(&id);
-            Err(AppError::Agent(format!(
-                "codex app-server timed out responding to {method}"
-            )))
-        }
-    }
-}
-
-async fn drain_stderr(stderr: tokio::process::ChildStderr) {
-    let mut buf = String::new();
-    let mut reader = stderr;
-    let _ = reader.read_to_string(&mut buf).await;
-    let trimmed = buf.trim();
-    if !trimmed.is_empty() {
-        log::debug!("codex app-server stderr: {trimmed}");
-    }
-}
-
-/// Read the server's stdout line by line: responses resolve pending requests,
-/// notifications route to the owning thread. On EOF the server is gone — fail
-/// every pending request and disconnect every thread channel.
-async fn reader_loop(stdout: tokio::process::ChildStdout) {
-    let mut lines = BufReader::new(stdout).lines();
-    while let Ok(Some(line)) = lines.next_line().await {
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
-        }
-        let Ok(msg) = serde_json::from_str::<Value>(line) else {
-            log::warn!("codex app-server: unparseable line: {line}");
-            continue;
-        };
-
-        let has_id = msg.get("id").is_some();
-        let method = msg.get("method").and_then(Value::as_str);
-
-        match (method, has_id) {
-            // Response to one of our requests.
-            (None, true) => dispatch_response(&msg),
-            // Notification (no id) — route by threadId.
-            (Some(method), false) => dispatch_notification(method, &msg),
-            // Server-initiated request (e.g. an approval prompt). Out of scope
-            // for 3a; the `never` approval policy means these shouldn't arrive,
-            // but log them rather than dropping silently.
-            (Some(method), true) => {
-                log::debug!("codex app-server: ignoring server request {method}");
-            }
-            (None, false) => {}
-        }
-    }
-
-    if let Some(server) = SERVER.get() {
-        for (_, tx) in server
-            .pending
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .drain()
-        {
-            let _ = tx.send(Err("codex app-server exited".to_string()));
-        }
-        server
-            .threads
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .clear();
-    }
-    log::warn!("codex app-server stdout closed");
-}
-
-fn dispatch_response(msg: &Value) {
-    let Some(server) = SERVER.get() else { return };
-    let Some(id) = msg.get("id").and_then(Value::as_u64) else {
-        return;
-    };
-    let Some(tx) = server
-        .pending
-        .lock()
-        .unwrap_or_else(|p| p.into_inner())
-        .remove(&id)
-    else {
-        return;
-    };
-    let result = if let Some(err) = msg.get("error") {
-        let message = err
-            .get("message")
-            .and_then(Value::as_str)
-            .unwrap_or("unknown error")
-            .to_string();
-        Err(message)
-    } else {
-        Ok(msg.get("result").cloned().unwrap_or(Value::Null))
-    };
-    let _ = tx.send(result);
-}
-
-fn dispatch_notification(method: &str, msg: &Value) {
-    let Some(server) = SERVER.get() else { return };
-    let params = msg.get("params").cloned().unwrap_or(Value::Null);
-
-    // Most notifications carry `threadId`; `thread/started` nests it under
-    // `thread.id`.
-    let thread_id = params
-        .get("threadId")
-        .or_else(|| params.get("thread").and_then(|t| t.get("id")))
-        .and_then(Value::as_str);
-
-    let Some(thread_id) = thread_id else {
-        return;
-    };
-    if let Some(tx) = server
-        .threads
-        .lock()
-        .unwrap_or_else(|p| p.into_inner())
-        .get(thread_id)
-    {
-        let _ = tx.send(Notification {
-            method: method.to_string(),
-            params,
-        });
-    }
-}
-
-fn register_thread(thread_id: &str, tx: mpsc::UnboundedSender<Notification>) {
-    if let Some(server) = SERVER.get() {
-        server
-            .threads
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .insert(thread_id.to_string(), tx);
-    }
-}
-
-fn unregister_thread(thread_id: &str) {
-    if let Some(server) = SERVER.get() {
-        server
-            .threads
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .remove(thread_id);
-    }
+fn turns() -> std::sync::MutexGuard<'static, HashMap<String, (String, String)>> {
+    TURNS.lock().unwrap_or_else(|p| p.into_inner())
 }
 
 fn register_turn(session_id: &str, thread_id: &str) {
-    if let Some(server) = SERVER.get() {
-        server
-            .turns
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .insert(
-                session_id.to_string(),
-                (thread_id.to_string(), String::new()),
-            );
-    }
+    turns().insert(
+        session_id.to_string(),
+        (thread_id.to_string(), String::new()),
+    );
 }
 
 /// Record the turn id once `turn/started` arrives, so a cancel can address it.
 fn set_turn_id(session_id: &str, turn_id: &str) {
-    if let Some(server) = SERVER.get() {
-        if let Some(entry) = server
-            .turns
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .get_mut(session_id)
-        {
-            entry.1 = turn_id.to_string();
-        }
+    if let Some(entry) = turns().get_mut(session_id) {
+        entry.1 = turn_id.to_string();
     }
 }
 
 fn unregister_turn(session_id: &str) {
-    if let Some(server) = SERVER.get() {
-        server
-            .turns
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .remove(session_id);
-    }
+    turns().remove(session_id);
 }
 
 /// Interrupt a session's in-flight Codex turn (`turn/interrupt`). Returns whether
 /// a turn was found. The server ends the turn and emits a terminating
 /// `turn/completed`, which settles the session to idle and breaks its drain loop.
 pub fn interrupt(session_id: &str) -> bool {
-    let Some(server) = SERVER.get() else {
-        return false;
-    };
-    let entry = server
-        .turns
-        .lock()
-        .unwrap_or_else(|p| p.into_inner())
-        .get(session_id)
-        .cloned();
+    let entry = turns().get(session_id).cloned();
     let Some((thread_id, turn_id)) = entry else {
         return false;
     };
     if turn_id.is_empty() {
         return false;
     }
+    let Some(client) = current() else {
+        return false;
+    };
     let params = json!({ "threadId": thread_id, "turnId": turn_id });
     // Fire-and-forget — we don't need the response, only for the server to stop.
     tauri::async_runtime::spawn(async move {
-        let _ = send_request("turn/interrupt", params).await;
+        let _ = client.request("turn/interrupt", params).await;
     });
     true
 }
 
-/// Kill the shared app-server (app shutdown). Idempotent.
+/// Kill the shared app-server (app shutdown). Idempotent. The server would
+/// abort its turns and exit on our death anyway (see module docs) — killing
+/// is just the tidy version.
 pub fn kill_all() {
-    if let Some(server) = SERVER.get() {
-        if let Ok(mut child) = server.child.lock() {
-            let _ = child.start_kill();
-        }
+    if let Some(client) = current() {
+        client.kill();
     }
 }
 
@@ -499,6 +250,7 @@ fn sandbox_policy(session: &Session, add_dirs: &[String]) -> Value {
 /// Start a new Codex thread (or resume the session's existing one), returning
 /// the thread id. The id is persisted so later turns resume the conversation.
 async fn start_or_resume(
+    client: &Client,
     store: &Store,
     session: &Session,
     base_instructions: &str,
@@ -506,7 +258,7 @@ async fn start_or_resume(
     if session.turns > 0 && !session.agent_session_id.is_empty() {
         let mut params = thread_params(session, base_instructions);
         params["threadId"] = json!(session.agent_session_id);
-        match send_request("thread/resume", params).await {
+        match client.request("thread/resume", params).await {
             Ok(_) => return Ok(session.agent_session_id.clone()),
             Err(e) => log::warn!(
                 "codex thread/resume failed for {}: {e}; starting a new thread",
@@ -515,7 +267,9 @@ async fn start_or_resume(
         }
     }
 
-    let response = send_request("thread/start", thread_params(session, base_instructions)).await?;
+    let response = client
+        .request("thread/start", thread_params(session, base_instructions))
+        .await?;
     let thread_id = response
         .get("thread")
         .and_then(|t| t.get("id"))
@@ -538,11 +292,10 @@ pub async fn run_turn(
     prompt: &str,
     base_instructions: &str,
 ) -> Result<()> {
-    ensure_running().await?;
-    let thread_id = start_or_resume(store, session, base_instructions).await?;
+    let client = server().await?;
+    let thread_id = start_or_resume(&client, store, session, base_instructions).await?;
 
-    let (tx, mut rx) = mpsc::unbounded_channel::<Notification>();
-    register_thread(&thread_id, tx);
+    let mut rx = client.subscribe(&thread_id);
     // Track the turn so a cancel can `turn/interrupt` it (turn id filled in on
     // the `turn/started` notification).
     register_turn(&session.id, &thread_id);
@@ -562,19 +315,33 @@ pub async fn run_turn(
         "effort": codex_effort(session.effort),
         "sandboxPolicy": sandbox_policy(session, &add_dirs),
     });
-    if let Err(e) = send_request("turn/start", turn_params).await {
-        unregister_thread(&thread_id);
+    if let Err(e) = client.request("turn/start", turn_params).await {
+        client.unsubscribe(&thread_id);
         unregister_turn(&session.id);
         return Err(e);
     }
 
+    let mut finished = false;
     while let Some(note) = rx.recv().await {
         if handle_notification(app, store, &session.id, &note.method, &note.params) {
+            finished = true;
             break;
         }
     }
-    unregister_thread(&thread_id);
+    client.unsubscribe(&thread_id);
     unregister_turn(&session.id);
+
+    // The channel closing before `turn/completed` means the server died
+    // mid-turn. Surface it — otherwise the session sits `Running` forever.
+    if !finished {
+        let detail = client.stderr_tail();
+        let message = if detail.is_empty() {
+            "codex app-server exited mid-turn".to_string()
+        } else {
+            format!("codex app-server exited mid-turn: {detail}")
+        };
+        return Err(AppError::Agent(message));
+    }
     Ok(())
 }
 
