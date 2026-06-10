@@ -274,7 +274,7 @@ pub async fn checkout_pr(
         return Err(AppError::Invalid("this repository has no git remote".to_string()).into());
     }
     let base = pr::pr_base_ref(repo, number).unwrap_or_else(|| "main".to_string());
-    let dir = crate::git::provision_pr_worktree(&app, &project, number, &base)?;
+    let dir = crate::git::provision_pr_worktree(&project, number, &base)?;
     let group_id = state
         .store
         .ensure_group_for_project(&project_id, &project.name)?;
