@@ -227,11 +227,16 @@ pub fn run() {
             cli::set_sources(sources);
 
             app.manage(AppState {
-                store,
+                store: store.clone(),
                 manager: AgentManager::new(),
                 workflow_cancels: Default::default(),
                 focus: Default::default(),
             });
+
+            // Reattach to agent processes that survived the previous app run
+            // (or drain what they wrote before dying), and settle any session
+            // left lying `Running` with nothing behind it.
+            agent::recover(app.handle().clone(), store);
 
             // Keep open PRs' state + CI checks fresh in the background.
             integrations::github::poll::spawn(app.handle().clone());
@@ -252,10 +257,13 @@ pub fn run() {
                     app.exit(0);
                 }
             }
-            // Tear down any live PTYs and agent processes when the app exits.
+            // Tear down PTYs and the Codex app-server on exit. Claude session
+            // processes survive on purpose: stdin EOF lets each finish its
+            // in-flight turn into its output file, and the next launch
+            // reattaches (see agent::recover).
             if matches!(event, tauri::RunEvent::Exit) {
                 terminal::kill_all();
-                agent::kill_all();
+                agent::shutdown();
             }
         });
 }
