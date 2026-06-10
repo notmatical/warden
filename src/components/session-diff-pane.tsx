@@ -94,21 +94,22 @@ function FilesView({
         { name: file.path, contents: data.oldText ?? "" },
         { name: file.path, contents: data.newText ?? "" }
       )
-      // `collapsed` must NOT feed the version hash: pierre observes it as a
-      // reactive item option and transitions in place. Bumping version on
-      // toggle tears the item down and re-creates it at its *estimated*
-      // (dehydrated) height — a huge empty card until re-measure.
+      // `collapsed` feeds the version hash on purpose: the version bump is
+      // what makes CodeView re-render the item in its new state (superset
+      // does exactly this).
+      const isCollapsed = collapsed.has(file.path)
       out.push({
         id: file.path,
         type: "diff",
         fileDiff,
-        collapsed: collapsed.has(file.path),
+        collapsed: isCollapsed,
         version: hashVersion(
           [
             file.path,
             file.added,
             file.removed,
             versionQueries[i]?.dataUpdatedAt ?? 0,
+            isCollapsed ? "1" : "0",
           ].join("\0")
         ),
       })

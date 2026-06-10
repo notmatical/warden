@@ -56,6 +56,7 @@ function Accordion() {
   const items = useMemo(() => {
     const out: CodeViewItem<undefined>[] = []
     for (const file of FILES) {
+      const isCollapsed = collapsed.has(file.path)
       out.push({
         id: file.path,
         type: "diff",
@@ -63,8 +64,8 @@ function Accordion() {
           { name: file.path, contents: file.oldText },
           { name: file.path, contents: file.newText }
         ),
-        collapsed: collapsed.has(file.path),
-        version: hashVersion(file.path),
+        collapsed: isCollapsed,
+        version: hashVersion(`${file.path}\0${isCollapsed ? "1" : "0"}`),
       })
     }
     return out
