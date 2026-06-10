@@ -4,8 +4,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use tauri::{AppHandle, Manager};
-
 use crate::domain::Project;
 use crate::error::Result;
 use crate::util::{short_id, uuid};
@@ -45,16 +43,8 @@ fn ensure_worktrees_root(repo: &Path) -> Result<PathBuf> {
 /// Whether `path` lives under warden's worktrees root — the only place warden
 /// is allowed to delete. A session pointed at any external directory (explicit
 /// working_dir, imported checkout) is never removed.
-pub fn is_managed_worktree(app: &AppHandle, repo: &Path, path: &Path) -> bool {
-    if path.starts_with(worktrees_root(repo)) {
-        return true;
-    }
-    // Legacy root (`~/warden`) — sessions provisioned before worktrees moved
-    // into the repo still clean up when they end.
-    app.path()
-        .home_dir()
-        .map(|home| path.starts_with(home.join("warden")))
-        .unwrap_or(false)
+pub fn is_managed_worktree(repo: &Path, path: &Path) -> bool {
+    path.starts_with(worktrees_root(repo))
 }
 
 /// Provision an isolated worktree checked out to an existing PR's head branch,
