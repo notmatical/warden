@@ -116,11 +116,14 @@ function useCodeViewOptions(
            pierre reserves under the code. */
         [data-code] { scrollbar-width: none; padding-bottom: 0; }
         [data-code]::-webkit-scrollbar { display: none; }
-        /* GitHub-style file header: compact, bold name, quietly separated. */
+        /* GitHub-style file header: compact, bold name, quietly separated.
+           The separator is an inset shadow, NOT a border — the virtualizer
+           positions expanded content from an estimated 44px header height,
+           and a real border would make it 45px, shifting layout on expand. */
         [data-diffs-header='default'] {
           font-size: 12px;
           padding-inline: 10px;
-          border-bottom: 1px solid var(--border);
+          box-shadow: inset 0 -1px 0 var(--border);
         }
         [data-header-content] [data-title] { font-weight: 600; }
         [data-diffs-header='default'] [data-change-icon] { display: none; }
