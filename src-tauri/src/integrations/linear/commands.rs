@@ -3,14 +3,15 @@
 
 use serde::Serialize;
 use specta::Type;
-use tauri::State;
+use tauri::{AppHandle, State};
 
 use crate::error::{AppError, CommandResult};
+use crate::events::emit_linear_changed;
 use crate::state::AppState;
 
 use super::binding::{self, LinearBinding};
 use super::client::{self, LinearComment, LinearIssue, LinearTeam, Viewer};
-use super::{key, sync};
+use super::{key, sync, writeback};
 
 /// Connection state for the Tasks UI.
 #[derive(Debug, Clone, Serialize, Type)]
@@ -58,6 +59,24 @@ pub async fn linear_status() -> CommandResult<LinearStatus> {
 #[specta::specta]
 pub async fn linear_cached_issues(state: State<'_, AppState>) -> CommandResult<Vec<LinearIssue>> {
     Ok(sync::cached_issues(&state.store)?)
+}
+
+/// Move an issue to its team's primary "started" state (writeback on
+/// send-to-agent). Freshens the cache afterwards so the inbox reflects it.
+#[tauri::command]
+#[specta::specta]
+pub async fn linear_start_issue(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    issue_id: String,
+    team_id: String,
+) -> CommandResult<()> {
+    let key = key::load()?.ok_or_else(|| AppError::Invalid("not connected to Linear".into()))?;
+    writeback::start_issue(&key, &issue_id, &team_id).await?;
+    if matches!(sync::sync_once(&state.store, &key).await, Ok(true)) {
+        emit_linear_changed(&app);
+    }
+    Ok(())
 }
 
 /// Comments for one issue, fetched live when the peek panel opens. Not cached:
