@@ -46,8 +46,7 @@ function SetupFailedState({ session }: { session: Session }) {
           </Button>
           <Button
             size="sm"
-            variant="ghost"
-            className="text-muted-foreground hover:text-foreground"
+            variant="secondary"
             onClick={() =>
               void ipc
                 .dismissSetupError(session.id)
