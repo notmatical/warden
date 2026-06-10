@@ -193,7 +193,9 @@ pub fn session_args(
     args
 }
 
-/// Build the persistent session command: stdin/stdout/stderr all piped.
+/// Build the persistent session command with stdin piped. The caller redirects
+/// stdout/stderr (to per-session files, so the process can outlive the app) and
+/// deliberately does NOT set `kill_on_drop` — survival is the point.
 pub fn session_command(
     session: &Session,
     add_dirs: &[String],
@@ -204,10 +206,7 @@ pub fn session_command(
     let mut cmd = Command::new(bin);
     cmd.args(session_args(session, add_dirs, context_file, resume))
         .current_dir(&session.working_dir)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true);
+        .stdin(Stdio::piped());
     apply_gh_env(&mut cmd);
     Ok(cmd)
 }
