@@ -139,6 +139,11 @@ pub fn spawn_session_setup(app: &AppHandle, store: &Store, session: &Session, re
     }
     let config = repo_config::load_lenient(Path::new(repo_path));
     let Some(script) = join(&config.setup) else {
+        // The commands were removed since the last run — clear any stale
+        // failed/done state so a retry doesn't dead-end on a no-op.
+        if session.setup_status.is_some() {
+            set_status(app, store, &session.id, None, None);
+        }
         return;
     };
 
