@@ -13,6 +13,7 @@ export function ErrorState({
   title,
   description,
   detail,
+  detailLabel,
   actions,
   className,
 }: {
