@@ -1,4 +1,4 @@
-import { FolderOpen, RefreshCw, TriangleAlert } from "lucide-react"
+import { RefreshCw, TriangleAlert } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
@@ -46,15 +46,8 @@ function SetupFailedState({ session }: { session: Session }) {
           </Button>
           <Button
             size="sm"
-            variant="outline"
-            onClick={() => void ipc.openIn("folder", session.workingDir)}
-          >
-            <FolderOpen />
-            Open worktree
-          </Button>
-          <Button
-            size="sm"
             variant="ghost"
+            className="text-muted-foreground hover:text-foreground"
             onClick={() =>
               void ipc
                 .dismissSetupError(session.id)
