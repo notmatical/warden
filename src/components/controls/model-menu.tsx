@@ -163,7 +163,13 @@ export function ModelMenu({
     )
 
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
+    // Non-modal in the composer so typing stays live; modal in dialogs so the
+    // menu (not the dialog's scroll lock) owns wheel events over its list.
+    <DropdownMenu
+      open={open}
+      onOpenChange={setOpen}
+      modal={variant === "form"}
+    >
       {trigger}
       <DropdownMenuContent
         align="start"

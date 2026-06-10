@@ -90,7 +90,8 @@ export function FolderPicker({
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    // Modal so the list owns wheel events inside dialogs (matches ModelMenu).
+    <Popover open={open} onOpenChange={setOpen} modal>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
