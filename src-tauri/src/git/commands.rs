@@ -24,8 +24,10 @@ pub struct RepoStatus {
     pub branch: Option<String>,
     pub ahead: u32,
     pub behind: u32,
-    pub uncommitted_added: u32,
-    pub uncommitted_removed: u32,
+    /// Lines changed: everything since the session's base for the primary root
+    /// (committed + uncommitted), uncommitted-only for other roots.
+    pub added: u32,
+    pub removed: u32,
     /// Whether this root's repo has a remote — i.e. a PR can be opened from it.
     pub has_remote: bool,
 }
@@ -61,20 +63,26 @@ pub async fn session_git_status(
             branch: None,
             ahead: 0,
             behind: 0,
-            uncommitted_added: 0,
-            uncommitted_removed: 0,
+            added: 0,
+            removed: 0,
             has_remote: false,
         };
 
         if git::is_repo(dir) {
-            let (added, removed) = git::uncommitted_lines(dir);
+            // The primary root counts everything the session changed since it
+            // forked (committed + uncommitted) — this number is the doorway to
+            // the diff view. Other roots fall back to uncommitted changes.
+            let (added, removed) = match session.base_sha.as_deref().filter(|_| is_primary) {
+                Some(base) => git::diff::lines_vs_base(dir, base),
+                None => git::uncommitted_lines(dir),
+            };
             let (ahead, behind) = git::ahead_behind(dir);
             status.is_git = true;
             status.branch = git::current_branch(dir);
             status.ahead = ahead;
             status.behind = behind;
-            status.uncommitted_added = added;
-            status.uncommitted_removed = removed;
+            status.added = added;
+            status.removed = removed;
             status.has_remote = git::has_remote(dir);
         }
 

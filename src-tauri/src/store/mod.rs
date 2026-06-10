@@ -9,8 +9,8 @@ use rusqlite::{Connection, OptionalExtension, Row};
 use crate::domain::{
     AgentEvent, Backend, CheckStatus, ContextSource, EffortLevel, EventRecord, Group, Label,
     NodeRunStatus, PermissionMode, Project, ProjectLabels, RunStatus, Session,
-    SessionContextSource, SessionKind, SessionRole, SessionStatus, Workflow, WorkflowGraph,
-    WorkflowNodeRun, WorkflowRun,
+    SessionContextSource, SessionKind, SessionRole, SessionStatus, SetupStatus, Workflow,
+    WorkflowGraph, WorkflowNodeRun, WorkflowRun,
 };
 use crate::error::{AppError, Result};
 use crate::util::{now_rfc3339, uuid};
@@ -713,6 +713,8 @@ impl Store {
             base_sha: new.base_sha,
             base_branch: new.base_branch,
             is_isolated: new.is_isolated,
+            setup_status: None,
+            setup_error: None,
             allowed_tools: Vec::new(),
             turns: 0,
             cost_usd: 0.0,
@@ -956,6 +958,22 @@ impl Store {
                 is_isolated as i64,
                 now_rfc3339(),
             ),
+        )?;
+        Ok(())
+    }
+
+    /// Record the worktree setup-commands lifecycle for a session. `None` clears
+    /// it (no setup configured, or the user dismissed a failure).
+    pub fn set_session_setup(
+        &self,
+        id: &str,
+        status: Option<SetupStatus>,
+        error: Option<&str>,
+    ) -> Result<()> {
+        let conn = self.lock();
+        conn.execute(
+            "UPDATE sessions SET setup_status = ?2, setup_error = ?3, updated_at = ?4 WHERE id = ?1",
+            (id, status.map(SetupStatus::as_str), error, now_rfc3339()),
         )?;
         Ok(())
     }
@@ -1233,14 +1251,16 @@ impl Store {
 
 const SESSION_SELECT: &str =
     "SELECT id, group_id, project_id, title, backend, model, permission_mode, status, role, \
-    agent_session_id, working_dir, branch, base_sha, is_isolated, allowed_tools, turns, cost_usd, \
+    agent_session_id, working_dir, branch, base_sha, is_isolated, setup_status, setup_error, \
+    allowed_tools, turns, cost_usd, \
     parent_id, workflow_id, created_at, updated_at, effort, auto_named, kind, terminal_command, terminal_started, \
     terminal_resume_id, base_branch, merged_at, pr_number, pr_url, pr_state, pr_check_status, \
     pr_checked_at, pinned FROM sessions WHERE id = ?1";
 
 const SESSION_SELECT_ALL: &str =
     "SELECT id, group_id, project_id, title, backend, model, permission_mode, status, role, \
-    agent_session_id, working_dir, branch, base_sha, is_isolated, allowed_tools, turns, cost_usd, \
+    agent_session_id, working_dir, branch, base_sha, is_isolated, setup_status, setup_error, \
+    allowed_tools, turns, cost_usd, \
     parent_id, workflow_id, created_at, updated_at, effort, auto_named, kind, terminal_command, terminal_started, \
     terminal_resume_id, base_branch, merged_at, pr_number, pr_url, pr_state, pr_check_status, \
     pr_checked_at, pinned FROM sessions";
@@ -1311,6 +1331,10 @@ fn map_session(row: &Row<'_>) -> rusqlite::Result<Session> {
         base_sha: row.get("base_sha")?,
         base_branch: row.get("base_branch")?,
         is_isolated: row.get::<_, i64>("is_isolated")? != 0,
+        setup_status: row
+            .get::<_, Option<String>>("setup_status")?
+            .and_then(|s| SetupStatus::parse(&s)),
+        setup_error: row.get("setup_error")?,
         allowed_tools: serde_json::from_str(&row.get::<_, String>("allowed_tools")?)
             .unwrap_or_default(),
         turns: row.get("turns")?,

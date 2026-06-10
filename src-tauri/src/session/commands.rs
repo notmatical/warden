@@ -274,6 +274,41 @@ pub async fn delete_session(
     Ok(())
 }
 
+/// Re-run the repo's worktree setup commands for a session (after a failure,
+/// or after the user edits the commands).
+#[tauri::command]
+#[specta::specta]
+pub async fn retry_worktree_setup(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: String,
+) -> CommandResult<()> {
+    let session = state.store.get_session(&session_id)?;
+    if !session.is_isolated {
+        return Err(
+            AppError::Invalid("setup commands only run in isolated worktrees".to_string()).into(),
+        );
+    }
+    let project = state.store.get_project(&session.project_id)?;
+    git::setup::spawn_session_setup(&app, &state.store, &session, &project.path);
+    Ok(())
+}
+
+/// Clear a failed setup state so the session is usable as-is.
+#[tauri::command]
+#[specta::specta]
+pub async fn dismiss_setup_error(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: String,
+) -> CommandResult<()> {
+    state.store.set_session_setup(&session_id, None, None)?;
+    if let Ok(updated) = state.store.get_session(&session_id) {
+        emit_session(&app, &updated);
+    }
+    Ok(())
+}
+
 /// Toggle a session's git-worktree isolation. Only allowed before the first
 /// turn — afterward the agent's conversation is tied to its working directory.
 #[tauri::command]
@@ -316,6 +351,9 @@ pub async fn set_session_isolation(
         dir.base_branch.as_deref(),
         dir.is_isolated,
     )?;
+    // Any setup state belonged to the torn-down worktree; re-isolating below
+    // starts a fresh run.
+    state.store.set_session_setup(&session_id, None, None)?;
 
     let updated = state.store.get_session(&session_id)?;
     emit_session(&app, &updated);

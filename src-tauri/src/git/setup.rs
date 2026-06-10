@@ -7,8 +7,8 @@ use std::time::Duration;
 
 use tauri::AppHandle;
 
-use crate::domain::{AgentEvent, Session};
-use crate::events::emit_event;
+use crate::domain::{Session, SetupStatus};
+use crate::events::emit_session;
 use crate::store::Store;
 use crate::workspace::config as repo_config;
 
@@ -112,15 +112,27 @@ pub async fn run_setup(repo: &Path, worktree: &Path) -> std::result::Result<bool
     Ok(true)
 }
 
-fn append(app: &AppHandle, store: &Store, session_id: &str, event: AgentEvent) {
-    if let Ok(record) = store.append_event(session_id, &event) {
-        emit_event(app, &record);
+/// Persist a session's setup state and push the updated session to the UI.
+fn set_status(
+    app: &AppHandle,
+    store: &Store,
+    session_id: &str,
+    status: Option<SetupStatus>,
+    error: Option<&str>,
+) {
+    if let Err(e) = store.set_session_setup(session_id, status, error) {
+        log::warn!("failed to record setup status for {session_id}: {e}");
+        return;
+    }
+    if let Ok(updated) = store.get_session(session_id) {
+        emit_session(app, &updated);
     }
 }
 
 /// Kick off the repo's setup commands in a session's fresh worktree, in the
-/// background, narrating progress as events on the session. No-op when the
-/// session isn't isolated or no setup commands are configured.
+/// background. Progress is session state (`setup_status`/`setup_error`), which
+/// the UI renders as a chip spinner or a dedicated failure view — not transcript
+/// noise. No-op when the session isn't isolated or no setup is configured.
 pub fn spawn_session_setup(app: &AppHandle, store: &Store, session: &Session, repo_path: &str) {
     if !session.is_isolated {
         return;
@@ -136,27 +148,18 @@ pub fn spawn_session_setup(app: &AppHandle, store: &Store, session: &Session, re
     let worktree = PathBuf::from(&session.working_dir);
     let repo = PathBuf::from(repo_path);
 
-    append(
-        &app,
-        &store,
-        &session_id,
-        AgentEvent::Notice {
-            text: format!(
-                "Running {} worktree setup command(s) from .warden/config.json…",
-                config.setup.len()
-            ),
-        },
-    );
+    set_status(&app, &store, &session_id, Some(SetupStatus::Running), None);
     tauri::async_runtime::spawn(async move {
-        let event = match run_script(&script, &worktree, &repo, SETUP_TIMEOUT).await {
-            Ok(()) => AgentEvent::Notice {
-                text: "Worktree setup finished.".to_string(),
-            },
-            Err(reason) => AgentEvent::Error {
-                message: format!("Worktree setup failed: {reason}"),
-            },
-        };
-        append(&app, &store, &session_id, event);
+        match run_script(&script, &worktree, &repo, SETUP_TIMEOUT).await {
+            Ok(()) => set_status(&app, &store, &session_id, Some(SetupStatus::Done), None),
+            Err(reason) => set_status(
+                &app,
+                &store,
+                &session_id,
+                Some(SetupStatus::Failed),
+                Some(&reason),
+            ),
+        }
     });
 }
 

@@ -50,6 +50,8 @@ pub fn run() {
         session::commands::create_session,
         session::commands::update_session,
         session::commands::set_session_isolation,
+        session::commands::retry_worktree_setup,
+        session::commands::dismiss_setup_error,
         session::commands::rename_session,
         session::commands::set_session_pinned,
         session::commands::load_project_labels,

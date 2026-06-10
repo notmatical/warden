@@ -87,6 +87,31 @@ pub fn worktree_diff(worktree: &Path, base: &str) -> Result<Vec<DiffFile>> {
     Ok(files)
 }
 
+/// Total added/removed lines in `worktree` since `base` — committed and
+/// uncommitted, untracked files included — for the session's change counter.
+pub fn lines_vs_base(worktree: &Path, base: &str) -> (u32, u32) {
+    let mut added = 0u32;
+    let mut removed = 0u32;
+    if let Ok(out) = run(worktree, &["diff", base, "--numstat"]) {
+        for line in out.lines() {
+            let mut cols = line.split('\t');
+            // Binary files report `-` for both counts; skip those entries.
+            if let (Some(a), Some(r)) = (cols.next(), cols.next()) {
+                added += a.trim().parse::<u32>().unwrap_or(0);
+                removed += r.trim().parse::<u32>().unwrap_or(0);
+            }
+        }
+    }
+    if let Ok(out) = run(worktree, &["ls-files", "--others", "--exclude-standard"]) {
+        for path in out.lines().map(str::trim).filter(|p| !p.is_empty()) {
+            if let Ok(contents) = std::fs::read_to_string(worktree.join(path)) {
+                added += contents.lines().count() as u32;
+            }
+        }
+    }
+    (added, removed)
+}
+
 /// One file's full before/after contents, for a rich (side-by-side) diff.
 #[derive(Debug, Serialize, Type)]
 #[serde(rename_all = "camelCase")]

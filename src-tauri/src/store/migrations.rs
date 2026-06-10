@@ -58,6 +58,10 @@ const MIGRATIONS: &[&str] = &[
         base_sha          TEXT,
         base_branch       TEXT,
         is_isolated       INTEGER NOT NULL,
+        -- Worktree setup-commands lifecycle: running/failed/done, NULL when no
+        -- setup is configured. `setup_error` holds the failure output tail.
+        setup_status      TEXT,
+        setup_error       TEXT,
         allowed_tools     TEXT NOT NULL DEFAULT '[]',
         turns             INTEGER NOT NULL DEFAULT 0,
         cost_usd          REAL NOT NULL DEFAULT 0,

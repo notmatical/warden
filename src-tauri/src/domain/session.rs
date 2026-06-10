@@ -142,6 +142,35 @@ impl SessionStatus {
     }
 }
 
+/// Lifecycle of the worktree setup commands run for a session. Absent when the
+/// repo configures none.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum SetupStatus {
+    Running,
+    Failed,
+    Done,
+}
+
+impl SetupStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            SetupStatus::Running => "running",
+            SetupStatus::Failed => "failed",
+            SetupStatus::Done => "done",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "running" => Some(SetupStatus::Running),
+            "failed" => Some(SetupStatus::Failed),
+            "done" => Some(SetupStatus::Done),
+            _ => None,
+        }
+    }
+}
+
 /// Aggregate CI-check state for a session's pull request, distilled from `gh`'s
 /// `statusCheckRollup`. Absent when the PR has no checks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
@@ -266,6 +295,10 @@ pub struct Session {
     /// The repo branch an isolated session merges back into.
     pub base_branch: Option<String>,
     pub is_isolated: bool,
+    /// Worktree setup-commands lifecycle; `None` when none are configured.
+    pub setup_status: Option<SetupStatus>,
+    /// Tail of the failing setup output, when `setup_status` is `Failed`.
+    pub setup_error: Option<String>,
     /// Tool patterns the user has approved for this session (`--allowedTools`),
     /// accumulated as denied tools are approved.
     pub allowed_tools: Vec<String>,

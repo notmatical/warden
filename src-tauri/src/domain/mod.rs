@@ -13,7 +13,7 @@ pub use label::{Label, ProjectLabels};
 pub use project::Project;
 pub use session::{
     Backend, CheckStatus, EffortLevel, PermissionMode, Session, SessionKind, SessionRole,
-    SessionStatus,
+    SessionStatus, SetupStatus,
 };
 pub use workflow::{
     NodeKind, NodeRunStatus, RunStatus, Workflow, WorkflowGraph, WorkflowNodeRun, WorkflowRun,
