@@ -183,6 +183,7 @@ async fn run_steps(ctx: &RunContext) -> Result<Outcome> {
             is_isolated: dir.is_isolated,
             parent_id,
             workflow_id: ctx.workflow_id.clone(),
+            linear_issue_id: None,
         })?;
         emit_session(&ctx.app, &session);
 

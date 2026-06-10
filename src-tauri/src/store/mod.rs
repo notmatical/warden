@@ -41,6 +41,7 @@ pub struct NewSession {
     pub is_isolated: bool,
     pub parent_id: Option<String>,
     pub workflow_id: Option<String>,
+    pub linear_issue_id: Option<String>,
 }
 
 /// A cached Linear issue row: indexed `id`/`updated_at` plus the full JSON
@@ -718,6 +719,7 @@ impl Store {
             cost_usd: 0.0,
             parent_id: new.parent_id,
             workflow_id: new.workflow_id,
+            linear_issue_id: new.linear_issue_id,
             merged_at: None,
             pr_number: None,
             pr_url: None,
@@ -735,9 +737,9 @@ impl Store {
                 id, group_id, project_id, title, backend, model, permission_mode, status, role,
                 agent_session_id, working_dir, branch, base_sha, is_isolated, allowed_tools, turns,
                 cost_usd, parent_id, created_at, updated_at, effort, auto_named, kind,
-                terminal_command, base_branch, workflow_id
+                terminal_command, base_branch, workflow_id, linear_issue_id
              ) VALUES (
-                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26
+                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27
              )",
             rusqlite::params![
                 session.id,
@@ -766,6 +768,7 @@ impl Store {
                 session.terminal_command,
                 session.base_branch,
                 session.workflow_id,
+                session.linear_issue_id,
             ],
         )?;
         // Seed the primary root. Additional roots are added via set_session_roots.
@@ -1235,14 +1238,14 @@ const SESSION_SELECT: &str =
     "SELECT id, group_id, project_id, title, backend, model, permission_mode, status, role, \
     agent_session_id, working_dir, branch, base_sha, is_isolated, allowed_tools, turns, cost_usd, \
     parent_id, workflow_id, created_at, updated_at, effort, auto_named, kind, terminal_command, terminal_started, \
-    terminal_resume_id, base_branch, merged_at, pr_number, pr_url, pr_state, pr_check_status, \
+    terminal_resume_id, base_branch, linear_issue_id, merged_at, pr_number, pr_url, pr_state, pr_check_status, \
     pr_checked_at, pinned FROM sessions WHERE id = ?1";
 
 const SESSION_SELECT_ALL: &str =
     "SELECT id, group_id, project_id, title, backend, model, permission_mode, status, role, \
     agent_session_id, working_dir, branch, base_sha, is_isolated, allowed_tools, turns, cost_usd, \
     parent_id, workflow_id, created_at, updated_at, effort, auto_named, kind, terminal_command, terminal_started, \
-    terminal_resume_id, base_branch, merged_at, pr_number, pr_url, pr_state, pr_check_status, \
+    terminal_resume_id, base_branch, linear_issue_id, merged_at, pr_number, pr_url, pr_state, pr_check_status, \
     pr_checked_at, pinned FROM sessions";
 
 fn map_project(row: &Row<'_>) -> rusqlite::Result<Project> {
@@ -1317,6 +1320,7 @@ fn map_session(row: &Row<'_>) -> rusqlite::Result<Session> {
         cost_usd: row.get("cost_usd")?,
         parent_id: row.get("parent_id")?,
         workflow_id: row.get("workflow_id")?,
+        linear_issue_id: row.get("linear_issue_id")?,
         merged_at: row.get("merged_at")?,
         pr_number: row.get("pr_number")?,
         pr_url: row.get("pr_url")?,

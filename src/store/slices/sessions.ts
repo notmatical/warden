@@ -67,6 +67,7 @@ export const createSessionsSlice: StateCreator<
         backend: opts.backend,
         isolate: opts.isolate,
         nativeCommand: opts.nativeCommand,
+        linearIssueId: opts.linearIssueId,
       })
       set((state) => ({
         sessions: { ...state.sessions, [session.id]: session },

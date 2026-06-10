@@ -270,6 +270,8 @@ export interface CreateSessionInput {
   isolate?: boolean
   /** Provider CLI a native terminal session launches instead of the shell. */
   nativeCommand?: string
+  /** Linear issue this session works on; drives writeback on PR open/merge. */
+  linearIssueId?: string
 }
 
 export function createSession(input: CreateSessionInput): Promise<Session> {
@@ -286,6 +288,7 @@ export function createSession(input: CreateSessionInput): Promise<Session> {
       backend: input.backend ?? null,
       isolate: input.isolate ?? false,
       nativeCommand: input.nativeCommand ?? null,
+      linearIssueId: input.linearIssueId ?? null,
     },
   })
 }

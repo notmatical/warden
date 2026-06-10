@@ -66,6 +66,9 @@ const MIGRATIONS: &[&str] = &[
         -- the workflow instead of the flat session list. Cleared if the workflow
         -- is deleted (see delete_workflow).
         workflow_id       TEXT,
+        -- Linear issue this session was spawned from; drives writeback (PR
+        -- attachment on open, completed state on merge).
+        linear_issue_id   TEXT,
         merged_at         TEXT,
         pr_number         INTEGER,
         pr_url            TEXT,

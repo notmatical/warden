@@ -276,6 +276,9 @@ pub struct Session {
     /// Set when a workflow run spawned this session (groups it under the
     /// workflow in the sidebar).
     pub workflow_id: Option<String>,
+    /// Linear issue this session was spawned from; drives writeback on PR
+    /// open (attachment) and merge (completed state).
+    pub linear_issue_id: Option<String>,
     /// When the session's branch was merged back into its base — `None` until
     /// then. A merged session's worktree is gone, so it becomes read-only.
     pub merged_at: Option<String>,
