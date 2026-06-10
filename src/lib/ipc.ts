@@ -3,6 +3,7 @@ import type {
   Attachment,
   Backend,
   ContextSource,
+  DeleteCheck,
   EffortLevel,
   EventRecord,
   FileEntry,
@@ -387,6 +388,11 @@ export function renameSession(
 
 export function deleteSession(sessionId: string): Promise<void> {
   return invoke("delete_session", { sessionId })
+}
+
+/** What deleting this session would destroy, for a risk-aware confirm. */
+export function sessionDeleteCheck(sessionId: string): Promise<DeleteCheck> {
+  return invoke("session_delete_check", { sessionId })
 }
 
 export function setSessionPinned(

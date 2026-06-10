@@ -59,6 +59,7 @@ pub fn run() {
         session::commands::update_label,
         session::commands::delete_label,
         session::commands::set_session_labels,
+        session::commands::session_delete_check,
         session::commands::delete_session,
         session::commands::send_message,
         session::commands::attach_to_session,

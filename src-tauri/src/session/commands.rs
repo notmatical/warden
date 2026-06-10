@@ -1,7 +1,7 @@
 //! Session commands: creation, transcript reads, the message/cancel controls
 //! that drive agent turns, and live updates to a session's agent settings.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::{AppHandle, State};
 
@@ -262,8 +262,58 @@ pub async fn set_session_labels(
     Ok(())
 }
 
-/// Permanently delete a session: stop any running turn, tear down its isolated
-/// worktree (best-effort), and remove its rows (events cascade).
+/// What deleting a session would destroy, so the UI can ask before — instead of
+/// force-deleting work. All zeros when nothing is at risk: checkout sessions
+/// (nothing is removed), merged sessions (already cleaned), shared worktrees
+/// (kept for the siblings).
+#[derive(Debug, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteCheck {
+    /// Files with uncommitted changes in the worktree (untracked included).
+    pub dirty_files: u32,
+    /// Commits on the session's branch its base doesn't have.
+    pub unmerged_commits: u32,
+    /// Other sessions running in the same worktree — it stays while they exist.
+    pub shared_sessions: u32,
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn session_delete_check(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> CommandResult<DeleteCheck> {
+    let session = state.store.get_session(&session_id)?;
+    let mut check = DeleteCheck {
+        dirty_files: 0,
+        unmerged_commits: 0,
+        shared_sessions: 0,
+    };
+    if !session.is_isolated || session.merged_at.is_some() {
+        return Ok(check);
+    }
+    check.shared_sessions = state
+        .store
+        .count_sessions_sharing_workdir(&session.working_dir, &session_id)
+        .unwrap_or(0) as u32;
+    // A shared worktree isn't removed, so nothing in it is at risk.
+    if check.shared_sessions > 0 {
+        return Ok(check);
+    }
+    let worktree = std::path::Path::new(&session.working_dir);
+    if worktree.exists() {
+        check.dirty_files = git::dirty_file_count(worktree);
+        if let Some(base) = session.base_sha.as_deref() {
+            check.unmerged_commits = git::unmerged_commit_count(worktree, base);
+        }
+    }
+    Ok(check)
+}
+
+/// Permanently delete a session: stop its turn and PTY, tear down its isolated
+/// worktree and branch (best-effort, in the background), and remove its rows
+/// (events cascade). The worktree survives while sibling sessions share it, and
+/// only paths under warden's own worktrees root are ever removed.
 #[tauri::command]
 #[specta::specta]
 pub async fn delete_session(
@@ -273,15 +323,25 @@ pub async fn delete_session(
 ) -> CommandResult<()> {
     let session = state.store.get_session(&session_id)?;
     state.manager.cancel(&app, &state.store, &session_id);
+    crate::terminal::kill(&session_id);
 
-    if session.is_isolated {
-        if let Ok(project) = state.store.get_project(&session.project_id) {
-            // Background: teardown commands may take a while; deletion shouldn't.
-            git::setup::spawn_teardown_and_remove(
-                project.path.into(),
-                session.working_dir.clone().into(),
-                None,
-            );
+    if session.is_isolated && session.merged_at.is_none() {
+        let shared = state
+            .store
+            .count_sessions_sharing_workdir(&session.working_dir, &session_id)
+            .unwrap_or(0);
+        let worktree = std::path::PathBuf::from(&session.working_dir);
+        if shared == 0 && git::is_managed_worktree(&app, &worktree) {
+            if let Ok(project) = state.store.get_project(&session.project_id) {
+                // Background: teardown commands may take a while; deletion
+                // shouldn't. The branch goes too — the UI confirmed any
+                // unmerged work via session_delete_check.
+                git::setup::spawn_teardown_and_remove(
+                    project.path.into(),
+                    worktree,
+                    session.branch.clone(),
+                );
+            }
         }
     }
 

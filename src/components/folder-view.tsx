@@ -48,6 +48,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { WorktreeSetupDialog } from "@/components/worktree-setup-dialog"
+import * as ipc from "@/lib/ipc"
 import { DEFAULT_CHAT_MODEL } from "@/lib/models"
 import { relativeTime } from "@/lib/time"
 import { cn } from "@/lib/utils"
@@ -437,10 +438,32 @@ export function FolderView({ projectId }: { projectId: string }) {
                 )
               const onDelete = () =>
                 runAction(async () => {
+                  // Name what deletion destroys: dirty files / unmerged
+                  // commits mean the worktree+branch teardown loses work.
+                  const check = await ipc
+                    .sessionDeleteCheck(session.id)
+                    .catch(() => null)
+                  const risks: string[] = []
+                  if (check?.dirtyFiles) {
+                    risks.push(
+                      `${check.dirtyFiles} file${check.dirtyFiles === 1 ? "" : "s"} of uncommitted changes`
+                    )
+                  }
+                  if (check?.unmergedCommits) {
+                    risks.push(
+                      `${check.unmergedCommits} unmerged commit${check.unmergedCommits === 1 ? "" : "s"}`
+                    )
+                  }
                   if (
                     await confirm({
-                      title: "Delete session?",
-                      description: `"${session.title}" and its history will be permanently deleted.`,
+                      title:
+                        risks.length > 0
+                          ? "Delete session and unsaved work?"
+                          : "Delete session?",
+                      description:
+                        risks.length > 0
+                          ? `"${session.title}" will be permanently deleted. Its worktree still holds ${risks.join(" and ")} — deleting removes the worktree and its branch, and that work is lost.`
+                          : `"${session.title}" and its history will be permanently deleted.`,
                       confirmLabel: "Delete",
                       destructive: true,
                     })

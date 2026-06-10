@@ -157,6 +157,21 @@ pub fn has_uncommitted_changes(cwd: &Path) -> bool {
         .unwrap_or(false)
 }
 
+/// How many files carry uncommitted changes (untracked included).
+pub fn dirty_file_count(cwd: &Path) -> u32 {
+    run(cwd, &["status", "--porcelain"])
+        .map(|o| o.lines().filter(|l| !l.trim().is_empty()).count() as u32)
+        .unwrap_or(0)
+}
+
+/// Commits on HEAD that `base` doesn't have — work lost if the branch goes.
+pub fn unmerged_commit_count(cwd: &Path, base: &str) -> u32 {
+    run(cwd, &["rev-list", "--count", &format!("{base}..HEAD")])
+        .ok()
+        .and_then(|o| o.trim().parse().ok())
+        .unwrap_or(0)
+}
+
 /// Stage everything and commit in `worktree`. Returns whether a commit was made
 /// (`false` when there was nothing to commit).
 pub fn stage_and_commit(worktree: &Path, message: &str) -> Result<bool> {

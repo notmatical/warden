@@ -978,6 +978,21 @@ impl Store {
         Ok(())
     }
 
+    /// How many *other* sessions run in the same working directory. Plan→code
+    /// pairs and workflow nodes share one worktree; it must outlive each of them.
+    pub fn count_sessions_sharing_workdir(
+        &self,
+        working_dir: &str,
+        exclude_id: &str,
+    ) -> Result<i64> {
+        let conn = self.lock();
+        Ok(conn.query_row(
+            "SELECT count(*) FROM sessions WHERE working_dir = ?1 AND id != ?2",
+            (working_dir, exclude_id),
+            |row| row.get(0),
+        )?)
+    }
+
     /// Mark a session as merged back into its base branch (its worktree is gone).
     pub fn mark_session_merged(&self, id: &str) -> Result<()> {
         let conn = self.lock();

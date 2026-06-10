@@ -195,6 +195,16 @@ export type SyncOutcome =
   | { status: "synced" }
   | { status: "conflict"; files: string[] }
 
+/** What deleting a session would destroy — all zeros when nothing is at risk. */
+export interface DeleteCheck {
+  /** Files with uncommitted changes in the worktree (untracked included). */
+  dirtyFiles: number
+  /** Commits on the session's branch its base doesn't have. */
+  unmergedCommits: number
+  /** Other sessions running in the same worktree — it stays while they exist. */
+  sharedSessions: number
+}
+
 /** An open PR in a repo, for the review-checkout picker. */
 export interface PrSummary {
   number: number
