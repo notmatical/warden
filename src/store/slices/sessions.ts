@@ -1,5 +1,5 @@
 import type { StateCreator } from "zustand"
-
+import { refreshGitStatus } from "@/hooks/use-git-status"
 import * as ipc from "@/lib/ipc"
 import {
   backendForModel,
@@ -8,7 +8,7 @@ import {
 } from "@/lib/models"
 import { notifyFor, windowFocused } from "@/lib/notify"
 import * as terminals from "@/lib/terminal-instances"
-import { detachRef, firstLeaf } from "@/lib/viewport"
+import { detachRef, diffTabId, firstLeaf } from "@/lib/viewport"
 import { NATIVE_CLI, NATIVE_TITLE, reportError, showRef } from "../shared"
 import type { AppState } from "../types"
 
@@ -19,6 +19,7 @@ type SessionsSlice = Pick<
   | "createNativeSession"
   | "updateSession"
   | "setIsolation"
+  | "isolationPending"
   | "renameSession"
   | "deleteSessions"
   | "deleteSession"
@@ -67,6 +68,7 @@ export const createSessionsSlice: StateCreator<
         backend: opts.backend,
         isolate: opts.isolate,
         nativeCommand: opts.nativeCommand,
+        workingDir: opts.workingDir,
         linearIssueId: opts.linearIssueId,
       })
       set((state) => ({
@@ -134,12 +136,31 @@ export const createSessionsSlice: StateCreator<
     }
   },
 
+  isolationPending: {},
+
   setIsolation: async (sessionId, isolate) => {
+    // Provisioning/tearing down a worktree takes a beat — surface it on the
+    // status chip instead of leaving the click apparently ignored.
+    set((state) => ({
+      isolationPending: {
+        ...state.isolationPending,
+        [sessionId]: isolate ? "worktree" : "checkout",
+      },
+    }))
     try {
       // The backend re-provisions and emits the authoritative session-updated.
       await ipc.setSessionIsolation(sessionId, isolate)
     } catch (error) {
       reportError("Failed to change isolation", error)
+    } finally {
+      set((state) => {
+        const isolationPending = { ...state.isolationPending }
+        delete isolationPending[sessionId]
+        return { isolationPending }
+      })
+      // The chip's branch text comes from the 5s git-status poll; pull it
+      // forward so the badge hands off to fresh data, not a stale branch.
+      refreshGitStatus(sessionId)
     }
   },
 
@@ -178,6 +199,13 @@ export const createSessionsSlice: StateCreator<
     }
     if (deleted.size === 0) return
 
+    // A deleted session takes its diff tab down with it.
+    const closed = new Set<string>()
+    for (const sid of deleted) {
+      closed.add(sid)
+      closed.add(diffTabId(sid))
+    }
+
     set((state) => {
       const omit = <T>(record: Record<string, T>): Record<string, T> =>
         Object.fromEntries(
@@ -192,18 +220,18 @@ export const createSessionsSlice: StateCreator<
       )
 
       const prevTabs = state.openTabs
-      const openTabs = prevTabs.filter((sid) => !deleted.has(sid))
+      const openTabs = prevTabs.filter((sid) => !closed.has(sid))
 
       let layout = state.layout
-      for (const sid of deleted) layout = detachRef(layout, sid)
+      for (const sid of closed) layout = detachRef(layout, sid)
 
       let activeTabId = state.activeTabId
-      if (activeTabId && deleted.has(activeTabId)) {
+      if (activeTabId && closed.has(activeTabId)) {
         const idx = prevTabs.indexOf(activeTabId)
         const surviving = (start: number, step: number) => {
           for (let i = start; i >= 0 && i < prevTabs.length; i += step) {
             const sid = prevTabs[i]
-            if (!deleted.has(sid)) return sid
+            if (!closed.has(sid)) return sid
           }
           return null
         }
@@ -256,7 +284,8 @@ export const createSessionsSlice: StateCreator<
 
   onSessionUpdated: (session) => {
     const prev = get().sessions[session.id]
-    const finishedTurn = prev?.status === "running" && session.status !== "running"
+    const finishedTurn =
+      prev?.status === "running" && session.status !== "running"
     // CI checks settling (→ success/failure) on an open PR, via the poller.
     const checksSettled =
       prev !== undefined &&

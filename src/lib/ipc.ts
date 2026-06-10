@@ -3,6 +3,7 @@ import type {
   Attachment,
   Backend,
   ContextSource,
+  DeleteCheck,
   EffortLevel,
   EventRecord,
   FileEntry,
@@ -30,7 +31,7 @@ import type {
   SlashCommand,
   SyncOutcome,
 } from "@/types"
-import type { DiffFile, GitCommit } from "@/types/git-diff"
+import type { DiffFile, FileVersions, GitCommit } from "@/types/git-diff"
 import type { Workflow, WorkflowGraph, WorkflowRunView } from "@/types/workflow"
 
 export function listProjects(): Promise<Project[]> {
@@ -177,6 +178,13 @@ export function getSessionDiff(sessionId: string): Promise<DiffFile[]> {
   return invoke("get_session_diff", { sessionId })
 }
 
+export function getSessionFileVersions(
+  sessionId: string,
+  path: string
+): Promise<FileVersions> {
+  return invoke("get_session_file_versions", { sessionId, path })
+}
+
 export function getSessionCommits(
   sessionId: string,
   limit?: number
@@ -266,10 +274,13 @@ export interface CreateSessionInput {
   kind?: SessionKind
   /** Agent backend that powers the session. Defaults to Claude. */
   backend?: Backend
-  /** Run the agent in an isolated git worktree instead of the repo's checkout. */
+  /** Isolate in a git worktree. Omitted → backend default (agents yes, terminals no). */
   isolate?: boolean
   /** Provider CLI a native terminal session launches instead of the shell. */
   nativeCommand?: string
+  /** Run in this exact directory (e.g. a shell inside another session's
+   *  worktree) instead of provisioning one. Implies no isolation. */
+  workingDir?: string
   /** Linear issue this session works on; drives writeback on PR open/merge. */
   linearIssueId?: string
 }
@@ -291,11 +302,31 @@ export function createSession(input: CreateSessionInput): Promise<Session> {
       role: input.role ?? null,
       kind: input.kind ?? null,
       backend: input.backend ?? null,
-      isolate: input.isolate ?? false,
+      isolate: input.isolate ?? null,
       nativeCommand: input.nativeCommand ?? null,
+      workingDir: input.workingDir ?? null,
       linearIssueId: input.linearIssueId ?? null,
     },
   })
+}
+
+/** Per-repo config stored in `.warden/config.json` (committed to the repo). */
+export interface RepoConfig {
+  /** Commands run in a fresh worktree after it's created, joined with `&&`. */
+  setup: string[]
+  /** Commands run in a worktree before it's removed. */
+  teardown: string[]
+}
+
+export function getRepoConfig(projectId: string): Promise<RepoConfig> {
+  return invoke("get_repo_config", { projectId })
+}
+
+export function updateRepoConfig(
+  projectId: string,
+  config: RepoConfig
+): Promise<RepoConfig> {
+  return invoke("update_repo_config", { projectId, config })
 }
 
 export interface TerminalEvent {
@@ -367,6 +398,11 @@ export function deleteSession(sessionId: string): Promise<void> {
   return invoke("delete_session", { sessionId })
 }
 
+/** What deleting this session would destroy, for a risk-aware confirm. */
+export function sessionDeleteCheck(sessionId: string): Promise<DeleteCheck> {
+  return invoke("session_delete_check", { sessionId })
+}
+
 export function setSessionPinned(
   sessionId: string,
   pinned: boolean
@@ -410,6 +446,16 @@ export function setSessionIsolation(
   isolate: boolean
 ): Promise<Session> {
   return invoke("set_session_isolation", { sessionId, isolate })
+}
+
+/** Re-run the repo's worktree setup commands for a session. */
+export function retryWorktreeSetup(sessionId: string): Promise<void> {
+  return invoke("retry_worktree_setup", { sessionId })
+}
+
+/** Clear a failed setup state so the session is usable as-is. */
+export function dismissSetupError(sessionId: string): Promise<void> {
+  return invoke("dismiss_setup_error", { sessionId })
 }
 
 export type OpenTarget = "folder" | "terminal" | "zed" | "vscode"

@@ -1,13 +1,10 @@
 import { Loader2 } from "lucide-react"
-import {
-  type ReactNode,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react"
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react"
 
-import { FolderPicker, type FolderRef } from "@/components/controls/folder-picker"
+import {
+  FolderPicker,
+  type FolderRef,
+} from "@/components/controls/folder-picker"
 import { ModeMenu } from "@/components/controls/mode-menu"
 import { ModelMenu } from "@/components/controls/model-menu"
 import { Button } from "@/components/ui/button"
@@ -20,7 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Switch } from "@/components/ui/switch"
-import { DEFAULT_CHAT_MODEL, backendForModel } from "@/lib/models"
+import { backendForModel, DEFAULT_CHAT_MODEL } from "@/lib/models"
 import { useAppStore } from "@/store/app-store"
 import type { CreateSessionOptions } from "@/store/types"
 import type { PermissionMode, Session } from "@/types"
