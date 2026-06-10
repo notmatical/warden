@@ -22,6 +22,20 @@ export function relativeTime(iso: string): string {
   return format(date, "MMM d")
 }
 
+/** Short date for table rows: "Jun 9". Empty string for invalid input. */
+export function formatDate(iso: string): string {
+  const date = new Date(iso)
+  return Number.isNaN(date.getTime()) ? "" : format(date, "MMM d")
+}
+
+/** Full local timestamp for hover tooltips: "Jun 9, 2026 at 4:12 PM". */
+export function formatExact(iso: string): string {
+  const date = new Date(iso)
+  return Number.isNaN(date.getTime())
+    ? ""
+    : format(date, "MMM d, yyyy 'at' h:mm a")
+}
+
 /** Compact elapsed time between two ISO timestamps: "<1s", "8s", "2m 5s". */
 export function formatDuration(startIso: string, endIso: string): string {
   const ms = new Date(endIso).getTime() - new Date(startIso).getTime()
