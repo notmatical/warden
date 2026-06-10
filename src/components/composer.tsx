@@ -107,7 +107,10 @@ export function Composer({ sessionId }: { sessionId: string }) {
     el.style.height = `${Math.min(el.scrollHeight, MAX_TEXTAREA_HEIGHT)}px`
   }, [])
 
-  useLayoutEffect(() => autosize(), [autosize])
+  // Re-measure on every value change — grow with content up to the cap, then
+  // the textarea scrolls.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: value drives the re-measure
+  useLayoutEffect(() => autosize(), [value, autosize])
 
   // Re-measure when the pane's width changes (e.g. a split): the initial mount
   // may measure at a transient width and otherwise stay stuck tall. Width-only

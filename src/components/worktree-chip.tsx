@@ -15,6 +15,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import * as ipc from "@/lib/ipc"
 import { DEFAULT_CHAT_MODEL } from "@/lib/models"
 import { cn } from "@/lib/utils"
@@ -73,30 +78,39 @@ export function WorktreeIdentity({
 
   return (
     <DropdownMenu modal={false}>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className="-mx-1 inline-flex min-w-0 items-center gap-1.5 rounded px-1 transition hover:bg-muted hover:text-foreground"
-        >
-          <span className="font-medium text-foreground/80">{name}</span>
-          {branch ? (
-            <span className="inline-flex min-w-0 items-center gap-1">
-              <GitBranch
-                className={cn(
-                  "size-3 shrink-0",
-                  isolated ? "text-primary" : "opacity-60"
-                )}
-              />
-              <span className="truncate">{branch}</span>
-            </span>
-          ) : null}
-          {setup === "running" ? (
-            <Loader2 className="size-3 shrink-0 animate-spin" />
-          ) : setup === "failed" ? (
-            <AlertTriangle className="size-3 shrink-0 text-destructive" />
-          ) : null}
-        </button>
-      </DropdownMenuTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="-mx-1 inline-flex min-w-0 items-center gap-1.5 rounded px-1 transition hover:bg-muted hover:text-foreground"
+            >
+              <span className="font-medium text-foreground/80">{name}</span>
+              {branch ? (
+                <span className="inline-flex min-w-0 items-center gap-1">
+                  <GitBranch
+                    className={cn(
+                      "size-3 shrink-0",
+                      isolated ? "text-primary" : "opacity-60"
+                    )}
+                  />
+                  <span className="truncate">{branch}</span>
+                </span>
+              ) : null}
+              {setup === "running" ? (
+                <Loader2 className="size-3 shrink-0 animate-spin" />
+              ) : setup === "failed" ? (
+                <AlertTriangle className="size-3 shrink-0 text-destructive" />
+              ) : null}
+            </button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-60">
+          {isolated
+            ? `Isolated worktree on ${session.branch ?? "its own branch"} — changes stay off your checkout. Click for actions.`
+            : "Project checkout — changes land directly on this branch. Click for actions."}
+        </TooltipContent>
+      </Tooltip>
       <DropdownMenuContent align="start" className="w-72">
         <div className="px-2 py-1.5">
           <p className="text-xs font-medium">

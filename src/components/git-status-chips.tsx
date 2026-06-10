@@ -469,13 +469,9 @@ export function GitStatusChips({
     }
   }, [sessionId, refresh])
 
+  // Constant padding — the row must not jump when statuses finish loading.
   return (
-    <div
-      className={cn(
-        "flex flex-wrap items-center gap-1.5 px-1",
-        statuses.length > 0 ? "pb-1.5" : "empty:hidden"
-      )}
-    >
+    <div className="flex flex-wrap items-center gap-1.5 px-1 pb-1.5 empty:hidden">
       {statuses.map((status) => (
         <StatusChip
           key={status.projectId}
@@ -520,16 +516,18 @@ export function GitStatusChips({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label="View the session's changes"
+                variant="secondary"
+                size="xs"
                 onClick={() => openTab(diffTabId(sessionId))}
-                className="text-muted-foreground hover:text-foreground"
+                className="gap-1.5"
               >
                 <FileDiff className="size-3.5" />
+                Changes
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Changes & files</TooltipContent>
+            <TooltipContent>
+              Browse the session's diff, commits, and files
+            </TooltipContent>
           </Tooltip>
         ) : null}
         <LandSessionButton
