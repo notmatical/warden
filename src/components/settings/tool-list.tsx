@@ -20,113 +20,97 @@ const SOURCES: { value: ProviderSource; label: string; hint: string }[] = [
   },
 ]
 
-type PillKind = "ok" | "warn" | "off"
+export type ToolStateKind = "ok" | "warn" | "off"
 
-const PILL: Record<PillKind, { surface: string; dot: string }> = {
-  ok: {
-    surface:
-      "bg-emerald-500/10 text-emerald-600 ring-emerald-500/30 dark:text-emerald-500",
-    dot: "bg-emerald-500",
-  },
-  warn: {
-    surface:
-      "bg-amber-500/10 text-amber-600 ring-amber-500/30 dark:text-amber-500",
-    dot: "bg-amber-500",
-  },
-  off: {
-    surface: "bg-muted/60 text-muted-foreground ring-border",
-    dot: "bg-muted-foreground/40",
-  },
+const STATE: Record<ToolStateKind, { dot: string; text: string }> = {
+  ok: { dot: "bg-emerald-500", text: "text-emerald-600 dark:text-emerald-500" },
+  warn: { dot: "bg-amber-500", text: "text-amber-600 dark:text-amber-500" },
+  off: { dot: "bg-muted-foreground/40", text: "text-muted-foreground" },
 }
 
-/** Connection-state pill shared by every tool/integration card. */
-export function StatePill({ kind, label }: { kind: PillKind; label: string }) {
+/** One bordered container for a section's tool rows — the settings-list
+ *  pattern (one surface, hairline-divided rows) instead of floating cards. */
+export function ToolList({ children }: { children: ReactNode }) {
   return (
-    <span
-      className={cn(
-        "inline-flex w-fit shrink-0 items-center gap-1.5 rounded-lg px-2 py-0.5 font-medium text-[11px] ring-1 ring-inset",
-        PILL[kind].surface
-      )}
-    >
-      <span className={cn("size-1.5 rounded-full", PILL[kind].dot)} />
-      {label}
-    </span>
+    <div className="divide-y divide-border/60 overflow-hidden rounded-xl bg-card shadow-xs ring-1 ring-foreground/10">
+      {children}
+    </div>
   )
 }
 
-function statusPill(status: ProviderStatus): { kind: PillKind; label: string } {
-  if (!status.installed) return { kind: "off", label: "Not installed" }
-  if (!status.authed) return { kind: "warn", label: "Not signed in" }
-  return { kind: "ok", label: "Connected" }
-}
-
-/** Card shell shared by every tool/integration tile: brand tile + identity,
- *  state pill, description, an optional full-bleed accent strip (updates,
- *  progress), and a footer row for controls. The tile goes ghost (dashed)
- *  when the tool isn't present, so install state reads at a glance. */
-export function ToolCardShell({
+/** A tool row: brand tile, identity + live status line, right-aligned
+ *  controls, and an optional attached band underneath (update offer, install
+ *  progress). The tile goes ghost (dashed) when the tool isn't present. */
+export function ToolListRow({
   icon: Icon,
   name,
-  meta,
+  version,
   ghost = false,
-  pill,
+  state,
   description,
-  strip,
-  footer,
+  actions,
+  band,
 }: {
   icon: ComponentType<{ className?: string }>
   name: string
-  /** Subdued identity line under the name (version, key type…). */
-  meta?: ReactNode
+  /** Mono version tag after the name. */
+  version?: string | null
   /** Dashed ghost treatment for the brand tile (tool not present). */
   ghost?: boolean
-  pill: { kind: PillKind; label: string }
+  state: { kind: ToolStateKind; label: string }
   description: string
-  /** Full-bleed accent row between body and footer (update offer, progress). */
-  strip?: ReactNode
-  footer?: ReactNode
+  /** Right-aligned controls (source picker, action buttons, forms). */
+  actions?: ReactNode
+  /** Full-width attached band under the row (update offer, progress). */
+  band?: ReactNode
 }) {
   return (
-    <div className="group flex flex-col overflow-hidden rounded-xl bg-card shadow-xs ring-1 ring-foreground/10 transition-shadow hover:shadow-md hover:ring-foreground/15">
-      <div className="flex flex-1 flex-col gap-3 p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <div
-              className={cn(
-                "flex size-10 shrink-0 items-center justify-center rounded-xl transition-colors",
-                ghost
-                  ? "border border-border border-dashed text-muted-foreground/50"
-                  : "bg-muted/60 text-foreground ring-1 ring-border/50"
-              )}
-            >
-              <Icon className="size-5" />
-            </div>
-            <div className="flex min-w-0 flex-col gap-0.5">
-              <span className="truncate font-semibold text-foreground text-sm leading-tight">
-                {name}
-              </span>
-              {meta ? (
-                <span className="truncate text-[11px] text-muted-foreground">
-                  {meta}
-                </span>
-              ) : null}
-            </div>
-          </div>
-          <StatePill kind={pill.kind} label={pill.label} />
+    <div>
+      <div className="flex items-center gap-3.5 px-4 py-3.5">
+        <div
+          className={cn(
+            "flex size-10 shrink-0 items-center justify-center rounded-xl transition-colors",
+            ghost
+              ? "border border-border border-dashed text-muted-foreground/50"
+              : "bg-muted/60 text-foreground ring-1 ring-border/50"
+          )}
+        >
+          <Icon className="size-5" />
         </div>
 
-        <p className="text-muted-foreground text-xs leading-relaxed">
-          {description}
-        </p>
-
-        {footer ? (
-          <div className="mt-auto flex items-center justify-between gap-2 pt-1">
-            {footer}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline gap-2">
+            <span className="truncate font-medium text-foreground text-sm">
+              {name}
+            </span>
+            {version ? (
+              <span className="shrink-0 font-mono text-[11px] text-muted-foreground tabular-nums">
+                v{version.replace(/^v/, "")}
+              </span>
+            ) : null}
           </div>
+          <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs">
+            <span
+              className={cn(
+                "size-1.5 shrink-0 rounded-full",
+                STATE[state.kind].dot
+              )}
+            />
+            <span className={cn("shrink-0", STATE[state.kind].text)}>
+              {state.label}
+            </span>
+            <span className="shrink-0 text-muted-foreground/40">·</span>
+            <span className="truncate text-muted-foreground">
+              {description}
+            </span>
+          </div>
+        </div>
+
+        {actions ? (
+          <div className="flex shrink-0 items-center gap-2">{actions}</div>
         ) : null}
       </div>
-
-      {strip}
+      {band}
     </div>
   )
 }
@@ -171,14 +155,19 @@ function SourcePicker({
   )
 }
 
-function cleanVersion(version: string): string {
-  return version.replace(/^v/, "")
+function toolState(status: ProviderStatus): {
+  kind: ToolStateKind
+  label: string
+} {
+  if (!status.installed) return { kind: "off", label: "Not installed" }
+  if (!status.authed) return { kind: "warn", label: "Not signed in" }
+  return { kind: "ok", label: "Connected" }
 }
 
-/** A managed-CLI tile (providers, GitHub CLI) on the shared shell. Pending
- *  updates surface as a tinted full-bleed strip with the version delta and a
- *  real button — not a label you have to squint for. */
-export function ToolCard({
+/** A managed-CLI row (providers, GitHub CLI). Pending updates surface as a
+ *  tinted attached band with the version delta and a real button — not a
+ *  label you have to squint for. */
+export function ToolRow({
   status,
   icon,
   description,
@@ -202,13 +191,13 @@ export function ToolCard({
     onSignIn,
   })
 
-  // Update gets the strip; Install / Sign in stay footer actions (they are the
-  // card's only possible action in those states, so the footer is enough).
+  // Update gets the band; Install / Sign in stay row actions (they are the
+  // row's only possible action in those states).
   const updatePending = status.installed && status.updateAvailable
-  const footerAction =
+  const rowAction =
     action && action.label !== "Update" && !progress ? action : null
 
-  const strip = progress ? (
+  const band = progress ? (
     <div className="flex flex-col gap-1.5 border-border/60 border-t bg-muted/30 px-4 py-2.5">
       <div className="flex items-center justify-between gap-2">
         <span className="truncate font-mono text-[10px] text-muted-foreground">
@@ -232,8 +221,8 @@ export function ToolCard({
         Update available
         {status.version && status.latestVersion ? (
           <span className="ml-1.5 font-mono text-[11px] tabular-nums opacity-80">
-            v{cleanVersion(status.version)} → v
-            {cleanVersion(status.latestVersion)}
+            v{status.version.replace(/^v/, "")} → v
+            {status.latestVersion.replace(/^v/, "")}
           </span>
         ) : null}
       </span>
@@ -249,32 +238,26 @@ export function ToolCard({
   ) : null
 
   return (
-    <ToolCardShell
+    <ToolListRow
       icon={icon}
       name={status.name}
-      meta={
-        status.version ? (
-          <span className="font-mono tabular-nums">
-            v{cleanVersion(status.version)}
-          </span>
-        ) : undefined
-      }
+      version={status.version}
       ghost={!status.installed}
-      pill={statusPill(status)}
+      state={toolState(status)}
       description={description}
-      strip={strip}
-      footer={
+      band={band}
+      actions={
         <>
           <SourcePicker status={status} onSetSource={onSetSource} />
-          {footerAction ? (
+          {rowAction ? (
             <Button
               variant="ghost"
               size="xs"
-              onClick={footerAction.onClick}
+              onClick={rowAction.onClick}
               disabled={busy}
               className={cn(
                 "shrink-0",
-                footerAction.primary
+                rowAction.primary
                   ? "bg-foreground text-background hover:bg-foreground/90"
                   : "text-muted-foreground hover:text-foreground"
               )}
@@ -282,7 +265,7 @@ export function ToolCard({
               {busy ? (
                 <Loader2 className="size-3 animate-spin" />
               ) : (
-                footerAction.label
+                rowAction.label
               )}
             </Button>
           ) : null}
