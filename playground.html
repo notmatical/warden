@@ -1,0 +1,43 @@
+<!doctype html>
+<!-- Dev-only playground for the diff/browse rendering (not part of the build:
+     vite only bundles index.html). Open at /playground.html under dev:web. -->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>warden diff playground</title>
+  </head>
+  <body class="dark">
+    <div id="root"></div>
+    <script>
+      // Headless/hidden tabs never fire rAF (and clamp timers to 1s), which
+      // stalls @pierre/diffs' render queue. Drive "frames" off a
+      // MessageChannel, which background tabs don't throttle.
+      if (document.visibilityState === "hidden") {
+        const channel = new MessageChannel()
+        const queue = new Map()
+        let nextId = 1
+        let scheduled = false
+        channel.port1.onmessage = () => {
+          scheduled = false
+          const callbacks = Array.from(queue.values())
+          queue.clear()
+          for (const cb of callbacks) cb(performance.now())
+        }
+        window.requestAnimationFrame = (cb) => {
+          const id = nextId++
+          queue.set(id, cb)
+          if (!scheduled) {
+            scheduled = true
+            channel.port2.postMessage(0)
+          }
+          return id
+        }
+        window.cancelAnimationFrame = (id) => {
+          queue.delete(id)
+        }
+      }
+    </script>
+    <script type="module" src="/src/dev/playground.tsx"></script>
+  </body>
+</html>
