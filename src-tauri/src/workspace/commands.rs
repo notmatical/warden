@@ -1,6 +1,6 @@
-//! Group commands: the top-level workspace (a named set of project roots and a
-//! saved pane layout) plus the per-session root selection that drives which
-//! repos an agent pulls into context.
+//! Tauri commands for workspace structure: projects, groups, per-session root
+//! selection, and per-repo config. Supporting logic for `.warden/config.json`
+//! lives in [`super::config`].
 
 use std::path::Path;
 
@@ -10,6 +10,46 @@ use crate::domain::{Group, Project, Session};
 use crate::error::{AppError, CommandResult};
 use crate::git;
 use crate::state::AppState;
+
+use super::config::{self, RepoConfig};
+
+// --- Projects ---------------------------------------------------------------
+
+#[tauri::command]
+#[specta::specta]
+pub async fn list_projects(state: State<'_, AppState>) -> CommandResult<Vec<Project>> {
+    state.store.list_projects().map_err(Into::into)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn open_project(state: State<'_, AppState>, path: String) -> CommandResult<Project> {
+    let p = Path::new(&path);
+    if !p.exists() {
+        return Err(AppError::Invalid(format!("path does not exist: {path}")).into());
+    }
+    let name = p
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(&path)
+        .to_string();
+    let is_git = git::is_repo(p);
+    state
+        .store
+        .upsert_project(&name, &path, is_git)
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn list_sessions(
+    state: State<'_, AppState>,
+    project_id: String,
+) -> CommandResult<Vec<Session>> {
+    state.store.list_sessions(&project_id).map_err(Into::into)
+}
+
+// --- Groups -----------------------------------------------------------------
 
 #[tauri::command]
 #[specta::specta]
@@ -143,4 +183,32 @@ pub async fn set_session_roots(
         .store
         .list_session_root_projects(&session_id)
         .map_err(Into::into)
+}
+
+// --- Repo config ------------------------------------------------------------
+
+#[tauri::command]
+#[specta::specta]
+pub async fn get_repo_config(
+    state: State<'_, AppState>,
+    project_id: String,
+) -> CommandResult<RepoConfig> {
+    let project = state.store.get_project(&project_id)?;
+    config::load(Path::new(&project.path)).map_err(Into::into)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn update_repo_config(
+    state: State<'_, AppState>,
+    project_id: String,
+    config: RepoConfig,
+) -> CommandResult<RepoConfig> {
+    let project = state.store.get_project(&project_id)?;
+    let config = RepoConfig {
+        setup: config::clean(config.setup),
+        teardown: config::clean(config.teardown),
+    };
+    config::save(Path::new(&project.path), &config)?;
+    Ok(config)
 }

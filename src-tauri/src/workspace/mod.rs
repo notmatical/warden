@@ -1,4 +1,3 @@
-//! Workspace structure commands: projects, groups, and their session roots.
+//! Workspace structure: projects, groups, and their session roots.
+pub mod commands;
 pub mod config;
-pub mod group;
-pub mod project;
