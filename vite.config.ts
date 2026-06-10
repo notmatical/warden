@@ -46,6 +46,12 @@ export default defineConfig({
   // Only `VITE_`- and `TAURI_ENV_`-prefixed env vars reach the frontend.
   envPrefix: ["VITE_", "TAURI_ENV_"],
   build: {
+    rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, "index.html"),
+        notification: path.resolve(__dirname, "notification.html"),
+      },
+    },
     target:
       process.env.TAURI_ENV_PLATFORM === "windows" ? "chrome105" : "safari13",
     // Vite 8 bundles rolldown; let it use its native (oxc) minifier rather than

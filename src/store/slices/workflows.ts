@@ -330,7 +330,10 @@ export const createWorkflowsSlice: StateCreator<
           ? { label: "Open workflow", onClick: openTarget }
           : undefined,
       })
-      if (!windowFocused()) void notifyFor("workflowDone", title, description)
+      if (!windowFocused())
+        void notifyFor("workflowDone", title, description, {
+          target: workflowId ? { kind: "workflow", id: workflowId } : undefined,
+        })
     }
 
     // Hit a gate → run paused, needs your sign-off. The toast carries the
@@ -355,7 +358,12 @@ export const createWorkflowsSlice: StateCreator<
         void notifyFor(
           "workflowDone",
           "Workflow waiting for your approval",
-          "A gate is holding the run."
+          "A gate is holding the run.",
+          {
+            target: workflowId
+              ? { kind: "workflow", id: workflowId }
+              : undefined,
+          }
         )
     }
     // Resolved by any surface (toast, node button, or the backend) → clear it.
