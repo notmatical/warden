@@ -118,6 +118,7 @@ pub fn run() {
         integrations::linear::commands::linear_cached_issues,
         integrations::linear::commands::linear_sync_now,
         integrations::linear::commands::linear_issue_comments,
+        integrations::linear::commands::linear_start_issue,
         integrations::linear::commands::linear_teams,
         integrations::linear::commands::linear_binding,
         integrations::linear::commands::linear_bindings,

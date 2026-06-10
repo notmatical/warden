@@ -36,6 +36,11 @@ export function linearSyncNow(): Promise<LinearIssue[]> {
   return invoke("linear_sync_now")
 }
 
+/** Move an issue to its team's primary "started" state (writeback on send). */
+export function linearStartIssue(issueId: string, teamId: string): Promise<void> {
+  return invoke("linear_start_issue", { issueId, teamId })
+}
+
 /** Comments for one issue, fetched live (not cached), oldest first. */
 export function linearIssueComments(issueId: string): Promise<LinearComment[]> {
   return invoke("linear_issue_comments", { issueId })

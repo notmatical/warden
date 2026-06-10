@@ -5,6 +5,7 @@
 pub mod binding;
 pub mod client;
 pub mod commands;
-mod key;
+pub(crate) mod key;
 pub mod poll;
 pub mod sync;
+pub mod writeback;

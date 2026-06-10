@@ -18,7 +18,9 @@ import { DEFAULT_CHAT_MODEL, backendForModel } from "@/lib/models"
 import { useAppStore } from "@/store/app-store"
 import type { PermissionMode } from "@/types"
 
-import { linearBindings } from "../ipc"
+import { toast } from "sonner"
+
+import { linearBindings, linearStartIssue } from "../ipc"
 import { buildIssuePrompt } from "../prompt"
 import type { LinearComment, LinearIssue } from "../types"
 
@@ -66,7 +68,13 @@ export function SendToAgentDialog({
   const [model, setModel] = useState(DEFAULT_CHAT_MODEL)
   const [mode, setMode] = useState<PermissionMode>("bypassPermissions")
   const [isolate, setIsolate] = useState(false)
+  const [startIssue, setStartIssue] = useState(true)
   const [creating, setCreating] = useState(false)
+
+  // Only unstarted issues can sensibly move to "started".
+  const canStart = issue
+    ? issue.state.type === "backlog" || issue.state.type === "unstarted"
+    : false
 
   const issueRef = useRef(issue)
   issueRef.current = issue
@@ -125,6 +133,11 @@ export function SendToAgentDialog({
         linearIssueId: issue.id,
       })
       if (session) {
+        if (canStart && startIssue) {
+          void linearStartIssue(issue.id, issue.team.id).catch(() =>
+            toast.warning("Couldn't move the issue to In Progress")
+          )
+        }
         onOpenChange(false)
         onSent?.()
       }
@@ -184,6 +197,22 @@ export function SendToAgentDialog({
               onCheckedChange={setIsolate}
             />
           </div>
+
+          {canStart ? (
+            <div className="flex items-center justify-between gap-3">
+              <label htmlFor="send-start-issue" className="flex flex-col">
+                <span className="text-sm">Move to In Progress</span>
+                <span className="text-muted-foreground text-xs">
+                  Transition the issue in Linear when the session starts.
+                </span>
+              </label>
+              <Switch
+                id="send-start-issue"
+                checked={startIssue}
+                onCheckedChange={setStartIssue}
+              />
+            </div>
+          ) : null}
         </div>
 
         <DialogFooter>
