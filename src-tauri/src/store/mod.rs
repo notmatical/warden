@@ -1266,17 +1266,17 @@ impl Store {
     ) -> Result<Vec<EventRecord>> {
         let mut conn = self.lock();
         let tx = conn.transaction()?;
-        let mut seq: i64 = tx.query_row(
+        let next_seq: i64 = tx.query_row(
             "SELECT COALESCE(MAX(seq), 0) + 1 FROM events WHERE session_id = ?1",
             [session_id],
             |row| row.get(0),
         )?;
         let mut records = Vec::with_capacity(events.len());
-        for event in events {
+        for (i, event) in events.iter().enumerate() {
             let record = EventRecord {
                 id: uuid(),
                 session_id: session_id.to_string(),
-                seq,
+                seq: next_seq + i as i64,
                 ts: now_rfc3339(),
                 event: event.clone(),
             };
@@ -1290,7 +1290,6 @@ impl Store {
                     serde_json::to_string(&record.event)?,
                 ),
             )?;
-            seq += 1;
             records.push(record);
         }
         tx.execute(
