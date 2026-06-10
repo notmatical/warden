@@ -1,4 +1,3 @@
-import { format } from "date-fns"
 import { ChevronDown, ChevronRight, Plus } from "lucide-react"
 import { type ReactNode, useMemo, useState } from "react"
 import { toast } from "sonner"
@@ -15,7 +14,7 @@ import {
   SwatchStack,
 } from "@/components/common/filter-menu"
 import { Input } from "@/components/ui/input"
-import { relativeTime } from "@/lib/time"
+import { formatExact, relativeTime } from "@/lib/time"
 import { cn } from "@/lib/utils"
 
 import type { LinearIssue, LinearState } from "../types"
@@ -361,18 +360,6 @@ export function Avatar({
   )
 }
 
-export function formatDate(iso: string): string {
-  const date = new Date(iso)
-  return Number.isNaN(date.getTime()) ? "" : format(date, "MMM d")
-}
-
-/** Full local timestamp for hover tooltips. */
-export function formatExact(iso: string): string {
-  const date = new Date(iso)
-  return Number.isNaN(date.getTime())
-    ? ""
-    : format(date, "MMM d, yyyy 'at' h:mm a")
-}
 
 /** A translucent rgba derived from a Linear "#rrggbb" state color, for tinting. */
 function tint(hex: string, alpha: number): string {

@@ -20,7 +20,9 @@ import {
 import { linearIssueComments } from "../ipc"
 import type { LinearComment, LinearIssue } from "../types"
 import { PriorityIcon, StatusIcon } from "./issue-icons"
-import { Avatar, formatDate } from "./issue-list"
+import { formatDate } from "@/lib/time"
+
+import { Avatar } from "./issue-list"
 
 export const PRIORITY_LABELS: Record<number, string> = {
   0: "No priority",
