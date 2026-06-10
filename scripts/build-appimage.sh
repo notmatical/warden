@@ -75,10 +75,13 @@ mv "$OUTPUT" "$FINAL"
 
 if [ -n "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
     echo "==> signing updater artifact"
-    (cd "$ROOT" && bun run tauri signer sign \
-        --private-key "$TAURI_SIGNING_PRIVATE_KEY" \
-        --password "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}" \
-        "$FINAL")
+    # Pass the key/password via env (tauri signer reads TAURI_SIGNING_*),
+    # not as CLI flags: an empty --password "" arg gets dropped by `bun run`,
+    # which would then swallow the FILE path as the password value.
+    (cd "$ROOT" && \
+        TAURI_SIGNING_PRIVATE_KEY="$TAURI_SIGNING_PRIVATE_KEY" \
+        TAURI_SIGNING_PRIVATE_KEY_PASSWORD="${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}" \
+        bun run tauri signer sign "$FINAL")
 else
     echo "warning: TAURI_SIGNING_PRIVATE_KEY unset; skipping updater signature" >&2
 fi
