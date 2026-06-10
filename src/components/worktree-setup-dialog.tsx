@@ -15,9 +15,9 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { UnderlineTabs } from "@/components/ui/underline-tabs"
 import * as ipc from "@/lib/ipc"
 import { isWindows } from "@/lib/platform"
-import { cn } from "@/lib/utils"
 
 const toLines = (commands: string[]) => commands.join("\n")
 const toCommands = (text: string) =>
@@ -182,27 +182,14 @@ export function WorktreeSetupDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {/* Tab bar + save indicator, Superset-style: quiet underline tabs,
-            flush with the content's left edge. */}
-        <div className="flex items-center gap-4 border-b border-border/60">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTab(t.id)}
-              className={cn(
-                "relative h-8 text-sm font-medium transition-colors",
-                tab === t.id
-                  ? "text-foreground after:absolute after:inset-x-0 after:-bottom-px after:h-px after:bg-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {t.label}
-            </button>
-          ))}
+        <UnderlineTabs
+          tabs={TABS.map(({ id, label }) => ({ id, label }))}
+          value={tab}
+          onChange={setTab}
+        >
           <span
             aria-live="polite"
-            className="ml-auto flex items-center gap-1 pr-1 text-[11px]"
+            className="flex items-center gap-1 pr-1 text-[11px]"
           >
             {saveState === "saving" ? (
               <span className="text-muted-foreground">Saving…</span>
@@ -213,7 +200,7 @@ export function WorktreeSetupDialog({
               </span>
             ) : null}
           </span>
-        </div>
+        </UnderlineTabs>
 
         {loading ? (
           <div className="flex items-center justify-center py-12 text-muted-foreground">

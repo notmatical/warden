@@ -25,6 +25,10 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import {
+  UnderlineTabs,
+  type UnderlineTabItem,
+} from "@/components/ui/underline-tabs"
 import * as ipc from "@/lib/ipc"
 import { cn } from "@/lib/utils"
 import { diffSessionIdOf } from "@/lib/viewport"
@@ -108,14 +112,17 @@ function useCodeViewOptions(
           border-radius: 10px;
           overflow: clip;
         }
-        [data-code] { scrollbar-width: none; }
+        /* Wrapped lines never scroll sideways — drop the dead gutter padding
+           pierre reserves under the code. */
+        [data-code] { scrollbar-width: none; padding-bottom: 0; }
         [data-code]::-webkit-scrollbar { display: none; }
-        /* GitHub-style file header: compact, quietly separated from the code. */
+        /* GitHub-style file header: compact, bold name, quietly separated. */
         [data-diffs-header='default'] {
           font-size: 12px;
           padding-inline: 10px;
           border-bottom: 1px solid var(--border);
         }
+        [data-header-content] [data-title] { font-weight: 600; }
         [data-diffs-header='default'] [data-change-icon] { display: none; }
         [data-diffs-header='default'] [data-additions-count] { color: var(--positive, #3fb950); }
         [data-diffs-header='default'] [data-deletions-count] { color: var(--destructive, #f85149); }
@@ -131,8 +138,9 @@ function useCodeViewOptions(
           background-color: transparent;
           --diffs-scrollbar-gutter-override: 0px;
         }
-        [data-code] { scrollbar-width: none; }
+        [data-code] { scrollbar-width: none; padding-bottom: 0; }
         [data-code]::-webkit-scrollbar { display: none; }
+        [data-header-content] [data-title] { font-weight: 600; }
       `,
     }),
     [themeType, variant]
@@ -551,60 +559,38 @@ export function SessionDiffPane({ refId }: { refId: string }) {
   const added = files.reduce((sum, f) => sum + f.added, 0)
   const removed = files.reduce((sum, f) => sum + f.removed, 0)
 
+  const tabs: UnderlineTabItem<Tab>[] = [
+    { id: "files", label: `Changes (${files.length})`, icon: FileDiff },
+    { id: "browse", label: "Browse", icon: FolderTree },
+  ]
+
   return (
     <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
-      <div className="flex items-center gap-1 px-2 py-1.5">
-        {(
-          [
-            {
-              id: "files",
-              label: `Changes (${files.length})`,
-              Icon: FileDiff,
-            },
-            { id: "browse", label: "Browse", Icon: FolderTree },
-          ] as const
-        ).map(({ id, label, Icon }) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setTab(id)}
-            className={cn(
-              "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-              tab === id
-                ? "bg-accent text-foreground"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Icon className="size-3.5" />
-            {label}
-          </button>
-        ))}
-        <span className="ml-2 text-[11px] tabular-nums text-muted-foreground">
+      <UnderlineTabs tabs={tabs} value={tab} onChange={setTab} className="px-3">
+        <span className="text-[11px] tabular-nums text-muted-foreground">
           <span className="text-positive">+{added}</span>{" "}
           <span className="text-destructive">−{removed}</span>
         </span>
-        <div className="ml-auto">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label="Refresh diff"
-                onClick={refresh}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <RefreshCw
-                  className={cn(
-                    "size-3.5",
-                    filesQuery.isFetching && "animate-spin"
-                  )}
-                />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Refresh</TooltipContent>
-          </Tooltip>
-        </div>
-      </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label="Refresh diff"
+              onClick={refresh}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <RefreshCw
+                className={cn(
+                  "size-3.5",
+                  filesQuery.isFetching && "animate-spin"
+                )}
+              />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Refresh</TooltipContent>
+        </Tooltip>
+      </UnderlineTabs>
 
       {tab === "files" ? (
         <FilesView
