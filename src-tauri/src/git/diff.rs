@@ -122,11 +122,25 @@ pub struct FileVersions {
     pub new_text: Option<String>,
 }
 
+/// Normalize CRLF → LF so a Windows checkout (CRLF on disk) doesn't diff as a
+/// whole-file rewrite against the LF blob git stores.
+fn normalize_eol(text: String) -> String {
+    if text.contains('\r') {
+        text.replace("\r\n", "\n")
+    } else {
+        text
+    }
+}
+
 /// Read a file's contents at `base` and in the working tree. Either side is
 /// `None` when it doesn't exist there (added/deleted) or isn't valid text.
 pub fn file_versions(worktree: &Path, base: &str, path: &str) -> FileVersions {
-    let old_text = run(worktree, &["show", &format!("{base}:{path}")]).ok();
-    let new_text = std::fs::read_to_string(worktree.join(path)).ok();
+    let old_text = run(worktree, &["show", &format!("{base}:{path}")])
+        .ok()
+        .map(normalize_eol);
+    let new_text = std::fs::read_to_string(worktree.join(path))
+        .ok()
+        .map(normalize_eol);
     FileVersions { old_text, new_text }
 }
 
