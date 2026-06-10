@@ -6,10 +6,8 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use tauri::State;
 
-use crate::error::{AppError, CommandResult, Result};
-use crate::state::AppState;
+use crate::error::{AppError, Result};
 
 /// Per-repo config. All fields default so a partial file stays valid.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
@@ -60,36 +58,10 @@ pub fn save(repo: &Path, config: &RepoConfig) -> Result<()> {
 }
 
 /// Drop empty/whitespace-only command lines.
-fn clean(commands: Vec<String>) -> Vec<String> {
+pub(super) fn clean(commands: Vec<String>) -> Vec<String> {
     commands
         .into_iter()
         .map(|c| c.trim().to_string())
         .filter(|c| !c.is_empty())
         .collect()
-}
-
-#[tauri::command]
-#[specta::specta]
-pub async fn get_repo_config(
-    state: State<'_, AppState>,
-    project_id: String,
-) -> CommandResult<RepoConfig> {
-    let project = state.store.get_project(&project_id)?;
-    load(Path::new(&project.path)).map_err(Into::into)
-}
-
-#[tauri::command]
-#[specta::specta]
-pub async fn update_repo_config(
-    state: State<'_, AppState>,
-    project_id: String,
-    config: RepoConfig,
-) -> CommandResult<RepoConfig> {
-    let project = state.store.get_project(&project_id)?;
-    let config = RepoConfig {
-        setup: clean(config.setup),
-        teardown: clean(config.teardown),
-    };
-    save(Path::new(&project.path), &config)?;
-    Ok(config)
 }
