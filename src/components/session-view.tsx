@@ -41,12 +41,11 @@ function SetupFailedState({ session }: { session: Session }) {
       detailLabel="Setup output"
       actions={
         <>
-          <Button size="sm" onClick={() => void retry()} disabled={retrying}>
+          <Button onClick={() => void retry()} disabled={retrying}>
             <RefreshCw className={retrying ? "animate-spin" : undefined} />
             Retry setup
           </Button>
           <Button
-            size="sm"
             variant="secondary"
             onClick={() =>
               void ipc
