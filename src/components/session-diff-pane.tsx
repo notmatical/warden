@@ -13,7 +13,6 @@ import {
   FolderOpen as FolderOpenIcon,
   Folder as FolderIcon,
   FolderTree,
-  GitCommit as GitCommitIcon,
   Loader2,
   RefreshCw,
 } from "lucide-react"
@@ -27,14 +26,13 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import * as ipc from "@/lib/ipc"
-import { relativeTime } from "@/lib/time"
 import { cn } from "@/lib/utils"
 import { diffSessionIdOf } from "@/lib/viewport"
 import { useAppStore } from "@/store/app-store"
 import type { FileEntry } from "@/types"
 import type { DiffFile } from "@/types/git-diff"
 
-type Tab = "files" | "commits" | "browse"
+type Tab = "files" | "browse"
 
 /** Cheap content-version hash (FNV-1a) so CodeView re-renders an item only
  *  when its diff data or collapsed state actually changed. */
@@ -81,22 +79,36 @@ function useCodeViewOptions(
       tokenizeMaxLineLength: 5_000,
       tokenizeMaxLength: 200_000,
       maxLineDiffLength: 5_000,
+      // Pierre layers its CSS (base, theme, rendered, unsafe) with unsafe
+      // last, and the shiki theme declares its canvas color via
+      // --diffs-light-bg/--diffs-dark-bg ON :host — where --diffs-bg and all
+      // derived tints are computed. So theming must happen at :host; rules on
+      // [data-diff]/[data-file] can only re-point already-computed values.
       unsafeCSS:
         variant === "diff"
           ? `
         * { user-select: text; -webkit-user-select: text; }
-        /* The component paints the shiki theme's canvas at the host level;
-           clear it so gaps between cards show the pane background. */
-        :host { background-color: transparent !important; }
+        :host {
+          /* Drive every computed tint (line bgs, gutters, +/- shades) from
+             the app's card color instead of the shiki theme's canvas… */
+          --diffs-light-bg: var(--card);
+          --diffs-dark-bg: var(--card);
+          /* …but keep the component's own canvas clear, so the space between
+             cards is the pane background. */
+          background-color: transparent;
+          /* Lines wrap — the reserved horizontal-scrollbar gutter is a dead
+             strip around the code. */
+          --diffs-scrollbar-gutter-override: 0px;
+        }
+        [data-code] { scrollbar-width: none; }
+        [data-code]::-webkit-scrollbar { display: none; }
         /* The chevron in the prefix slot replaces Pierre's status badge. */
         [data-diffs-header='default'] [data-change-icon] { display: none; }
         [data-diffs-header='default'] [data-additions-count] { color: var(--positive, #3fb950); }
         [data-diffs-header='default'] [data-deletions-count] { color: var(--destructive, #f85149); }
-        /* Each file is a rounded, hairline-bordered card on the app surface.
-           overflow: clip (not hidden) keeps sticky headers working. */
+        /* Each file is a rounded, hairline-bordered card. overflow: clip
+           (not hidden) keeps sticky headers working. */
         [data-diff], [data-file] {
-          --diffs-light-bg: var(--card) !important;
-          --diffs-dark-bg: var(--card) !important;
           border: 1px solid var(--border);
           border-radius: 10px;
           overflow: clip;
@@ -104,12 +116,15 @@ function useCodeViewOptions(
       `
           : `
         * { user-select: text; -webkit-user-select: text; }
-        /* Fully transparent: the pane's own background shows through. */
-        :host { background-color: transparent !important; }
-        :host, [data-diff], [data-file] {
-          --diffs-light-bg: transparent !important;
-          --diffs-dark-bg: transparent !important;
+        :host {
+          /* Fully transparent: the pane's own background shows through. */
+          --diffs-light-bg: transparent;
+          --diffs-dark-bg: transparent;
+          background-color: transparent;
+          --diffs-scrollbar-gutter-override: 0px;
         }
+        [data-code] { scrollbar-width: none; }
+        [data-code]::-webkit-scrollbar { display: none; }
       `,
     }),
     [themeType, variant]
@@ -486,7 +501,7 @@ function BrowseView({ sessionId }: { sessionId: string }) {
 }
 
 /** The session's changes since base, as a real tab: stacked collapsible
- *  per-file diffs (the main view) plus the branch's commit list. */
+ *  per-file diffs (the main view) plus a browser for the whole working tree. */
 export function SessionDiffPane({ refId }: { refId: string }) {
   const sessionId = diffSessionIdOf(refId)
   const session = useAppStore((s) => s.sessions[sessionId])
@@ -498,29 +513,18 @@ export function SessionDiffPane({ refId }: { refId: string }) {
     queryFn: () => ipc.getSessionDiff(sessionId),
     refetchOnWindowFocus: true,
   })
-  const commitsQuery = useQuery({
-    queryKey: ["session-commits", sessionId],
-    queryFn: () => ipc.getSessionCommits(sessionId),
-    refetchOnWindowFocus: true,
-  })
 
   // Refresh whenever a turn finishes — that's when the diff actually moves.
   const running = session?.status === "running"
   useEffect(() => {
     if (running) return
     void queryClient.invalidateQueries({ queryKey: ["session-diff", sessionId] })
-    void queryClient.invalidateQueries({
-      queryKey: ["session-commits", sessionId],
-    })
   }, [running, sessionId, queryClient])
 
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ["session-diff", sessionId] })
     void queryClient.invalidateQueries({
       queryKey: ["session-diff-file", sessionId],
-    })
-    void queryClient.invalidateQueries({
-      queryKey: ["session-commits", sessionId],
     })
   }
 
@@ -533,7 +537,6 @@ export function SessionDiffPane({ refId }: { refId: string }) {
   }
 
   const files = filesQuery.data ?? []
-  const commits = commitsQuery.data ?? []
   const added = files.reduce((sum, f) => sum + f.added, 0)
   const removed = files.reduce((sum, f) => sum + f.removed, 0)
 
@@ -546,11 +549,6 @@ export function SessionDiffPane({ refId }: { refId: string }) {
               id: "files",
               label: `Changes (${files.length})`,
               Icon: FileDiff,
-            },
-            {
-              id: "commits",
-              label: `Commits (${commits.length})`,
-              Icon: GitCommitIcon,
             },
             { id: "browse", label: "Browse", Icon: FolderTree },
           ] as const
@@ -603,28 +601,8 @@ export function SessionDiffPane({ refId }: { refId: string }) {
           files={files}
           loading={filesQuery.isPending}
         />
-      ) : tab === "browse" ? (
-        <BrowseView sessionId={sessionId} />
-      ) : commits.length === 0 ? (
-        <div className="flex items-center justify-center text-sm text-muted-foreground">
-          No commits yet.
-        </div>
       ) : (
-        <div className="divide-y divide-border/50 overflow-y-auto">
-          {commits.map((c) => (
-            <div key={c.sha} className="flex items-baseline gap-3 px-4 py-2.5">
-              <code className="shrink-0 font-mono text-[11px] text-muted-foreground">
-                {c.sha.slice(0, 7)}
-              </code>
-              <span className="min-w-0 flex-1 truncate text-sm">
-                {c.subject}
-              </span>
-              <span className="shrink-0 text-[11px] text-muted-foreground">
-                {c.author} · {relativeTime(c.date)}
-              </span>
-            </div>
-          ))}
-        </div>
+        <BrowseView sessionId={sessionId} />
       )}
     </div>
   )
