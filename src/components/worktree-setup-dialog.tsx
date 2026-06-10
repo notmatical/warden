@@ -15,7 +15,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { UnderlineTabs } from "@/components/ui/underline-tabs"
+import { SegmentedTabs } from "@/components/ui/segmented-tabs"
 import * as ipc from "@/lib/ipc"
 import { isWindows } from "@/lib/platform"
 
@@ -182,7 +182,7 @@ export function WorktreeSetupDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <UnderlineTabs
+        <SegmentedTabs
           tabs={TABS.map(({ id, label }) => ({ id, label }))}
           value={tab}
           onChange={setTab}
@@ -200,7 +200,7 @@ export function WorktreeSetupDialog({
               </span>
             ) : null}
           </span>
-        </UnderlineTabs>
+        </SegmentedTabs>
 
         {loading ? (
           <div className="flex items-center justify-center py-12 text-muted-foreground">

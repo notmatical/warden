@@ -26,9 +26,9 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import {
-  UnderlineTabs,
-  type UnderlineTabItem,
-} from "@/components/ui/underline-tabs"
+  SegmentedTabs,
+  type SegmentedTabItem,
+} from "@/components/ui/segmented-tabs"
 import * as ipc from "@/lib/ipc"
 import { cn } from "@/lib/utils"
 import { diffSessionIdOf } from "@/lib/viewport"
@@ -559,14 +559,19 @@ export function SessionDiffPane({ refId }: { refId: string }) {
   const added = files.reduce((sum, f) => sum + f.added, 0)
   const removed = files.reduce((sum, f) => sum + f.removed, 0)
 
-  const tabs: UnderlineTabItem<Tab>[] = [
+  const tabs: SegmentedTabItem<Tab>[] = [
     { id: "files", label: `Changes (${files.length})`, icon: FileDiff },
     { id: "browse", label: "Browse", icon: FolderTree },
   ]
 
   return (
     <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
-      <UnderlineTabs tabs={tabs} value={tab} onChange={setTab} className="px-3">
+      <SegmentedTabs
+        tabs={tabs}
+        value={tab}
+        onChange={setTab}
+        className="px-2 py-1.5"
+      >
         <span className="text-[11px] tabular-nums text-muted-foreground">
           <span className="text-positive">+{added}</span>{" "}
           <span className="text-destructive">−{removed}</span>
@@ -590,7 +595,7 @@ export function SessionDiffPane({ refId }: { refId: string }) {
           </TooltipTrigger>
           <TooltipContent>Refresh</TooltipContent>
         </Tooltip>
-      </UnderlineTabs>
+      </SegmentedTabs>
 
       {tab === "files" ? (
         <FilesView
