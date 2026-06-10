@@ -332,16 +332,25 @@ export const createSessionsSlice: StateCreator<
         errored ? `${session.title} stopped` : `${session.title} finished`,
         errored
           ? "The agent stopped on an error."
-          : "The agent is ready for your next message."
+          : "The agent is ready for your next message.",
+        {
+          target: { kind: "session", id: session.id },
+          tone: errored ? "error" : "default",
+        }
       )
     }
     if (checksSettled && !windowFocused()) {
+      const failed = session.prCheckStatus === "failure"
       void notifyFor(
         "prChecks",
-        session.prCheckStatus === "failure"
+        failed
           ? `Checks failed on PR #${session.prNumber}`
           : `Checks passed on PR #${session.prNumber}`,
-        session.title
+        session.title,
+        {
+          target: { kind: "session", id: session.id },
+          tone: failed ? "error" : "default",
+        }
       )
     }
   },

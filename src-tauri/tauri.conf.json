@@ -30,6 +30,23 @@
         "transparent": true,
         "shadow": true,
         "dragDropEnabled": true
+      },
+      {
+        "label": "notifications",
+        "title": "Warden Notifications",
+        "url": "notification.html",
+        "width": 372,
+        "height": 96,
+        "visible": false,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "resizable": false,
+        "focus": false,
+        "focusable": false,
+        "acceptFirstMouse": true
       }
     ],
     "security": {

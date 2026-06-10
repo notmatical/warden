@@ -158,7 +158,11 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_window_state::Builder::new().build())
+        .plugin(
+            tauri_plugin_window_state::Builder::new()
+                .with_denylist(&["notifications"])
+                .build(),
+        )
         .plugin(tauri_plugin_decorum::init())
         .setup(|app| {
             if cfg!(debug_assertions) {
@@ -237,7 +241,17 @@ pub fn run() {
         .invoke_handler(specta_builder.invoke_handler())
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|_app, event| {
+        .run(|app, event| {
+            if let tauri::RunEvent::WindowEvent {
+                label,
+                event: tauri::WindowEvent::Destroyed,
+                ..
+            } = &event
+            {
+                if label == "main" {
+                    app.exit(0);
+                }
+            }
             // Tear down any live PTYs and agent processes when the app exits.
             if matches!(event, tauri::RunEvent::Exit) {
                 terminal::kill_all();

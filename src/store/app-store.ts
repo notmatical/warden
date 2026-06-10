@@ -1,3 +1,5 @@
+import { listen } from "@tauri-apps/api/event"
+import { openUrl } from "@tauri-apps/plugin-opener"
 import { create } from "zustand"
 import { devtools } from "zustand/middleware"
 import { linearCachedIssues, onLinearChanged } from "@/integrations/linear/ipc"
@@ -8,7 +10,14 @@ import {
   onWorkflowRun,
 } from "@/lib/events"
 import * as ipc from "@/lib/ipc"
-import { notifyFor } from "@/lib/notify"
+import {
+  type BackendNotification,
+  handleBackendNotification,
+  NOTIFY_ACTIVATED,
+  NOTIFY_REQUEST,
+  notifyFor,
+  type ToastPayload,
+} from "@/lib/notify"
 import { reportError } from "./shared"
 import { createGitSlice } from "./slices/git"
 import { createGroupsSlice } from "./slices/groups"
@@ -63,6 +72,21 @@ export const useAppStore = create<AppState>()(
           onAgentDelta((payload) => get().onDelta(payload))
           onSessionUpdated((session) => get().onSessionUpdated(session))
           onWorkflowRun((view) => get().applyWorkflowRun(view))
+
+          // Clicking a toast in the notifications window lands back here.
+          void listen<ToastPayload>(NOTIFY_ACTIVATED, ({ payload }) => {
+            const target = payload.target
+            if (!target) return
+            if (target.kind === "session") get().openSession(target.id)
+            else if (target.kind === "workflow") get().openWorkflow(target.id)
+            else void openUrl(target.url).catch(() => {})
+          }).catch(() => {})
+
+          // Backend-originated notifications (e.g. the PR poller).
+          void listen<BackendNotification>(NOTIFY_REQUEST, ({ payload }) =>
+            handleBackendNotification(payload)
+          ).catch(() => {})
+
           // Re-probe providers when the window regains focus, so installs or
           // logins done outside the app are reflected without a restart.
           window.addEventListener("focus", () => void get().loadProviders())
@@ -101,7 +125,8 @@ export const useAppStore = create<AppState>()(
                   void notifyFor(
                     "linearAssigned",
                     `Assigned: ${issue.identifier}`,
-                    issue.title
+                    issue.title,
+                    { target: { kind: "url", url: issue.url } }
                   )
               }
               knownLinearIds = ids
