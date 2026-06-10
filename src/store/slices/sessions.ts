@@ -6,6 +6,7 @@ import {
   DEFAULT_CHAT_MODEL,
   DEFAULT_CODEX_MODEL,
 } from "@/lib/models"
+import { refreshGitStatus } from "@/hooks/use-git-status"
 import { notify, windowFocused } from "@/lib/notify"
 import * as terminals from "@/lib/terminal-instances"
 import { detachRef, diffTabId, firstLeaf } from "@/lib/viewport"
@@ -19,6 +20,7 @@ type SessionsSlice = Pick<
   | "createNativeSession"
   | "updateSession"
   | "setIsolation"
+  | "isolationPending"
   | "renameSession"
   | "deleteSessions"
   | "deleteSession"
@@ -132,12 +134,31 @@ export const createSessionsSlice: StateCreator<
     }
   },
 
+  isolationPending: {},
+
   setIsolation: async (sessionId, isolate) => {
+    // Provisioning/tearing down a worktree takes a beat — surface it on the
+    // status chip instead of leaving the click apparently ignored.
+    set((state) => ({
+      isolationPending: {
+        ...state.isolationPending,
+        [sessionId]: isolate ? "worktree" : "checkout",
+      },
+    }))
     try {
       // The backend re-provisions and emits the authoritative session-updated.
       await ipc.setSessionIsolation(sessionId, isolate)
     } catch (error) {
       reportError("Failed to change isolation", error)
+    } finally {
+      set((state) => {
+        const isolationPending = { ...state.isolationPending }
+        delete isolationPending[sessionId]
+        return { isolationPending }
+      })
+      // The chip's branch text comes from the 5s git-status poll; pull it
+      // forward so the badge hands off to fresh data, not a stale branch.
+      refreshGitStatus(sessionId)
     }
   },
 

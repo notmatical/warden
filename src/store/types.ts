@@ -205,6 +205,9 @@ export interface AppState {
     patch: SessionSettingsPatch
   ) => Promise<void>
   setIsolation: (sessionId: string, isolate: boolean) => Promise<void>
+  /** Sessions mid-switch between worktree and checkout (provisioning takes a
+   *  beat); the value is the side being switched *to*, for the pending badge. */
+  isolationPending: Record<string, "worktree" | "checkout">
   renameSession: (sessionId: string, title: string) => Promise<void>
   deleteSessions: (sessionIds: string[]) => Promise<void>
   deleteSession: (sessionId: string) => Promise<void>

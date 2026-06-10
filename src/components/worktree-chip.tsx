@@ -36,8 +36,24 @@ export function WorktreeIdentity({
   const session = useAppStore((s) => s.sessions[sessionId])
   const setIsolation = useAppStore((s) => s.setIsolation)
   const createSession = useAppStore((s) => s.createSession)
+  const switching = useAppStore((s) => s.isolationPending[sessionId])
 
   if (!session) return null
+
+  // Mid-switch the old branch/dir is already stale — replace the whole
+  // identity segment with a live "what's happening" badge.
+  if (switching) {
+    return (
+      <span className="inline-flex min-w-0 items-center gap-1.5 text-muted-foreground">
+        <Loader2 className="size-3 shrink-0 animate-spin" />
+        <span className="truncate">
+          {switching === "worktree"
+            ? "Creating worktree…"
+            : "Moving to checkout…"}
+        </span>
+      </span>
+    )
+  }
 
   const isolated = session.isIsolated
   const started = session.turns > 0
