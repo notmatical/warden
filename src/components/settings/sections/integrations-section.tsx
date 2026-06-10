@@ -3,6 +3,7 @@ import { useEffect } from "react"
 import { GitHubIcon } from "@/components/icons/brand"
 import { IntegrationCard } from "@/components/settings/integration-card"
 import { SettingsSection } from "@/components/settings/settings-section"
+import { LinearIntegrationCard } from "@/integrations/linear/components/linear-integration-card"
 import { runInLoginTerminal, shellBin } from "@/lib/cli-login"
 import { useAppStore } from "@/store/app-store"
 
@@ -43,6 +44,7 @@ export function IntegrationsSection() {
             Checking GitHub CLI…
           </p>
         )}
+        <LinearIntegrationCard />
       </div>
     </SettingsSection>
   )
