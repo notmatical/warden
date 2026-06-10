@@ -97,17 +97,6 @@ export function IssuePeekPanel({
             {shown.identifier}
           </span>
           <div className="flex-1" />
-          {onSendToAgent ? (
-            <Button
-              variant="secondary"
-              size="sm"
-              className="h-7 gap-1.5"
-              onClick={() => onSendToAgent(shown, loadedComments)}
-            >
-              <Send className="size-3.5" />
-              Send to Agent
-            </Button>
-          ) : null}
           <Button
             variant="ghost"
             size="icon-sm"
@@ -257,6 +246,18 @@ export function IssuePeekPanel({
             </div>
           </div>
         </div>
+
+        {onSendToAgent ? (
+          <div className="shrink-0 border-t p-3">
+            <Button
+              className="w-full gap-1.5"
+              onClick={() => onSendToAgent(shown, loadedComments)}
+            >
+              <Send className="size-3.5" />
+              Send to Agent
+            </Button>
+          </div>
+        ) : null}
       </SheetContent>
     </Sheet>
   )
