@@ -5,6 +5,7 @@
 pub mod claude;
 pub mod codex;
 pub mod context;
+pub mod jsonrpc;
 
 use std::time::Duration;
 

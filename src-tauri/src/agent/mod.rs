@@ -8,6 +8,7 @@ mod session_proc;
 mod stream;
 
 pub use naming::generate_session_title;
+pub use session_proc::recover;
 
 use tauri::AppHandle;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
@@ -23,10 +24,11 @@ use crate::providers::codex::agent as codex;
 
 use stream::parse_line;
 
-/// Tear down every live agent process on app exit: the persistent Claude
-/// session processes and the shared Codex app-server.
-pub fn kill_all() {
-    session_proc::kill_all();
+/// App-exit teardown. The shared Codex app-server dies with the app; Claude
+/// session processes are deliberately left running — each sees stdin EOF,
+/// finishes any in-flight turn into its output file, and exits on its own.
+/// The next launch reattaches or drains them (see [`session_proc::recover`]).
+pub fn shutdown() {
     codex::kill_all();
 }
 
