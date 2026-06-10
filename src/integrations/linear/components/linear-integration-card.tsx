@@ -3,6 +3,7 @@ import { type FormEvent, useEffect, useState } from "react"
 import { toast } from "sonner"
 
 import { LinearIcon } from "@/components/icons/brand"
+import { ToolCardShell } from "@/components/settings/tool-card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
@@ -55,53 +56,59 @@ export function LinearIntegrationCard() {
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-border/60 bg-card p-4 transition-colors hover:border-border">
-      <div className="flex items-center gap-2.5">
-        <LinearIcon className="size-5 shrink-0 text-foreground" />
-        <span className="truncate font-semibold text-foreground text-sm">
-          Linear
-        </span>
-      </div>
-
-      <p className="text-muted-foreground text-xs leading-relaxed">
-        Triage your assigned issues in Tasks and send them to agents.
-      </p>
-
-      {phase === "connected" ? (
-        <div className="mt-auto flex items-baseline justify-between gap-2">
-          <span className="text-emerald-500 text-xs">Connected</span>
-          <Button
-            variant="ghost"
-            size="xs"
-            onClick={() => void handleDisconnect()}
-            disabled={busy}
-            className="text-muted-foreground hover:text-foreground"
+    <ToolCardShell
+      icon={LinearIcon}
+      name="Linear"
+      pill={
+        phase === "connected"
+          ? { kind: "ok", label: "Connected" }
+          : { kind: "off", label: "Not connected" }
+      }
+      description="Triage your assigned issues in Tasks and send them to agents."
+      footer={
+        phase === "connected" ? (
+          <>
+            <span />
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() => void handleDisconnect()}
+              disabled={busy}
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+            >
+              {busy ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                "Disconnect"
+              )}
+            </Button>
+          </>
+        ) : (
+          <form
+            onSubmit={handleConnect}
+            className="flex w-full items-center gap-2"
           >
-            {busy ? <Loader2 className="size-3 animate-spin" /> : "Disconnect"}
-          </Button>
-        </div>
-      ) : (
-        <form onSubmit={handleConnect} className="mt-auto flex items-center gap-2">
-          <Input
-            type="password"
-            autoComplete="off"
-            value={keyInput}
-            onChange={(e) => setKeyInput(e.target.value)}
-            placeholder="lin_api_…"
-            disabled={phase === "loading"}
-            className="h-7 flex-1 font-mono text-xs"
-          />
-          <Button
-            type="submit"
-            variant="ghost"
-            size="xs"
-            disabled={busy || phase === "loading" || !keyInput.trim()}
-            className="bg-foreground text-background hover:bg-foreground/90"
-          >
-            {busy ? <Loader2 className="size-3 animate-spin" /> : "Connect"}
-          </Button>
-        </form>
-      )}
-    </div>
+            <Input
+              type="password"
+              autoComplete="off"
+              value={keyInput}
+              onChange={(e) => setKeyInput(e.target.value)}
+              placeholder="lin_api_…"
+              disabled={phase === "loading"}
+              className="h-7 flex-1 font-mono text-xs"
+            />
+            <Button
+              type="submit"
+              variant="ghost"
+              size="xs"
+              disabled={busy || phase === "loading" || !keyInput.trim()}
+              className="bg-foreground text-background hover:bg-foreground/90"
+            >
+              {busy ? <Loader2 className="size-3 animate-spin" /> : "Connect"}
+            </Button>
+          </form>
+        )
+      }
+    />
   )
 }
