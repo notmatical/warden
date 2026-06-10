@@ -52,6 +52,8 @@ pub struct CreateSessionOptions {
     pub backend: Option<String>,
     pub isolate: Option<bool>,
     pub native_command: Option<String>,
+    /// Linear issue this session works on; drives writeback on PR open/merge.
+    pub linear_issue_id: Option<String>,
 }
 
 #[tauri::command]
@@ -121,6 +123,7 @@ pub async fn create_session(
         is_isolated: dir.is_isolated,
         parent_id: None,
         workflow_id: None,
+        linear_issue_id: options.linear_issue_id,
     })?;
 
     emit_session(&app, &session);

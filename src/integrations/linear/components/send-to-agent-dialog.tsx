@@ -122,6 +122,7 @@ export function SendToAgentDialog({
         role: "chat",
         isolate,
         firstMessage: buildIssuePrompt(issue, comments),
+        linearIssueId: issue.id,
       })
       if (session) {
         onOpenChange(false)

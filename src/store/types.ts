@@ -42,6 +42,8 @@ export interface CreateSessionOptions {
   firstMessage?: string
   /** A provider CLI for a native terminal session to launch instead of the shell. */
   nativeCommand?: string
+  /** Linear issue this session works on; drives writeback on PR open/merge. */
+  linearIssueId?: string
 }
 
 export interface SessionSettingsPatch {
