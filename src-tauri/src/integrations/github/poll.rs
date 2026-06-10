@@ -76,7 +76,7 @@ fn poll_once(app: &AppHandle) {
             if shared == 0 {
                 if let Ok(project) = store.get_project(&session.project_id) {
                     let repo = Path::new(&project.path);
-                    if crate::git::is_managed_worktree(app, repo, &worktree) {
+                    if crate::git::is_managed_worktree(repo, &worktree) {
                         crate::git::setup::spawn_teardown_and_remove(
                             project.path.into(),
                             worktree,

@@ -337,7 +337,7 @@ pub async fn delete_session(
         if shared == 0 {
             if let Ok(project) = state.store.get_project(&session.project_id) {
                 let repo = std::path::Path::new(&project.path);
-                if git::is_managed_worktree(&app, repo, &worktree) {
+                if git::is_managed_worktree(repo, &worktree) {
                     // Background: teardown commands may take a while; deletion
                     // shouldn't. The branch goes too — the UI confirmed any
                     // unmerged work via session_delete_check.
