@@ -160,7 +160,7 @@ export function LinearTasksView() {
         leading={
           <span className="flex items-center gap-2.5">
             <ListTodo className="size-4 shrink-0 text-muted-foreground" />
-            <h1 className="font-medium text-foreground">Tasks</h1>
+            <h1 className="font-semibold text-foreground">Tasks</h1>
             <CountChip>{issues.length}</CountChip>
           </span>
         }

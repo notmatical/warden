@@ -109,7 +109,7 @@ export function SwatchStack({ swatches }: { swatches: ReactNode[] }) {
           // biome-ignore lint/suspicious/noArrayIndexKey: purely visual stack, order is the identity
           key={i}
           className={cn(
-            "flex items-center justify-center rounded-full bg-background ring-2 ring-background",
+            "flex items-center justify-center rounded-full ring-1 ring-background",
             i > 0 && "-ml-1.5"
           )}
         >
