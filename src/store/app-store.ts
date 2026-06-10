@@ -8,6 +8,8 @@ import {
   onWorkflowRun,
 } from "@/lib/events"
 import * as ipc from "@/lib/ipc"
+import { notifyFor } from "@/lib/notify"
+import { linearCachedIssues, onLinearChanged } from "@/integrations/linear/ipc"
 import { reportError } from "./shared"
 import { createGitSlice } from "./slices/git"
 import { createGroupsSlice } from "./slices/groups"
@@ -74,6 +76,38 @@ export const useAppStore = create<AppState>()(
             void ipc.setAppFocusState(false)
           )
           void ipc.setAppFocusState(document.hasFocus())
+
+          // Notify on freshly assigned Linear issues. Seeding from the
+          // pre-sync cache means assignments made while the app was closed
+          // notify on launch, while a first-ever sync stays silent.
+          let knownLinearIds: Set<string> | null = null
+          void linearCachedIssues()
+            .then((issues) => {
+              // A change event may beat the seed; never clobber its newer set.
+              knownLinearIds ??= new Set(issues.map((i) => i.id))
+            })
+            .catch(() => {})
+          void onLinearChanged(async () => {
+            try {
+              const issues = await linearCachedIssues()
+              const ids = new Set(issues.map((i) => i.id))
+              if (knownLinearIds) {
+                const fresh = issues.filter(
+                  // biome-ignore lint/style/noNonNullAssertion: guarded just above
+                  (i) => !knownLinearIds!.has(i.id)
+                )
+                for (const issue of fresh.slice(0, 3))
+                  void notifyFor(
+                    "linearAssigned",
+                    `Assigned: ${issue.identifier}`,
+                    issue.title
+                  )
+              }
+              knownLinearIds = ids
+            } catch {
+              // cache reload is best-effort
+            }
+          })
         }
 
         void get().loadProviders()
