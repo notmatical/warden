@@ -202,7 +202,12 @@ export function IssueList({
           const isCollapsed = collapsed.has(group.state.name)
           return (
             <div key={group.state.name}>
-              <div className="group/section flex items-center gap-2.5 border-foreground/5 border-b bg-foreground/[0.02] px-4 py-2">
+              <div
+                className="group/section flex items-center gap-2.5 border-foreground/5 border-b px-4 py-2"
+                style={{
+                  backgroundImage: `linear-gradient(${tint(group.state.color, 0.14)}, ${tint(group.state.color, 0.14)})`,
+                }}
+              >
                 <button
                   type="button"
                   onClick={() => toggleGroup(group.state.name)}
@@ -451,4 +456,12 @@ export function Avatar({
 export function formatDate(iso: string): string {
   const date = new Date(iso)
   return Number.isNaN(date.getTime()) ? "" : format(date, "MMM d")
+}
+
+/** A translucent rgba derived from a Linear "#rrggbb" state color, for tinting. */
+function tint(hex: string, alpha: number): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim())
+  if (!m) return `rgba(127, 127, 127, ${alpha})`
+  const n = Number.parseInt(m[1], 16)
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`
 }
