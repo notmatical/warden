@@ -1,0 +1,27 @@
+/* Injected into @pierre/diffs shadow roots (CodeView `unsafeCSS`) for the
+ * Browse file viewer: a single file rendered flush on the pane, no card. */
+
+* {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+:host {
+  /* Fully transparent: the pane's own background shows through. */
+  --diffs-light-bg: transparent;
+  --diffs-dark-bg: transparent;
+  background-color: transparent;
+  --diffs-scrollbar-gutter-override: 0px;
+}
+
+[data-code] {
+  scrollbar-width: none;
+  padding-bottom: 0;
+}
+[data-code]::-webkit-scrollbar {
+  display: none;
+}
+
+[data-header-content] [data-title] {
+  font-weight: 600;
+}

@@ -44,7 +44,8 @@ pub fn spawn(app: AppHandle) {
 /// Refresh every session that has an open PR. Synchronous `gh` calls run on the
 /// poll task; cheap enough at this cadence.
 fn poll_once(app: &AppHandle) {
-    let store = app.state::<AppState>().store.clone();
+    let state = app.state::<AppState>();
+    let store = state.store.clone();
     let Ok(sessions) = store.sessions_with_open_pr() else {
         return;
     };
@@ -61,6 +62,29 @@ fn poll_once(app: &AppHandle) {
             &info.state,
             info.check_status,
         );
+
+        // A PR that just merged retires its session: stop any in-flight work,
+        // tear down the worktree + branch, and mark the session read-only —
+        // exactly as if it had been landed in-app.
+        if info.state == "MERGED" && session.merged_at.is_none() && session.is_isolated {
+            state.manager.cancel(app, &store, &session.id);
+            crate::terminal::kill(&session.id);
+            let shared = store
+                .count_sessions_sharing_workdir(&session.working_dir, &session.id)
+                .unwrap_or(0);
+            let worktree = std::path::PathBuf::from(&session.working_dir);
+            if shared == 0 && crate::git::is_managed_worktree(app, &worktree) {
+                if let Ok(project) = store.get_project(&session.project_id) {
+                    crate::git::setup::spawn_teardown_and_remove(
+                        project.path.into(),
+                        worktree,
+                        session.branch.clone(),
+                    );
+                }
+            }
+            let _ = store.mark_session_merged(&session.id);
+        }
+
         if changed {
             if let Ok(updated) = store.get_session(&session.id) {
                 emit_session(app, &updated);

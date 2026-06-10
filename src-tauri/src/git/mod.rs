@@ -3,9 +3,12 @@
 
 mod cli;
 pub mod diff;
+pub mod setup;
 mod worktree;
 
 pub use cli::*;
-pub use worktree::{provision_pr_worktree, provision_working_dir, ProvisionedDir};
+pub use worktree::{
+    is_managed_worktree, provision_pr_worktree, provision_working_dir, ProvisionedDir,
+};
 
 pub mod commands;

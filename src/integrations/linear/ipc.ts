@@ -37,7 +37,10 @@ export function linearSyncNow(): Promise<LinearIssue[]> {
 }
 
 /** Move an issue to its team's primary "started" state (writeback on send). */
-export function linearStartIssue(issueId: string, teamId: string): Promise<void> {
+export function linearStartIssue(
+  issueId: string,
+  teamId: string
+): Promise<void> {
   return invoke("linear_start_issue", { issueId, teamId })
 }
 

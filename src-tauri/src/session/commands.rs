@@ -1,7 +1,7 @@
 //! Session commands: creation, transcript reads, the message/cancel controls
 //! that drive agent turns, and live updates to a session's agent settings.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::{AppHandle, State};
 
@@ -52,6 +52,9 @@ pub struct CreateSessionOptions {
     pub backend: Option<String>,
     pub isolate: Option<bool>,
     pub native_command: Option<String>,
+    /// Run in this exact directory instead of provisioning one — e.g. a shell
+    /// opened inside another session's worktree. Implies no isolation.
+    pub working_dir: Option<String>,
     /// Linear issue this session works on; drives writeback on PR open/merge.
     pub linear_issue_id: Option<String>,
 }
@@ -73,8 +76,6 @@ pub async fn create_session(
             .store
             .ensure_group_for_project(&project_id, &project.name)?,
     };
-    let dir = provision_working_dir(&app, &project, options.isolate.unwrap_or(false), None)?;
-
     let permission_mode = options
         .permission_mode
         .as_deref()
@@ -95,6 +96,23 @@ pub async fn create_session(
         .as_deref()
         .and_then(SessionKind::parse)
         .unwrap_or(SessionKind::Agent);
+
+    // Worktree-first: agent sessions isolate by default. Plain terminals stay
+    // in the checkout — a fresh worktree per shell is noise, not safety. An
+    // explicit working_dir (a shell inside an existing worktree) wins outright.
+    let dir = match options.working_dir.filter(|d| !d.trim().is_empty()) {
+        Some(working_dir) => crate::git::ProvisionedDir {
+            working_dir,
+            branch: None,
+            base_sha: None,
+            base_branch: None,
+            is_isolated: false,
+        },
+        None => {
+            let isolate = options.isolate.unwrap_or(kind != SessionKind::Terminal);
+            provision_working_dir(&app, &project, isolate, None)?
+        }
+    };
     // An explicit backend wins; otherwise it follows from the model id, since
     // the model picks its own backend (codex/gpt ids run on Codex).
     let backend = options
@@ -127,6 +145,7 @@ pub async fn create_session(
     })?;
 
     emit_session(&app, &session);
+    git::setup::spawn_session_setup(&app, &state.store, &session, &project.path);
     Ok(session)
 }
 
@@ -246,8 +265,58 @@ pub async fn set_session_labels(
     Ok(())
 }
 
-/// Permanently delete a session: stop any running turn, tear down its isolated
-/// worktree (best-effort), and remove its rows (events cascade).
+/// What deleting a session would destroy, so the UI can ask before — instead of
+/// force-deleting work. All zeros when nothing is at risk: checkout sessions
+/// (nothing is removed), merged sessions (already cleaned), shared worktrees
+/// (kept for the siblings).
+#[derive(Debug, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteCheck {
+    /// Files with uncommitted changes in the worktree (untracked included).
+    pub dirty_files: u32,
+    /// Commits on the session's branch its base doesn't have.
+    pub unmerged_commits: u32,
+    /// Other sessions running in the same worktree — it stays while they exist.
+    pub shared_sessions: u32,
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn session_delete_check(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> CommandResult<DeleteCheck> {
+    let session = state.store.get_session(&session_id)?;
+    let mut check = DeleteCheck {
+        dirty_files: 0,
+        unmerged_commits: 0,
+        shared_sessions: 0,
+    };
+    if !session.is_isolated || session.merged_at.is_some() {
+        return Ok(check);
+    }
+    check.shared_sessions = state
+        .store
+        .count_sessions_sharing_workdir(&session.working_dir, &session_id)
+        .unwrap_or(0) as u32;
+    // A shared worktree isn't removed, so nothing in it is at risk.
+    if check.shared_sessions > 0 {
+        return Ok(check);
+    }
+    let worktree = std::path::Path::new(&session.working_dir);
+    if worktree.exists() {
+        check.dirty_files = git::dirty_file_count(worktree);
+        if let Some(base) = session.base_sha.as_deref() {
+            check.unmerged_commits = git::unmerged_commit_count(worktree, base);
+        }
+    }
+    Ok(check)
+}
+
+/// Permanently delete a session: stop its turn and PTY, tear down its isolated
+/// worktree and branch (best-effort, in the background), and remove its rows
+/// (events cascade). The worktree survives while sibling sessions share it, and
+/// only paths under warden's own worktrees root are ever removed.
 #[tauri::command]
 #[specta::specta]
 pub async fn delete_session(
@@ -257,18 +326,64 @@ pub async fn delete_session(
 ) -> CommandResult<()> {
     let session = state.store.get_session(&session_id)?;
     state.manager.cancel(&app, &state.store, &session_id);
+    crate::terminal::kill(&session_id);
 
-    if session.is_isolated {
-        if let Ok(project) = state.store.get_project(&session.project_id) {
-            let repo = std::path::Path::new(&project.path);
-            let worktree = std::path::Path::new(&session.working_dir);
-            if let Err(e) = git::remove_worktree(repo, worktree) {
-                log::warn!("failed to remove worktree for session {session_id}: {e}");
+    if session.is_isolated && session.merged_at.is_none() {
+        let shared = state
+            .store
+            .count_sessions_sharing_workdir(&session.working_dir, &session_id)
+            .unwrap_or(0);
+        let worktree = std::path::PathBuf::from(&session.working_dir);
+        if shared == 0 && git::is_managed_worktree(&app, &worktree) {
+            if let Ok(project) = state.store.get_project(&session.project_id) {
+                // Background: teardown commands may take a while; deletion
+                // shouldn't. The branch goes too — the UI confirmed any
+                // unmerged work via session_delete_check.
+                git::setup::spawn_teardown_and_remove(
+                    project.path.into(),
+                    worktree,
+                    session.branch.clone(),
+                );
             }
         }
     }
 
     state.store.delete_session(&session_id)?;
+    Ok(())
+}
+
+/// Re-run the repo's worktree setup commands for a session (after a failure,
+/// or after the user edits the commands).
+#[tauri::command]
+#[specta::specta]
+pub async fn retry_worktree_setup(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: String,
+) -> CommandResult<()> {
+    let session = state.store.get_session(&session_id)?;
+    if !session.is_isolated {
+        return Err(
+            AppError::Invalid("setup commands only run in isolated worktrees".to_string()).into(),
+        );
+    }
+    let project = state.store.get_project(&session.project_id)?;
+    git::setup::spawn_session_setup(&app, &state.store, &session, &project.path);
+    Ok(())
+}
+
+/// Clear a failed setup state so the session is usable as-is.
+#[tauri::command]
+#[specta::specta]
+pub async fn dismiss_setup_error(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: String,
+) -> CommandResult<()> {
+    state.store.set_session_setup(&session_id, None, None)?;
+    if let Ok(updated) = state.store.get_session(&session_id) {
+        emit_session(&app, &updated);
+    }
     Ok(())
 }
 
@@ -295,13 +410,14 @@ pub async fn set_session_isolation(
 
     let project = state.store.get_project(&session.project_id)?;
 
-    // Tear down the existing worktree when turning isolation off.
+    // Tear down the existing worktree (and its unused branch) when turning
+    // isolation off. The session has no turns yet, so nothing is lost.
     if session.is_isolated {
-        let repo = std::path::Path::new(&project.path);
-        let worktree = std::path::Path::new(&session.working_dir);
-        if let Err(e) = git::remove_worktree(repo, worktree) {
-            log::warn!("failed to remove worktree for {session_id}: {e}");
-        }
+        git::setup::spawn_teardown_and_remove(
+            project.path.clone().into(),
+            session.working_dir.clone().into(),
+            session.branch.clone(),
+        );
     }
 
     let dir = provision_working_dir(&app, &project, isolate, None)?;
@@ -313,9 +429,13 @@ pub async fn set_session_isolation(
         dir.base_branch.as_deref(),
         dir.is_isolated,
     )?;
+    // Any setup state belonged to the torn-down worktree; re-isolating below
+    // starts a fresh run.
+    state.store.set_session_setup(&session_id, None, None)?;
 
     let updated = state.store.get_session(&session_id)?;
     emit_session(&app, &updated);
+    git::setup::spawn_session_setup(&app, &state.store, &updated, &project.path);
     Ok(updated)
 }
 

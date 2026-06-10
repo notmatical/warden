@@ -14,9 +14,11 @@ export type ContentKind =
   | "settings"
   | "tasks"
   | "issues"
+  | "diff"
 
 const WORKFLOW_PREFIX = "workflow:"
 const FOLDER_PREFIX = "folder:"
+const DIFF_PREFIX = "diff:"
 
 /** Singleton destination ids — there's only ever one tab of each. */
 export const SETTINGS_TAB_ID = "settings"
@@ -47,6 +49,19 @@ export function folderIdOf(ref: string): string {
 
 export function isFolderTab(ref: string): boolean {
   return ref.startsWith(FOLDER_PREFIX)
+}
+
+/** A diff destination: the multi-file changes view for one session. */
+export function diffTabId(sessionId: string): string {
+  return DIFF_PREFIX + sessionId
+}
+
+export function diffSessionIdOf(ref: string): string {
+  return ref.slice(DIFF_PREFIX.length)
+}
+
+export function isDiffTab(ref: string): boolean {
+  return ref.startsWith(DIFF_PREFIX)
 }
 
 /** Pure, render-free metadata the viewport store needs about a kind. */
@@ -104,6 +119,12 @@ const META: Record<ContentKind, KindMeta> = {
     loadsEvents: false,
     persistsWithoutRecord: true,
   },
+  diff: {
+    kind: "diff",
+    singleton: false,
+    loadsEvents: false,
+    persistsWithoutRecord: true,
+  },
 }
 
 /** Resolve a ref to its content kind. `session` is the fallback (bare ids). */
@@ -114,6 +135,7 @@ export function kindOf(ref: string): ContentKind {
   if (ref === ISSUES_TAB_ID) return "issues"
   if (isFolderTab(ref)) return "folder"
   if (isWorkflowTab(ref)) return "workflow"
+  if (isDiffTab(ref)) return "diff"
   return "session"
 }
 

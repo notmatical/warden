@@ -1,12 +1,6 @@
 import { openUrl } from "@tauri-apps/plugin-opener"
 import { ExternalLink, Loader2, Send, X } from "lucide-react"
-import {
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react"
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Markdown } from "@/components/ui/markdown"
@@ -16,11 +10,10 @@ import {
   SheetContent,
   SheetTitle,
 } from "@/components/ui/sheet"
-
+import { formatDate } from "@/lib/time"
 import { linearIssueComments } from "../ipc"
 import type { LinearComment, LinearIssue } from "../types"
 import { PriorityIcon, StatusIcon } from "./issue-icons"
-import { formatDate } from "@/lib/time"
 
 import { Avatar } from "./issue-list"
 
@@ -84,8 +77,7 @@ export function IssuePeekPanel({
 
   if (!shown) return null
 
-  const loadedComments =
-    comments.status === "loaded" ? comments.comments : []
+  const loadedComments = comments.status === "loaded" ? comments.comments : []
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -192,9 +184,7 @@ export function IssuePeekPanel({
               {shown.description?.trim() ? (
                 <Markdown className="text-sm">{shown.description}</Markdown>
               ) : (
-                <p className="text-muted-foreground text-sm">
-                  No description.
-                </p>
+                <p className="text-muted-foreground text-sm">No description.</p>
               )}
             </div>
 

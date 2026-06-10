@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "playground",
+      "runtimeExecutable": "bunx",
+      "runtimeArgs": ["vite", "--port", "1777"],
+      "port": 1777
+    }
+  ]
+}

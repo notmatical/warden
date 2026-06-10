@@ -360,7 +360,6 @@ export function Avatar({
   )
 }
 
-
 /** A translucent rgba derived from a Linear "#rrggbb" state color, for tinting. */
 function tint(hex: string, alpha: number): string {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim())

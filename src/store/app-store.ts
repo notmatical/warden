@@ -1,6 +1,6 @@
 import { create } from "zustand"
 import { devtools } from "zustand/middleware"
-
+import { linearCachedIssues, onLinearChanged } from "@/integrations/linear/ipc"
 import {
   onAgentDelta,
   onAgentEvent,
@@ -9,7 +9,6 @@ import {
 } from "@/lib/events"
 import * as ipc from "@/lib/ipc"
 import { notifyFor } from "@/lib/notify"
-import { linearCachedIssues, onLinearChanged } from "@/integrations/linear/ipc"
 import { reportError } from "./shared"
 import { createGitSlice } from "./slices/git"
 import { createGroupsSlice } from "./slices/groups"
@@ -69,11 +68,13 @@ export const useAppStore = create<AppState>()(
           window.addEventListener("focus", () => void get().loadProviders())
           // Report focus to the backend; remote pollers tier their cadence
           // (hot while focused, slow in background, crawl when idle).
-          window.addEventListener("focus", () =>
-            void ipc.setAppFocusState(true)
+          window.addEventListener(
+            "focus",
+            () => void ipc.setAppFocusState(true)
           )
-          window.addEventListener("blur", () =>
-            void ipc.setAppFocusState(false)
+          window.addEventListener(
+            "blur",
+            () => void ipc.setAppFocusState(false)
           )
           void ipc.setAppFocusState(document.hasFocus())
 
