@@ -1,6 +1,7 @@
-import { AlertTriangle, type LucideIcon } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 import type { ReactNode } from "react"
 
+import { Callout } from "@/components/ui/callout"
 import { cn } from "@/lib/utils"
 
 /** A full-pane state for failures (and other terminal states): icon, title,
@@ -54,31 +55,15 @@ export function ErrorState({
           ) : null}
         </div>
         {detail ? (
-          // Same callout language as the transcript's error rows: tinted
-          // surface + labeled header strip, raw output in plain mono below.
-          <div
-            className={cn(
-              "w-full overflow-hidden rounded-lg border text-left",
-              tone === "destructive"
-                ? "border-destructive/40 bg-destructive/10"
-                : "border-border/60 bg-muted/30"
-            )}
+          <Callout
+            variant={tone === "destructive" ? "destructive" : "info"}
+            className="w-full text-left"
           >
-            <div
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium",
-                tone === "destructive"
-                  ? "border-b border-destructive/20 text-destructive"
-                  : "border-b border-border/60 text-muted-foreground"
-              )}
-            >
-              <AlertTriangle className="size-3 shrink-0" />
-              {detailLabel ?? "Error output"}
-            </div>
-            <pre className="max-h-56 cursor-text select-text overflow-auto px-3 py-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-foreground/80">
+            <p className="font-medium">{detailLabel ?? "Error output"}</p>
+            <pre className="mt-1 max-h-56 cursor-text select-text overflow-auto font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-foreground/80">
               {detail}
             </pre>
-          </div>
+          </Callout>
         ) : null}
         {actions ? (
           <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
