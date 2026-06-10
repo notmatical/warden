@@ -1,6 +1,8 @@
 import { Link2, ListTodo, Loader2, RefreshCw, Settings2 } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
 
+import { CountChip } from "@/components/common/count-chip"
+import { FILTER_SURFACE } from "@/components/common/filter-menu"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store/app-store"
@@ -68,42 +70,98 @@ export function FolderTasksSection({ projectId }: { projectId: string }) {
     comments: LinearComment[]
   } | null>(null)
 
+  const sectionTitle = (
+    <span className="flex items-center gap-2">
+      <h2 className="font-medium text-foreground text-sm">Tasks</h2>
+      {phase === "bound" ? (
+        <>
+          <CountChip>{scoped.length}</CountChip>
+          <span className="text-muted-foreground text-xs">
+            your issues in {teamName}
+          </span>
+        </>
+      ) : null}
+    </span>
+  )
+
+  if (phase === "bound") {
+    return (
+      <section className="flex flex-col gap-3">
+        <IssueList
+          issues={scoped}
+          syncing={syncing}
+          error={error}
+          emptyMessage="No issues assigned to you in this team."
+          onSelect={(issue) => setPeekId(issue.id)}
+          scroll={false}
+          leading={sectionTitle}
+          trailing={
+            <>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                aria-label="Refresh"
+                onClick={() => void syncNow()}
+                disabled={syncing}
+                className={cn(
+                  "size-8 text-muted-foreground hover:bg-input/70 hover:text-foreground dark:hover:bg-input/70",
+                  FILTER_SURFACE
+                )}
+              >
+                <RefreshCw
+                  className={cn("size-3.5", syncing && "animate-spin")}
+                />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                aria-label="Edit binding"
+                onClick={() => setBindOpen(true)}
+                className={cn(
+                  "size-8 text-muted-foreground hover:bg-input/70 hover:text-foreground dark:hover:bg-input/70",
+                  FILTER_SURFACE
+                )}
+              >
+                <Settings2 className="size-3.5" />
+              </Button>
+            </>
+          }
+        />
+
+        <IssuePeekPanel
+          open={peekId !== null}
+          issue={peekIssue}
+          onOpenChange={(open) => {
+            if (!open) setPeekId(null)
+          }}
+          onSendToAgent={(issue, comments) => setSend({ issue, comments })}
+        />
+
+        <SendToAgentDialog
+          issue={send?.issue ?? null}
+          comments={send?.comments ?? []}
+          open={send !== null}
+          onOpenChange={(open) => {
+            if (!open) setSend(null)
+          }}
+          defaultProjectId={projectId}
+          onSent={() => setPeekId(null)}
+        />
+
+        <BindRepoDialog
+          projectId={projectId}
+          existing={binding}
+          open={bindOpen}
+          onOpenChange={setBindOpen}
+          onBound={() => void refresh()}
+        />
+      </section>
+    )
+  }
+
   return (
     <section className="flex flex-col gap-3">
-      <div className="flex h-7 shrink-0 items-center gap-2">
-        <h2 className="font-medium text-foreground text-sm">Tasks</h2>
-        {phase === "bound" ? (
-          <span className="text-muted-foreground text-xs">
-            {scoped.length} · your issues in {teamName}
-          </span>
-        ) : null}
-        <div className="flex-1" />
-        {phase === "bound" ? (
-          <>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Refresh"
-              onClick={() => void syncNow()}
-              disabled={syncing}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <RefreshCw
-                className={cn("size-3.5", syncing && "animate-spin")}
-              />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Edit binding"
-              onClick={() => setBindOpen(true)}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <Settings2 className="size-3.5" />
-            </Button>
-          </>
-        ) : null}
-      </div>
+      <div className="flex h-8 shrink-0 items-center gap-2">{sectionTitle}</div>
 
       {phase === "loading" ? (
         <EmptyCard>
@@ -124,7 +182,7 @@ export function FolderTasksSection({ projectId }: { projectId: string }) {
             </Button>
           }
         />
-      ) : phase === "unbound" ? (
+      ) : (
         <EmptyCard
           icon={<Link2 className="size-5" />}
           title="Bind this repo to a Linear team"
@@ -135,36 +193,7 @@ export function FolderTasksSection({ projectId }: { projectId: string }) {
             </Button>
           }
         />
-      ) : (
-        <IssueList
-          issues={scoped}
-          syncing={syncing}
-          error={error}
-          emptyMessage="No issues assigned to you in this team."
-          onSelect={(issue) => setPeekId(issue.id)}
-          scroll={false}
-        />
       )}
-
-      <IssuePeekPanel
-        open={peekId !== null}
-        issue={peekIssue}
-        onOpenChange={(open) => {
-          if (!open) setPeekId(null)
-        }}
-        onSendToAgent={(issue, comments) => setSend({ issue, comments })}
-      />
-
-      <SendToAgentDialog
-        issue={send?.issue ?? null}
-        comments={send?.comments ?? []}
-        open={send !== null}
-        onOpenChange={(open) => {
-          if (!open) setSend(null)
-        }}
-        defaultProjectId={projectId}
-        onSent={() => setPeekId(null)}
-      />
 
       <BindRepoDialog
         projectId={projectId}
