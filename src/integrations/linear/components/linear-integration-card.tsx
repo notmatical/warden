@@ -59,6 +59,8 @@ export function LinearIntegrationCard() {
     <ToolCardShell
       icon={LinearIcon}
       name="Linear"
+      meta={phase === "connected" ? "Personal API key" : undefined}
+      ghost={phase !== "connected"}
       pill={
         phase === "connected"
           ? { kind: "ok", label: "Connected" }
