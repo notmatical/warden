@@ -189,6 +189,20 @@ const MIGRATIONS: &[&str] = &[
         payload     TEXT NOT NULL,
         synced_at   TEXT NOT NULL
     );
+
+    -- Detached agent processes that may outlive the app (survive & reattach).
+    -- `out_offset` is how many bytes of `out_file` have been drained into
+    -- `events`; `proc_id` is a per-spawn generation so a stale tailer can't
+    -- clobber a newer spawn's row.
+    CREATE TABLE agent_procs (
+        session_id  TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+        proc_id     TEXT NOT NULL,
+        pid         INTEGER NOT NULL,
+        out_file    TEXT NOT NULL,
+        err_file    TEXT NOT NULL,
+        out_offset  INTEGER NOT NULL DEFAULT 0,
+        spawned_at  TEXT NOT NULL
+    );
     "#,
 ];
 

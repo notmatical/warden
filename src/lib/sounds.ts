@@ -75,7 +75,9 @@ async function playFile(url: string, volume: number): Promise<void> {
 // Synthesized sounds
 // ---------------------------------------------------------------------------
 
-type Partial = {
+// "Partial" in the synthesis sense (one tone component) — named to avoid
+// shadowing TypeScript's built-in Partial<T>.
+type TonePartial = {
   freq: number
   /** Seconds after the sound starts. */
   at?: number
@@ -88,7 +90,7 @@ type Partial = {
   glideTo?: number
 }
 
-function playPartials(partials: Partial[], volume: number): void {
+function playPartials(partials: TonePartial[], volume: number): void {
   const ac = audioContext()
   const now = ac.currentTime + 0.02
   // Master gain keeps even multi-partial sounds comfortably quiet.
@@ -117,7 +119,7 @@ function playPartials(partials: Partial[], volume: number): void {
   }
 }
 
-const SYNTH_SOUNDS: Record<SynthSound, Partial[]> = {
+const SYNTH_SOUNDS: Record<SynthSound, TonePartial[]> = {
   // Quick downward blip; barely-there.
   pop: [{ freq: 520, glideTo: 180, gain: 0.9, decay: 0.12 }],
 }
