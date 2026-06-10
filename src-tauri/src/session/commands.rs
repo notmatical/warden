@@ -110,7 +110,7 @@ pub async fn create_session(
         },
         None => {
             let isolate = options.isolate.unwrap_or(kind != SessionKind::Terminal);
-            provision_working_dir(&app, &project, isolate, None)?
+            provision_working_dir(&project, isolate, None)?
         }
     };
     // An explicit backend wins; otherwise it follows from the model id, since
@@ -334,16 +334,19 @@ pub async fn delete_session(
             .count_sessions_sharing_workdir(&session.working_dir, &session_id)
             .unwrap_or(0);
         let worktree = std::path::PathBuf::from(&session.working_dir);
-        if shared == 0 && git::is_managed_worktree(&app, &worktree) {
+        if shared == 0 {
             if let Ok(project) = state.store.get_project(&session.project_id) {
-                // Background: teardown commands may take a while; deletion
-                // shouldn't. The branch goes too — the UI confirmed any
-                // unmerged work via session_delete_check.
-                git::setup::spawn_teardown_and_remove(
-                    project.path.into(),
-                    worktree,
-                    session.branch.clone(),
-                );
+                let repo = std::path::Path::new(&project.path);
+                if git::is_managed_worktree(&app, repo, &worktree) {
+                    // Background: teardown commands may take a while; deletion
+                    // shouldn't. The branch goes too — the UI confirmed any
+                    // unmerged work via session_delete_check.
+                    git::setup::spawn_teardown_and_remove(
+                        project.path.into(),
+                        worktree,
+                        session.branch.clone(),
+                    );
+                }
             }
         }
     }
@@ -420,7 +423,7 @@ pub async fn set_session_isolation(
         );
     }
 
-    let dir = provision_working_dir(&app, &project, isolate, None)?;
+    let dir = provision_working_dir(&project, isolate, None)?;
     state.store.update_session_workdir(
         &session_id,
         &dir.working_dir,

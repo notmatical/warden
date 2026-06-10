@@ -23,39 +23,48 @@ pub struct ProvisionedDir {
     pub is_isolated: bool,
 }
 
-/// Root for isolated worktrees: `~/warden`. Visible and grouped per repo, rather
-/// than buried under the app-data dir.
-fn worktrees_root(app: &AppHandle) -> Result<PathBuf> {
-    Ok(app.path().home_dir()?.join("warden"))
+/// Root for isolated worktrees: `<repo>/.warden/worktrees`. Lives inside the
+/// project — alongside `.warden/config.json` — so worktrees travel and die
+/// with the repo instead of accumulating under the home dir.
+fn worktrees_root(repo: &Path) -> PathBuf {
+    repo.join(".warden").join("worktrees")
+}
+
+/// Create the worktrees root with a self-ignoring `.gitignore`, so the nested
+/// checkouts never appear as untracked files in the main repo.
+fn ensure_worktrees_root(repo: &Path) -> Result<PathBuf> {
+    let root = worktrees_root(repo);
+    fs::create_dir_all(&root)?;
+    let gitignore = root.join(".gitignore");
+    if !gitignore.exists() {
+        fs::write(&gitignore, "*\n")?;
+    }
+    Ok(root)
 }
 
 /// Whether `path` lives under warden's worktrees root — the only place warden
 /// is allowed to delete. A session pointed at any external directory (explicit
 /// working_dir, imported checkout) is never removed.
-pub fn is_managed_worktree(app: &AppHandle, path: &Path) -> bool {
-    worktrees_root(app)
-        .map(|root| path.starts_with(&root))
+pub fn is_managed_worktree(app: &AppHandle, repo: &Path, path: &Path) -> bool {
+    if path.starts_with(worktrees_root(repo)) {
+        return true;
+    }
+    // Legacy root (`~/warden`) — sessions provisioned before worktrees moved
+    // into the repo still clean up when they end.
+    app.path()
+        .home_dir()
+        .map(|home| path.starts_with(home.join("warden")))
         .unwrap_or(false)
 }
 
 /// Provision an isolated worktree checked out to an existing PR's head branch,
 /// for reviewing it. `base` is the PR's base branch (its merge target).
-pub fn provision_pr_worktree(
-    app: &AppHandle,
-    project: &Project,
-    number: i64,
-    base: &str,
-) -> Result<ProvisionedDir> {
+pub fn provision_pr_worktree(project: &Project, number: i64, base: &str) -> Result<ProvisionedDir> {
     let repo = Path::new(&project.path);
     let branch = format!("warden-pr-{number}");
     git::fetch_pr(repo, number, &branch)?;
 
-    let dest = worktrees_root(app)?
-        .join(sanitize(&project.name))
-        .join(format!("pr-{number}"));
-    if let Some(parent) = dest.parent() {
-        fs::create_dir_all(parent)?;
-    }
+    let dest = ensure_worktrees_root(repo)?.join(format!("pr-{number}"));
     git::add_worktree(repo, &dest, &branch)?;
 
     Ok(ProvisionedDir {
@@ -94,9 +103,8 @@ fn sanitize(name: &str) -> String {
 /// - Git project, `isolate = false` → runs in the repo's main checkout, but
 ///   still records the current HEAD so the UI can show a read-only diff.
 /// - Git project, `isolate = true` → a fresh worktree on a `warden/<short>`
-///   branch under `~/warden/<repo>/<short>`, rooted at the current HEAD.
+///   branch under `<repo>/.warden/worktrees/<short>`, rooted at the current HEAD.
 pub fn provision_working_dir(
-    app: &AppHandle,
     ws: &Project,
     isolate: bool,
     branch_hint: Option<&str>,
@@ -137,10 +145,7 @@ pub fn provision_working_dir(
         Some(b) => format!("{}-{short}", sanitize(b)),
         None => short.clone(),
     };
-    let dest = worktrees_root(app)?.join(sanitize(&ws.name)).join(&dir_seg);
-    if let Some(parent) = dest.parent() {
-        fs::create_dir_all(parent)?;
-    }
+    let dest = ensure_worktrees_root(repo)?.join(&dir_seg);
     git::create_worktree(repo, &dest, &branch, &base)?;
 
     Ok(ProvisionedDir {
