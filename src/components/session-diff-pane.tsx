@@ -88,31 +88,39 @@ function useCodeViewOptions(
         variant === "diff"
           ? `
         * { user-select: text; -webkit-user-select: text; }
+        /* Each item is its own shadow host wrapping header + code, so the
+           card chrome lives on :host — bordering [data-diff] alone rounds
+           only the code half. overflow: clip (not hidden) keeps sticky
+           headers working. */
         :host {
           /* Drive every computed tint (line bgs, gutters, +/- shades) from
-             the app's card color instead of the shiki theme's canvas… */
+             the app's card color instead of the shiki theme's canvas. */
           --diffs-light-bg: var(--card);
           --diffs-dark-bg: var(--card);
-          /* …but keep the component's own canvas clear, so the space between
-             cards is the pane background. */
-          background-color: transparent;
           /* Lines wrap — the reserved horizontal-scrollbar gutter is a dead
              strip around the code. */
           --diffs-scrollbar-gutter-override: 0px;
-        }
-        [data-code] { scrollbar-width: none; }
-        [data-code]::-webkit-scrollbar { display: none; }
-        /* The chevron in the prefix slot replaces Pierre's status badge. */
-        [data-diffs-header='default'] [data-change-icon] { display: none; }
-        [data-diffs-header='default'] [data-additions-count] { color: var(--positive, #3fb950); }
-        [data-diffs-header='default'] [data-deletions-count] { color: var(--destructive, #f85149); }
-        /* Each file is a rounded, hairline-bordered card. overflow: clip
-           (not hidden) keeps sticky headers working. */
-        [data-diff], [data-file] {
+          /* Hunk-expand strips: the default mixes 15% toward white; keep
+             them a whisper above the card instead. */
+          --diffs-bg-separator-override: color-mix(in lab, var(--diffs-bg) 95%, var(--diffs-mixer));
+          background-color: var(--card);
           border: 1px solid var(--border);
           border-radius: 10px;
           overflow: clip;
         }
+        [data-code] { scrollbar-width: none; }
+        [data-code]::-webkit-scrollbar { display: none; }
+        /* GitHub-style file header: compact, quietly separated from the code. */
+        [data-diffs-header='default'] {
+          font-size: 12px;
+          padding-inline: 10px;
+          border-bottom: 1px solid var(--border);
+        }
+        [data-diffs-header='default'] [data-change-icon] { display: none; }
+        [data-diffs-header='default'] [data-additions-count] { color: var(--positive, #3fb950); }
+        [data-diffs-header='default'] [data-deletions-count] { color: var(--destructive, #f85149); }
+        /* Expand controls read as affordances, not banners. */
+        [data-separator-content], [data-expand-button] { font-size: 11px; }
       `
           : `
         * { user-select: text; -webkit-user-select: text; }
@@ -212,18 +220,21 @@ function FilesView({
 
   const renderHeaderPrefix = useCallback(
     (item: CodeViewItem<undefined>) => (
-      <button
-        type="button"
-        onClick={() => toggleCollapsed(item.id)}
-        aria-label={collapsed.has(item.id) ? "Expand file" : "Collapse file"}
-        className="rounded p-1 text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground"
-      >
-        {collapsed.has(item.id) ? (
-          <ChevronRight className="size-3.5" />
-        ) : (
-          <ChevronDown className="size-3.5" />
-        )}
-      </button>
+      <span className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => toggleCollapsed(item.id)}
+          aria-label={collapsed.has(item.id) ? "Expand file" : "Collapse file"}
+          className="rounded p-1 text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground"
+        >
+          {collapsed.has(item.id) ? (
+            <ChevronRight className="size-3.5" />
+          ) : (
+            <ChevronDown className="size-3.5" />
+          )}
+        </button>
+        <FileCode2 className="size-3.5 shrink-0 text-muted-foreground/70" />
+      </span>
     ),
     [collapsed, toggleCollapsed]
   )
