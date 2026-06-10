@@ -1,8 +1,8 @@
 import { useEffect } from "react"
 
 import { GitHubIcon } from "@/components/icons/brand"
-import { IntegrationCard } from "@/components/settings/integration-card"
 import { SettingsSection } from "@/components/settings/settings-section"
+import { ToolCard } from "@/components/settings/tool-card"
 import { LinearIntegrationCard } from "@/integrations/linear/components/linear-integration-card"
 import { runInLoginTerminal, shellBin } from "@/lib/cli-login"
 import { useAppStore } from "@/store/app-store"
@@ -25,7 +25,7 @@ export function IntegrationsSection() {
     >
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {status ? (
-          <IntegrationCard
+          <ToolCard
             status={status}
             icon={GitHubIcon}
             description="Open issues, pull requests, and reviews from your sessions."
