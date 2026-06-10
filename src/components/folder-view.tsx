@@ -10,7 +10,7 @@ import {
   Tag,
   Trash2,
 } from "lucide-react"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { AgentProvidersIcon } from "@/components/agent-providers-icon"
 import {
@@ -56,6 +56,9 @@ const COLS =
   "grid grid-cols-[minmax(0,1.5fr)_minmax(0,1.3fr)_minmax(0,1fr)_108px_92px_60px] items-center gap-x-4"
 
 const MENU_ITEM = "gap-2 text-[13px]"
+
+/** Sessions rendered per infinite-scroll page. */
+const PAGE = 15
 
 const STATUS: Record<
   SessionStatus,
@@ -224,9 +227,25 @@ function SessionsSection({ projectId }: { projectId: string }) {
     fn()
   }
 
-  // Long histories render incrementally — the dashboard stacks Tasks below.
-  const PAGE = 15
+  // Long histories render incrementally: an in-table sentinel grows the limit
+  // as it scrolls into view, so the dashboard stays light without a button.
   const [limit, setLimit] = useState(PAGE)
+  const sentinelIo = useRef<IntersectionObserver | null>(null)
+  // Callback ref + key={limit}: every bump remounts the sentinel, re-arming a
+  // fresh observer that fires immediately if it is still in view (auto-fill).
+  const observeSentinel = useCallback((el: HTMLDivElement | null) => {
+    sentinelIo.current?.disconnect()
+    sentinelIo.current = null
+    if (!el) return
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) setLimit((l) => l + PAGE)
+      },
+      { rootMargin: "240px" }
+    )
+    io.observe(el)
+    sentinelIo.current = io
+  }, [])
 
   const [search, setSearch] = useState("")
   // Empty selection = no filter, matching the shared FilterMenu convention.
@@ -276,7 +295,7 @@ function SessionsSection({ projectId }: { projectId: string }) {
   return (
     <section className="flex flex-col gap-3">
       <div className="flex h-7 shrink-0 flex-wrap items-center gap-2">
-        <h2 className="font-medium text-foreground text-sm">Sessions</h2>
+        <h2 className="font-semibold text-base text-foreground">Sessions</h2>
         <CountChip>{rows.length}</CountChip>
         <div className="flex-1" />
         <Input
@@ -507,14 +526,13 @@ function SessionsSection({ projectId }: { projectId: string }) {
             })
           )}
         {rows.length > limit ? (
-          <button
-            type="button"
-            onClick={() => setLimit((l) => l + PAGE)}
-            className="w-full border-foreground/5 border-t px-4 py-2.5 text-center text-muted-foreground text-xs transition-colors hover:bg-accent/40 hover:text-foreground"
+          <div
+            key={limit}
+            ref={observeSentinel}
+            className="flex items-center justify-center border-foreground/5 border-t px-4 py-2.5 text-muted-foreground/70 text-xs tabular-nums"
           >
-            Show {Math.min(PAGE, rows.length - limit)} more (
-            {rows.length - limit} hidden)
-          </button>
+            {limit} of {rows.length}
+          </div>
         ) : null}
       </DataTable>
     </section>
