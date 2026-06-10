@@ -15,6 +15,21 @@ export function GitHubIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+/** Linear mark; inherits color via `currentColor`. */
+export function LinearIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M2.886 4.18A11.982 11.982 0 0 1 12.005 0C18.629 0 24 5.371 24 11.995a11.982 11.982 0 0 1-4.18 9.119L2.886 4.18Zm-1.078 1.541a11.93 11.93 0 0 0-.978 2.103l15.346 15.346a11.93 11.93 0 0 0 2.103-.978L1.808 5.721Zm-1.46 4.537a12.058 12.058 0 0 0 0 3.484l8.91 8.91a12.058 12.058 0 0 0 3.484 0L.348 10.258Zm.665 6.043a12.045 12.045 0 0 0 5.686 5.686L1.013 16.3Z" />
+    </svg>
+  )
+}
+
 /** Anthropic wordmark glyph; inherits color via `currentColor`. Used for agent
  *  sessions running Anthropic (Claude) models. */
 export function AnthropicIcon(props: SVGProps<SVGSVGElement>) {
