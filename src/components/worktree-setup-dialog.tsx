@@ -173,7 +173,7 @@ export function WorktreeSetupDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="w-[min(620px,calc(100vw-2rem))] max-w-none sm:max-w-none">
-        <DialogHeader>
+        <DialogHeader className="pr-8">
           <DialogTitle>Worktree commands</DialogTitle>
           <DialogDescription>
             Run automatically around every isolated worktree. Saved to{" "}
@@ -182,17 +182,18 @@ export function WorktreeSetupDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {/* Tab bar + save indicator, Superset-style: quiet underline tabs. */}
-        <div className="flex items-center border-b border-border/60">
+        {/* Tab bar + save indicator, Superset-style: quiet underline tabs,
+            flush with the content's left edge. */}
+        <div className="flex items-center gap-4 border-b border-border/60">
           {TABS.map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => setTab(t.id)}
               className={cn(
-                "relative h-8 px-3 text-sm font-medium transition-colors",
+                "relative h-8 text-sm font-medium transition-colors",
                 tab === t.id
-                  ? "text-foreground after:absolute after:inset-x-2 after:-bottom-px after:h-px after:bg-foreground"
+                  ? "text-foreground after:absolute after:inset-x-0 after:-bottom-px after:h-px after:bg-foreground"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
@@ -254,7 +255,7 @@ export function WorktreeSetupDialog({
                       {varToken(v.name)}
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent className="max-w-64">
+                  <TooltipContent side="bottom" className="max-w-64">
                     {v.description} Click to insert at the cursor.
                   </TooltipContent>
                 </Tooltip>
