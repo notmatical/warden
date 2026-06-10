@@ -3,6 +3,8 @@ import { ListTodo, Loader2, MoreHorizontal, RefreshCw } from "lucide-react"
 import { type FormEvent, useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 
+import { CountChip } from "@/components/common/count-chip"
+import { FILTER_SURFACE } from "@/components/common/filter-menu"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -150,47 +152,57 @@ export function LinearTasksView() {
 
   return (
     <div className="flex h-full flex-col gap-4 p-6">
-      <div className="flex shrink-0 items-center gap-2.5">
-        <ListTodo className="size-4 shrink-0 text-muted-foreground" />
-        <h1 className="font-medium text-foreground">Tasks</h1>
-        <span className="text-muted-foreground text-xs tabular-nums">
-          {issues.length}
-        </span>
-        <div className="flex-1" />
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Refresh"
-          onClick={() => void syncNow()}
-          disabled={syncing}
-          className="text-muted-foreground hover:text-foreground"
-        >
-          <RefreshCw className={cn("size-3.5", syncing && "animate-spin")} />
-        </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Linear actions"
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <MoreHorizontal className="size-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-40">
-            <DropdownMenuItem onSelect={() => void handleDisconnect()}>
-              Disconnect Linear
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
       <IssueList
         issues={issues}
         syncing={syncing}
         error={error}
         onSelect={(issue) => setPeekId(issue.id)}
+        leading={
+          <span className="flex items-center gap-2.5">
+            <ListTodo className="size-4 shrink-0 text-muted-foreground" />
+            <h1 className="font-medium text-foreground">Tasks</h1>
+            <CountChip>{issues.length}</CountChip>
+          </span>
+        }
+        trailing={
+          <>
+            <Button
+              variant="outline"
+              size="icon-sm"
+              aria-label="Refresh"
+              onClick={() => void syncNow()}
+              disabled={syncing}
+              className={cn(
+                "size-8 text-muted-foreground hover:bg-input/70 hover:text-foreground dark:hover:bg-input/70",
+                FILTER_SURFACE
+              )}
+            >
+              <RefreshCw
+                className={cn("size-3.5", syncing && "animate-spin")}
+              />
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  aria-label="Linear actions"
+                  className={cn(
+                    "size-8 text-muted-foreground hover:bg-input/70 hover:text-foreground dark:hover:bg-input/70",
+                    FILTER_SURFACE
+                  )}
+                >
+                  <MoreHorizontal className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-40">
+                <DropdownMenuItem onSelect={() => void handleDisconnect()}>
+                  Disconnect Linear
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        }
       />
 
       <IssuePeekPanel

@@ -22,7 +22,12 @@ import { useConfirm } from "@/components/confirm-dialog"
 import { ClaudeIcon, CodexIcon } from "@/components/icons/brand"
 import { LabelChip, LabelPicker, labelColor } from "@/components/label-picker"
 import { SessionFavicon } from "@/components/session-favicon"
-import { Badge } from "@/components/ui/badge"
+import { CountChip } from "@/components/common/count-chip"
+import {
+  FILTER_SURFACE,
+  FilterMenu,
+  SwatchStack,
+} from "@/components/common/filter-menu"
 import { Button } from "@/components/ui/button"
 import {
   ContextMenu,
@@ -33,7 +38,6 @@ import {
 } from "@/components/ui/context-menu"
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -52,9 +56,6 @@ const COLS =
   "grid grid-cols-[minmax(0,1.5fr)_minmax(0,1.3fr)_minmax(0,1fr)_108px_92px_60px] items-center gap-x-4"
 
 const MENU_ITEM = "gap-2 text-[13px]"
-
-/** Filter-bar control surface — shared by search + status (matches Workflows). */
-const FILTER_SURFACE = "border-border/60 bg-input/50 dark:bg-input/50"
 
 const STATUS: Record<
   SessionStatus,
@@ -224,32 +225,26 @@ function SessionsSection({ projectId }: { projectId: string }) {
   }
 
   // Long histories render incrementally — the dashboard stacks Tasks below.
-  const PAGE = 25
+  const PAGE = 15
   const [limit, setLimit] = useState(PAGE)
 
   const [search, setSearch] = useState("")
-  const [statusFilter, setStatusFilter] = useState<Set<SessionStatus>>(
-    () => new Set(STATUS_ORDER)
+  // Empty selection = no filter, matching the shared FilterMenu convention.
+  const [statusFilter, setStatusFilter] = useState<Set<string>>(
+    () => new Set()
   )
   const [labelFilter, setLabelFilter] = useState<Set<string>>(() => new Set())
-  const selectedStatusCount = STATUS_ORDER.filter((s) =>
-    statusFilter.has(s)
-  ).length
-  const allStatuses = selectedStatusCount === STATUS_ORDER.length
+  const allStatuses = statusFilter.size === 0
 
-  const toggleStatus = (s: SessionStatus, on: boolean) =>
-    setStatusFilter((prev) => {
+  const toggleIn = (
+    set: (fn: (prev: Set<string>) => Set<string>) => void,
+    value: string,
+    on: boolean
+  ) =>
+    set((prev) => {
       const next = new Set(prev)
-      if (on) next.add(s)
-      else next.delete(s)
-      return next
-    })
-
-  const toggleLabelFilter = (id: string, on: boolean) =>
-    setLabelFilter((prev) => {
-      const next = new Set(prev)
-      if (on) next.add(id)
-      else next.delete(id)
+      if (on) next.add(value)
+      else next.delete(value)
       return next
     })
 
@@ -282,9 +277,7 @@ function SessionsSection({ projectId }: { projectId: string }) {
     <section className="flex flex-col gap-3">
       <div className="flex h-7 shrink-0 flex-wrap items-center gap-2">
         <h2 className="font-medium text-foreground text-sm">Sessions</h2>
-        <span className="text-muted-foreground text-xs tabular-nums">
-          {rows.length}
-        </span>
+        <CountChip>{rows.length}</CountChip>
         <div className="flex-1" />
         <Input
           value={search}
@@ -292,116 +285,44 @@ function SessionsSection({ projectId }: { projectId: string }) {
           placeholder="Search sessions…"
           className={cn("h-8 w-48", FILTER_SURFACE)}
         />
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              className={cn(
-                "h-8 gap-2 hover:bg-input/70 dark:hover:bg-input/70",
-                FILTER_SURFACE
-              )}
-            >
-              <span className="flex items-center">
-                {STATUS_ORDER.filter((s) => statusFilter.has(s)).map((s, i) => (
-                  <span
-                    key={s}
-                    className={cn(
-                      "size-2 rounded-full ring-2 ring-background",
-                      STATUS[s].dot,
-                      i > 0 && "-ml-1"
-                    )}
-                  />
-                ))}
-              </span>
-              Status
-              {!allStatuses ? (
-                <Badge
-                  variant="secondary"
-                  className="h-[18px] justify-center rounded-[5px] px-1 font-mono text-[10px] tabular-nums"
-                >
-                  {selectedStatusCount}
-                </Badge>
-              ) : null}
-              <ChevronDown className="size-3.5 text-muted-foreground/60" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-44">
-            {STATUS_ORDER.map((s) => (
-              <DropdownMenuCheckboxItem
-                key={s}
-                checked={statusFilter.has(s)}
-                onCheckedChange={(c) => toggleStatus(s, c === true)}
-                onSelect={(e) => e.preventDefault()}
-                className="gap-2 text-[13px]"
-              >
-                <span className={cn("size-2 rounded-full", STATUS[s].dot)} />
-                {STATUS[s].label}
-              </DropdownMenuCheckboxItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              className={cn(
-                "h-8 gap-2 hover:bg-input/70 dark:hover:bg-input/70",
-                FILTER_SURFACE
-              )}
-            >
-              <Tag className="size-3.5 text-muted-foreground/70" />
-              Labels
-              {labelFilter.size > 0 ? (
-                <Badge
-                  variant="secondary"
-                  className="h-[18px] justify-center rounded-[5px] px-1 font-mono text-[10px] tabular-nums"
-                >
-                  {labelFilter.size}
-                </Badge>
-              ) : null}
-              <ChevronDown className="size-3.5 text-muted-foreground/60" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-52">
-            {(labels ?? []).length === 0 ? (
-              <div className="px-2 py-1.5 text-muted-foreground text-xs">
-                No labels in this folder yet.
-              </div>
-            ) : (
-              (labels ?? []).map((l) => (
-                <DropdownMenuCheckboxItem
-                  key={l.id}
-                  checked={labelFilter.has(l.id)}
-                  onCheckedChange={(c) => toggleLabelFilter(l.id, c === true)}
-                  onSelect={(e) => e.preventDefault()}
-                  className="gap-2 text-[13px]"
-                >
-                  <span
-                    className={cn(
-                      "size-2 rounded-full",
-                      labelColor(l.color).dot
-                    )}
-                  />
-                  {l.name}
-                </DropdownMenuCheckboxItem>
-              ))
-            )}
-            {labelFilter.size > 0 ? (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onSelect={() => setLabelFilter(new Set())}
-                  className="text-[13px] text-muted-foreground"
-                >
-                  Clear filter
-                </DropdownMenuItem>
-              </>
-            ) : null}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <FilterMenu
+          label="Status"
+          icon={
+            <SwatchStack
+              swatches={STATUS_ORDER.map((s) => (
+                <span
+                  key={s}
+                  className={cn("size-2.5 rounded-full", STATUS[s].dot)}
+                />
+              ))}
+            />
+          }
+          options={STATUS_ORDER.map((s) => ({
+            value: s,
+            label: STATUS[s].label,
+            swatch: (
+              <span className={cn("size-2 rounded-full", STATUS[s].dot)} />
+            ),
+          }))}
+          selected={statusFilter}
+          onToggle={(v, on) => toggleIn(setStatusFilter, v, on)}
+          onClear={() => setStatusFilter(new Set())}
+        />
+        <FilterMenu
+          label="Labels"
+          options={(labels ?? []).map((l) => ({
+            value: l.id,
+            label: l.name,
+            swatch: (
+              <span
+                className={cn("size-2 rounded-full", labelColor(l.color).dot)}
+              />
+            ),
+          }))}
+          selected={labelFilter}
+          onToggle={(v, on) => toggleIn(setLabelFilter, v, on)}
+          onClear={() => setLabelFilter(new Set())}
+        />
       </div>
 
       <DataTable>
