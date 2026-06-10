@@ -87,7 +87,7 @@ const REGISTRY: Partial<Record<ContentKind, Entry>> = {
     View: ({ refId }) => <SessionDiffPane refId={refId} />,
     title: (s, ref) => {
       const title = s.sessions[diffSessionIdOf(ref)]?.title
-      return title ? `Diff · ${title}` : "Diff"
+      return title ? `Changes · ${title}` : "Changes"
     },
   },
 }

@@ -37,10 +37,20 @@ import type { CheckStatus, Project, RepoStatus } from "@/types"
 // Stable empty reference so the `?? EMPTY` fallback doesn't allocate each run.
 const EMPTY: Project[] = []
 
-function Counter({ added, removed }: { added: number; removed: number }) {
+/** The chip's +N/−N changed-lines counter. With `onClick` (the primary repo of
+ *  a session with a diff base) it's the doorway to the Changes tab. */
+function Counter({
+  added,
+  removed,
+  onClick,
+}: {
+  added: number
+  removed: number
+  onClick?: () => void
+}) {
   if (added === 0 && removed === 0) return null
-  return (
-    <span className="inline-flex items-center gap-1 tabular-nums">
+  const inner = (
+    <>
       <span
         className={cn(
           added > 0 ? "text-emerald-500" : "text-muted-foreground/60"
@@ -55,7 +65,28 @@ function Counter({ added, removed }: { added: number; removed: number }) {
       >
         −{removed}
       </span>
-    </span>
+    </>
+  )
+  if (!onClick) {
+    return (
+      <span className="inline-flex items-center gap-1 tabular-nums">
+        {inner}
+      </span>
+    )
+  }
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={onClick}
+          className="-mx-0.5 inline-flex items-center gap-1 rounded px-0.5 tabular-nums transition hover:bg-muted hover:text-foreground"
+        >
+          {inner}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>View the session's changes</TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -110,6 +141,7 @@ function StatusChip({
   onRemove,
   onPush,
   onPull,
+  onOpenDiff,
   pushing,
   pulling,
 }: {
@@ -117,6 +149,7 @@ function StatusChip({
   onRemove?: () => void
   onPush?: () => void
   onPull?: () => void
+  onOpenDiff?: () => void
   pushing?: boolean
   pulling?: boolean
 }) {
@@ -140,8 +173,9 @@ function StatusChip({
         </span>
       ) : null}
       <Counter
-        added={status.uncommittedAdded}
-        removed={status.uncommittedRemoved}
+        added={status.added}
+        removed={status.removed}
+        onClick={onOpenDiff}
       />
       {status.ahead > 0 ? (
         <AheadBehind
@@ -361,6 +395,9 @@ export function GitStatusChips({
   const hasRemote = primary?.hasRemote ?? false
   const canSync =
     !!session?.isIsolated && !session.mergedAt && (primary?.behind ?? 0) > 0
+  // Any session that recorded a fork point can show its changes — isolation
+  // is irrelevant; in-checkout sessions diff against HEAD-at-start.
+  const canViewDiff = !!session?.baseSha && !session.mergedAt
 
   // Re-check the PR's state whenever this session's view mounts.
   const prNumber = session?.prNumber ?? null
@@ -430,6 +467,11 @@ export function GitStatusChips({
           }
           onPush={status.isPrimary && status.hasRemote ? push : undefined}
           onPull={status.isPrimary && status.hasRemote ? pull : undefined}
+          onOpenDiff={
+            status.isPrimary && canViewDiff
+              ? () => openTab(diffTabId(sessionId))
+              : undefined
+          }
           pushing={status.isPrimary && pending === "push"}
           pulling={status.isPrimary && pending === "pull"}
         />
@@ -455,16 +497,21 @@ export function GitStatusChips({
             checkStatus={session.prCheckStatus}
           />
         ) : null}
-        {session?.isIsolated && !session.mergedAt ? (
-          <Button
-            variant="ghost"
-            size="xs"
-            onClick={() => openTab(diffTabId(sessionId))}
-            className="gap-1.5 text-muted-foreground hover:text-foreground"
-          >
-            <FileDiff className="size-3.5" />
-            Diff
-          </Button>
+        {canViewDiff ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label="View the session's changes"
+                onClick={() => openTab(diffTabId(sessionId))}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <FileDiff className="size-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Changes & files</TooltipContent>
+          </Tooltip>
         ) : null}
         <LandSessionButton
           sessionId={sessionId}
