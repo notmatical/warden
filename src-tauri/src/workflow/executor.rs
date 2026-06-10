@@ -117,7 +117,7 @@ async fn run_steps(ctx: &RunContext) -> Result<Outcome> {
             }
         }
         None => {
-            let dir = provision_working_dir(&ctx.app, &project, true, Some(&ctx.branch))?;
+            let dir = provision_working_dir(&project, true, Some(&ctx.branch))?;
             // Run repo setup before the first node so agents find a ready tree.
             if dir.is_isolated {
                 if let Err(reason) =

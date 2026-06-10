@@ -73,13 +73,16 @@ fn poll_once(app: &AppHandle) {
                 .count_sessions_sharing_workdir(&session.working_dir, &session.id)
                 .unwrap_or(0);
             let worktree = std::path::PathBuf::from(&session.working_dir);
-            if shared == 0 && crate::git::is_managed_worktree(app, &worktree) {
+            if shared == 0 {
                 if let Ok(project) = store.get_project(&session.project_id) {
-                    crate::git::setup::spawn_teardown_and_remove(
-                        project.path.into(),
-                        worktree,
-                        session.branch.clone(),
-                    );
+                    let repo = Path::new(&project.path);
+                    if crate::git::is_managed_worktree(app, repo, &worktree) {
+                        crate::git::setup::spawn_teardown_and_remove(
+                            project.path.into(),
+                            worktree,
+                            session.branch.clone(),
+                        );
+                    }
                 }
             }
             let _ = store.mark_session_merged(&session.id);
