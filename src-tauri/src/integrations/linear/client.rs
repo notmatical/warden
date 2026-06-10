@@ -144,11 +144,71 @@ pub async fn fetch_teams(key: &str) -> Result<Vec<LinearTeam>> {
     Ok(all)
 }
 
+/// A team's workflow states (Backlog, Todo, In Progress, Done…), for resolving
+/// writeback targets by state category.
+pub async fn fetch_team_states(key: &str, team_id: &str) -> Result<Vec<WorkflowState>> {
+    let vars = serde_json::json!({ "id": team_id });
+    let data: TeamStatesData = request(key, TEAM_STATES_QUERY, vars).await?;
+    Ok(data.team.states.nodes)
+}
+
+/// The team an issue currently belongs to (live, not from cache — the cached
+/// row may be gone by the time writeback fires).
+pub async fn fetch_issue_team_id(key: &str, issue_id: &str) -> Result<String> {
+    let vars = serde_json::json!({ "id": issue_id });
+    let data: IssueTeamData = request(key, ISSUE_TEAM_QUERY, vars).await?;
+    Ok(data.issue.team.id)
+}
+
+/// Move an issue to a workflow state.
+pub async fn update_issue_state(key: &str, issue_id: &str, state_id: &str) -> Result<()> {
+    let vars = serde_json::json!({ "id": issue_id, "stateId": state_id });
+    let data: IssueUpdateData = request(key, ISSUE_SET_STATE_MUTATION, vars).await?;
+    if !data.issue_update.success {
+        return Err(AppError::Integration("linear: issueUpdate failed".into()));
+    }
+    Ok(())
+}
+
+/// Attach a GitHub PR link to an issue (renders natively in Linear).
+pub async fn attach_github_url(key: &str, issue_id: &str, url: &str) -> Result<()> {
+    let vars = serde_json::json!({ "issueId": issue_id, "url": url });
+    let data: AttachGithubData = request(key, ATTACH_GITHUB_MUTATION, vars).await?;
+    if !data.attachment_link_git_hub.success {
+        return Err(AppError::Integration(
+            "linear: attachmentLinkGitHub failed".into(),
+        ));
+    }
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // GraphQL documents
 // ---------------------------------------------------------------------------
 
 const VIEWER_QUERY: &str = "query { viewer { id name email } }";
+
+const TEAM_STATES_QUERY: &str = r#"
+query TeamStates($id: String!) {
+  team(id: $id) { states(first: 50) { nodes { id type position } } }
+}
+"#;
+
+const ISSUE_TEAM_QUERY: &str = r#"
+query IssueTeam($id: String!) { issue(id: $id) { team { id } } }
+"#;
+
+const ISSUE_SET_STATE_MUTATION: &str = r#"
+mutation IssueSetState($id: String!, $stateId: String!) {
+  issueUpdate(id: $id, input: { stateId: $stateId }) { success }
+}
+"#;
+
+const ATTACH_GITHUB_MUTATION: &str = r#"
+mutation AttachPr($issueId: String!, $url: String!) {
+  attachmentLinkGitHub(issueId: $issueId, url: $url) { success }
+}
+"#;
 
 const TEAMS_QUERY: &str = r#"
 query Teams($first: Int!, $after: String) {
@@ -276,6 +336,18 @@ impl From<RawTeam> for LinearTeam {
     }
 }
 
+/// One of a team's workflow states. `state_type` is the Linear category
+/// (backlog | unstarted | started | completed | canceled); `position` orders
+/// states within a category (lowest = the team's primary state of that kind).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowState {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub state_type: String,
+    pub position: f64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LinearComment {
@@ -388,6 +460,53 @@ struct RawTeam {
 #[derive(Deserialize)]
 struct ProjectConnection {
     nodes: Vec<LinearProjectRef>,
+}
+
+#[derive(Deserialize)]
+struct TeamStatesData {
+    team: TeamStates,
+}
+
+#[derive(Deserialize)]
+struct TeamStates {
+    states: StateConnection,
+}
+
+#[derive(Deserialize)]
+struct StateConnection {
+    nodes: Vec<WorkflowState>,
+}
+
+#[derive(Deserialize)]
+struct IssueTeamData {
+    issue: IssueTeam,
+}
+
+#[derive(Deserialize)]
+struct IssueTeam {
+    team: TeamIdRef,
+}
+
+#[derive(Deserialize)]
+struct TeamIdRef {
+    id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct IssueUpdateData {
+    issue_update: MutationSuccess,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AttachGithubData {
+    attachment_link_git_hub: MutationSuccess,
+}
+
+#[derive(Deserialize)]
+struct MutationSuccess {
+    success: bool,
 }
 
 #[derive(Deserialize)]

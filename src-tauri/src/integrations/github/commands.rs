@@ -108,6 +108,10 @@ pub async fn open_pull_request(
     if let Ok(updated) = state.store.get_session(&session_id) {
         emit_session(&app, &updated);
     }
+    // Linear writeback: surface the PR on the originating issue (best-effort).
+    if let Some(issue_id) = session.linear_issue_id.as_deref() {
+        crate::integrations::linear::writeback::attach_pr(issue_id, &info.url).await;
+    }
     Ok(info)
 }
 
@@ -175,6 +179,18 @@ pub async fn merge_pull_request(
     state.store.mark_session_merged(&session_id)?;
     if let Ok(updated) = state.store.get_session(&session_id) {
         emit_session(&app, &updated);
+    }
+    // Linear writeback: the work landed, so complete the issue (best-effort).
+    if let Some(issue_id) = session.linear_issue_id.as_deref() {
+        crate::integrations::linear::writeback::complete_issue(issue_id).await;
+        if let Ok(Some(key)) = crate::integrations::linear::key::load() {
+            if matches!(
+                crate::integrations::linear::sync::sync_once(&state.store, &key).await,
+                Ok(true)
+            ) {
+                crate::events::emit_linear_changed(&app);
+            }
+        }
     }
     Ok(())
 }
