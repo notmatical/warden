@@ -2,6 +2,8 @@ import { Loader2 } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 
 import { FolderPicker, type FolderRef } from "@/components/controls/folder-picker"
+import { ModeMenu } from "@/components/controls/mode-menu"
+import { ModelMenu } from "@/components/controls/model-menu"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -11,35 +13,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import {
-  DEFAULT_CHAT_MODEL,
-  MODEL_PROVIDERS,
-  MODELS,
-  backendForModel,
-} from "@/lib/models"
-import { cn } from "@/lib/utils"
+import { DEFAULT_CHAT_MODEL, backendForModel } from "@/lib/models"
 import { useAppStore } from "@/store/app-store"
 import type { PermissionMode } from "@/types"
 
 import { linearBindings } from "../ipc"
 import { buildIssuePrompt } from "../prompt"
 import type { LinearComment, LinearIssue } from "../types"
-
-const MODES: { value: PermissionMode; label: string; dot: string }[] = [
-  { value: "plan", label: "Plan", dot: "bg-amber-500" },
-  { value: "acceptEdits", label: "Accept edits", dot: "bg-emerald-500" },
-  { value: "bypassPermissions", label: "Bypass permissions", dot: "bg-red-500" },
-]
 
 /** Spawn a chat session seeded with the full issue as its first message.
  *  Folder (group-qualified), model, permission mode, and worktree isolation
@@ -61,11 +42,6 @@ export function SendToAgentDialog({
 }) {
   const rootsByGroup = useAppStore((s) => s.rootsByGroup)
   const createSession = useAppStore((s) => s.createSession)
-  const providers = useAppStore((s) => s.providers)
-  const authedBackends = useMemo(
-    () => new Set(providers.filter((p) => p.authed).map((p) => p.id)),
-    [providers]
-  )
 
   // First group that contains a root — the picker default; users with the same
   // folder in several groups can re-pick the exact pair.
@@ -170,60 +146,27 @@ export function SendToAgentDialog({
 
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <span className="text-muted-foreground text-xs">Folder</span>
+            <span className="text-muted-foreground text-xs">
+              Working directory
+            </span>
             <FolderPicker value={folder} onChange={setFolder} />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <span className="text-muted-foreground text-xs">Model</span>
-              <Select value={model} onValueChange={setModel}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MODEL_PROVIDERS.map((provider) => (
-                    <SelectGroup key={provider}>
-                      <SelectLabel>{provider}</SelectLabel>
-                      {MODELS.filter((m) => m.provider === provider).map(
-                        (m) => (
-                          <SelectItem
-                            key={m.id}
-                            value={m.id}
-                            disabled={!authedBackends.has(backendForModel(m.id))}
-                          >
-                            {m.label}
-                          </SelectItem>
-                        )
-                      )}
-                    </SelectGroup>
-                  ))}
-                </SelectContent>
-              </Select>
+              <ModelMenu
+                variant="form"
+                value={model}
+                onChange={setModel}
+                backend={backendForModel(model)}
+                started={false}
+              />
             </div>
 
             <div className="flex flex-col gap-1.5">
               <span className="text-muted-foreground text-xs">Mode</span>
-              <Select
-                value={mode}
-                onValueChange={(v) => setMode(v as PermissionMode)}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MODES.map((m) => (
-                    <SelectItem key={m.value} value={m.value}>
-                      <span className="flex items-center gap-2">
-                        <span
-                          className={cn("size-1.5 rounded-full", m.dot)}
-                        />
-                        {m.label}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <ModeMenu variant="form" value={mode} onChange={setMode} />
             </div>
           </div>
 
