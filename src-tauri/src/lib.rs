@@ -27,6 +27,9 @@ use store::Store;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Must run before any webview is created.
+    platform::init_linux_webview_workarounds();
+
     let specta_builder = Builder::<tauri::Wry>::new().commands(collect_commands![
         // workspace: projects + groups
         workspace::project::list_projects,

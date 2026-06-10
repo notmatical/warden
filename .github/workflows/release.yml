@@ -45,12 +45,24 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build:
-    name: Build (windows)
+    name: Build (${{ matrix.name }})
     needs: version
     if: needs.version.outputs.published == 'true' || github.event_name == 'workflow_dispatch'
     permissions:
       contents: write
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows
+            os: windows-latest
+            bundles: msi,nsis
+          # ubuntu-22.04 on purpose: binaries link against the oldest glibc /
+          # webkit2gtk we support, so deb/rpm/AppImage run on 22.04 and newer.
+          - name: linux
+            os: ubuntu-22.04
+            bundles: deb,rpm
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -58,6 +70,11 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: "./src-tauri -> target"
+      - name: Install Linux dependencies
+        if: matrix.name == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils libfuse2
       - run: bun install --frozen-lockfile
 
       - name: Build and release
@@ -71,4 +88,59 @@ jobs:
           tagName: warden-v__VERSION__
           releaseName: "Warden v__VERSION__"
           includeUpdaterJson: true
-          args: "--bundles msi,nsis"
+          args: "--bundles ${{ matrix.bundles }}"
+
+      # The AppImage is built outside tauri-action so its AppRun can be
+      # swapped for the distro-portable launcher (see scripts/build-appimage.sh),
+      # then signed and attached to the same release.
+      - name: Build AppImage
+        if: matrix.name == 'linux'
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: bash scripts/build-appimage.sh
+
+      - name: Upload AppImage to release
+        if: matrix.name == 'linux'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="$(jq -r .version src-tauri/tauri.conf.json)"
+          gh release upload "warden-v${VERSION}" \
+            src-tauri/target/release/bundle/appimage/Warden_*.AppImage* --clobber
+
+  # tauri-action only writes updater entries for the bundles it built itself,
+  # so the AppImage (built above, outside the action) is added to latest.json
+  # here — after every matrix leg has finished uploading, to avoid clobbering.
+  updater-manifest:
+    name: Updater manifest (linux)
+    needs: [version, build]
+    if: needs.version.outputs.published == 'true' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Add Linux AppImage entry to latest.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          VERSION="$(jq -r .version src-tauri/tauri.conf.json)"
+          TAG="warden-v${VERSION}"
+          mkdir updater && cd updater
+          gh release download "$TAG" --repo "$REPO" --pattern 'latest.json'
+          gh release download "$TAG" --repo "$REPO" --pattern '*.AppImage.sig' || true
+          SIG_FILE="$(ls ./*.AppImage.sig 2>/dev/null | head -n 1 || true)"
+          if [ -z "$SIG_FILE" ]; then
+            echo "no signed AppImage on the release; leaving latest.json unchanged"
+            exit 0
+          fi
+          ASSET="$(basename "${SIG_FILE%.sig}")"
+          URL="https://github.com/${REPO}/releases/download/${TAG}/${ASSET}"
+          jq --arg sig "$(cat "$SIG_FILE")" --arg url "$URL" \
+            '.platforms["linux-x86_64"] = {signature: $sig, url: $url}' \
+            latest.json > latest.json.tmp
+          mv latest.json.tmp latest.json
+          gh release upload "$TAG" latest.json --repo "$REPO" --clobber
