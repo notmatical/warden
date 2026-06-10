@@ -1,9 +1,42 @@
 //! Platform-specific process and filesystem helpers: spawning background
 //! subprocesses cleanly (no console flash on Windows; the user's real PATH on
-//! macOS GUI apps) and writing downloaded binaries atomically.
+//! macOS GUI apps), writing downloaded binaries atomically, and Linux webview
+//! environment workarounds.
 
 use std::path::Path;
 use std::process::Command;
+
+/// WebKitGTK's GPU paths are a chronic source of blank windows and renderer
+/// crashes on Linux: DMABUF buffer sharing fails on NVIDIA and some Mesa
+/// stacks (GBM errors), and accelerated compositing white-screens on several
+/// rolling-release distros. Default both off before the first webview spawns.
+///
+/// Each variable is only set when absent, so users can pre-set them to take
+/// control. Escape hatches: `WARDEN_NO_WEBKIT_WORKAROUNDS=1` skips everything;
+/// `WARDEN_FORCE_X11=1` runs the GTK backend through XWayland for misbehaving
+/// Wayland compositors.
+#[cfg(target_os = "linux")]
+pub fn init_linux_webview_workarounds() {
+    if std::env::var_os("WARDEN_NO_WEBKIT_WORKAROUNDS").is_some() {
+        return;
+    }
+    for var in [
+        "WEBKIT_DISABLE_DMABUF_RENDERER",
+        "WEBKIT_DISABLE_COMPOSITING_MODE",
+    ] {
+        if std::env::var_os(var).is_none() {
+            std::env::set_var(var, "1");
+        }
+    }
+    if std::env::var("WARDEN_FORCE_X11").as_deref() == Ok("1")
+        && std::env::var_os("GDK_BACKEND").is_none()
+    {
+        std::env::set_var("GDK_BACKEND", "x11");
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn init_linux_webview_workarounds() {}
 
 /// macOS GUI apps (launched from Finder/Dock) inherit a minimal `PATH` without
 /// Homebrew/npm/etc., so subprocess lookups like `which claude` fail. Import the
@@ -45,12 +78,12 @@ pub fn silent_command(cmd: &mut Command) -> &mut Command {
     cmd
 }
 
-/// Best-effort kill of a process *and its descendants*. On Windows the agent CLI
-/// is usually a `claude.cmd` shim that spawns `node`; terminating only the direct
-/// child (e.g. via `Child::start_kill`) orphans `node`, which keeps streaming to
-/// the inherited pipe and holds the Claude session lock. `taskkill /T` tears down
-/// the whole tree. On other platforms this is a no-op (the direct-child kill is
-/// enough for development); revisit if we ship beyond Windows.
+/// Best-effort kill of a process *and its descendants*. The agent CLI is often
+/// a shim/wrapper that spawns `node`; terminating only the direct child (e.g.
+/// via `Child::start_kill`) orphans `node`, which keeps streaming to the
+/// inherited pipe and holds the Claude session lock. Windows tears the tree
+/// down with `taskkill /T`; Unix walks children via `pgrep -P` depth-first
+/// (children before parent, so nothing respawns or reparents mid-walk).
 pub fn kill_process_tree(pid: u32) {
     #[cfg(windows)]
     {
@@ -58,7 +91,24 @@ pub fn kill_process_tree(pid: u32) {
         cmd.args(["/F", "/T", "/PID", &pid.to_string()]);
         let _ = silent_command(&mut cmd).output();
     }
-    #[cfg(not(windows))]
+    #[cfg(unix)]
+    {
+        fn kill_recursive(pid: u32) {
+            if let Ok(out) = Command::new("pgrep")
+                .args(["-P", &pid.to_string()])
+                .output()
+            {
+                for child in String::from_utf8_lossy(&out.stdout).split_whitespace() {
+                    if let Ok(child_pid) = child.parse::<u32>() {
+                        kill_recursive(child_pid);
+                    }
+                }
+            }
+            let _ = Command::new("kill").args(["-9", &pid.to_string()]).output();
+        }
+        kill_recursive(pid);
+    }
+    #[cfg(not(any(windows, unix)))]
     {
         let _ = pid;
     }
