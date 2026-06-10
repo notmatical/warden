@@ -159,7 +159,7 @@ export function WorktreeIdentity({
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         {started ? (
-          <Callout variant="info" className="m-1">
+          <Callout variant="info" size="sm" className="m-1">
             Where a session runs is fixed once it has started.
           </Callout>
         ) : (

@@ -4,16 +4,22 @@ import type { ReactNode } from "react"
 
 import { cn } from "@/lib/utils"
 
-const calloutVariants = cva("flex gap-2.5 rounded-lg p-2.5 text-xs/relaxed", {
+const calloutVariants = cva("flex rounded-lg", {
   variants: {
     variant: {
       info: "bg-muted/50 text-muted-foreground",
       warning: "bg-amber-500/10 text-amber-500 dark:text-amber-400",
       destructive: "bg-destructive/10 text-destructive",
     },
+    size: {
+      default: "gap-2.5 p-2.5 text-xs/relaxed",
+      /** Compact, for tight surfaces like menus and popovers. */
+      sm: "gap-1.5 px-2 py-1.5 text-[11px]/snug",
+    },
   },
   defaultVariants: {
     variant: "info",
+    size: "default",
   },
 })
 
@@ -28,12 +34,21 @@ interface CalloutProps extends VariantProps<typeof calloutVariants> {
   className?: string
 }
 
-function Callout({ variant = "info", children, className }: CalloutProps) {
+function Callout({ variant = "info", size, children, className }: CalloutProps) {
   const Icon = ICON_MAP[variant ?? "info"]
 
   return (
-    <div className={cn(calloutVariants({ variant }), className)} role="alert">
-      <Icon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+    <div
+      className={cn(calloutVariants({ variant, size }), className)}
+      role="alert"
+    >
+      <Icon
+        aria-hidden="true"
+        className={cn(
+          "shrink-0",
+          size === "sm" ? "mt-[2.5px] size-3" : "mt-0.5 size-3.5"
+        )}
+      />
       <div className="min-w-0 flex-1 break-words">{children}</div>
     </div>
   )
