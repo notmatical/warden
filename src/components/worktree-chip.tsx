@@ -8,6 +8,7 @@ import {
   SquareTerminal,
 } from "lucide-react"
 
+import { Callout } from "@/components/ui/callout"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -105,10 +106,10 @@ export function WorktreeIdentity({
             </button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
-        <TooltipContent className="max-w-60">
+        <TooltipContent>
           {isolated
-            ? `Isolated worktree on ${session.branch ?? "its own branch"} — changes stay off your checkout. Click for actions.`
-            : "Project checkout — changes land directly on this branch. Click for actions."}
+            ? `Isolated worktree on ${session.branch ?? "its own branch"}.`
+            : `Direct checkout on ${session.branch ?? "this branch"}.`}
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="start" className="w-72">
@@ -158,9 +159,9 @@ export function WorktreeIdentity({
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         {started ? (
-          <p className="px-2 py-1.5 text-[11px] leading-snug text-muted-foreground">
+          <Callout variant="info" className="m-1">
             Where a session runs is fixed once it has started.
-          </p>
+          </Callout>
         ) : (
           <DropdownMenuItem
             onSelect={() => void setIsolation(sessionId, !isolated)}
