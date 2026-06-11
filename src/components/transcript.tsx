@@ -69,7 +69,7 @@ function MessageMeta({
 function UserBubble({ text, ts }: { text: string; ts: string }) {
   return (
     <div className="group/msg flex flex-col items-end gap-1">
-      <div className="max-w-[85%] rounded-lg bg-secondary px-3.5 py-2 text-sm whitespace-pre-wrap text-secondary-foreground">
+      <div className="max-w-[85%] rounded-lg bg-secondary px-4 py-2.5 text-[0.9375rem] leading-[1.65] whitespace-pre-wrap text-secondary-foreground">
         {text}
       </div>
       <MessageMeta text={text} ts={ts} align="end" />
@@ -80,10 +80,34 @@ function UserBubble({ text, ts }: { text: string; ts: string }) {
 function AssistantMessage({ text, ts }: { text: string; ts?: string }) {
   return (
     <div className="group/msg flex flex-col gap-1">
-      <div className="text-sm text-foreground">
-        <Markdown>{text}</Markdown>
-      </div>
+      <Markdown>{text}</Markdown>
       {ts ? <MessageMeta text={text} ts={ts} align="start" /> : null}
+    </div>
+  )
+}
+
+/** Floating Normal/Verbose switch for transcript detail (persisted globally). */
+function ViewToggle() {
+  const view = useAppStore((s) => s.transcriptView)
+  const setView = useAppStore((s) => s.setTranscriptView)
+  return (
+    <div className="flex items-center gap-0.5 rounded-md border border-border/60 bg-background/85 p-0.5 shadow-sm backdrop-blur">
+      {(["normal", "verbose"] as const).map((mode) => (
+        <button
+          key={mode}
+          type="button"
+          onClick={() => setView(mode)}
+          aria-pressed={view === mode}
+          className={cn(
+            "rounded-[5px] px-2 py-0.5 text-[11px] font-medium capitalize transition-colors",
+            view === mode
+              ? "bg-muted text-foreground"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          {mode}
+        </button>
+      ))}
     </div>
   )
 }
@@ -399,6 +423,13 @@ export function Transcript({
           <StreamingStatus sessionId={sessionId} />
         </div>
       </ScrollArea>
+
+      {/* Transcript detail switch, floating over the top-right corner. */}
+      {isEmpty ? null : (
+        <div className="absolute top-2 right-4 z-10">
+          <ViewToggle />
+        </div>
+      )}
 
       {/* Floating pill, centered just above the composer. Pulses while output
           streams in below the fold. */}
