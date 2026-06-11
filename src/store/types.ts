@@ -93,7 +93,6 @@ export interface AppState {
   startedAtBySession: Record<string, number>
 
   sidebarCollapsed: boolean
-  sidebarWidth: number
 
   /** Transcript detail level: "normal" keeps tool activity collapsed to summary
    *  lines; "verbose" expands detail panels and surfaces tool inputs. */
@@ -154,7 +153,6 @@ export interface AppState {
   /** Restore the persisted global view once all groups are loaded. */
   restoreView: () => void
   setSidebarCollapsed: (collapsed: boolean) => void
-  setSidebarWidth: (width: number) => void
   setTranscriptView: (view: TranscriptView) => void
   loadProviders: () => Promise<void>
   installProvider: (id: Provider) => Promise<void>
