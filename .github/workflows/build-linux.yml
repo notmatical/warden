@@ -11,6 +11,7 @@ jobs:
   build:
     name: Build (linux x86_64)
     runs-on: ubuntu-22.04
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
