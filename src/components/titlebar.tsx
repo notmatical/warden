@@ -3,13 +3,7 @@ import { PanelLeft } from "lucide-react"
 import { CliUpdates } from "@/components/cli-updates"
 import { GithubButton } from "@/components/github-button"
 import { OpenInButtons } from "@/components/open-in-buttons"
-import { QuickSwitcher } from "@/components/quick-switcher"
 import { Button } from "@/components/ui/button"
-import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from "@/components/ui/hover-card"
 import { WindowControls } from "@/components/window-controls"
 import { WorkflowsMenu } from "@/components/workflows-menu"
 import { isMac, isTauri } from "@/lib/platform"
@@ -38,8 +32,6 @@ function SidebarToggle() {
  *  middle is the drag region. On macOS we reserve space for the native traffic
  *  lights; on Windows/Linux we render our own controls (native decorations off). */
 export function Titlebar() {
-  const collapsed = useAppStore((s) => s.sidebarCollapsed)
-
   // The active session's working directory, falling back to the group's first
   // root.
   const openPath = useAppStore((s) => {
@@ -54,24 +46,7 @@ export function Titlebar() {
       <div
         className={cn("flex items-center gap-1 pr-2 pl-3", isMac && "pl-20")}
       >
-        {collapsed ? (
-          <HoverCard openDelay={120} closeDelay={120}>
-            <HoverCardTrigger asChild>
-              <span className="inline-flex">
-                <SidebarToggle />
-              </span>
-            </HoverCardTrigger>
-            <HoverCardContent
-              align="start"
-              sideOffset={8}
-              className="max-h-80 w-64 overflow-y-auto rounded-xl p-1.5"
-            >
-              <QuickSwitcher />
-            </HoverCardContent>
-          </HoverCard>
-        ) : (
-          <SidebarToggle />
-        )}
+        <SidebarToggle />
       </div>
 
       {/* Draggable region — the bare middle. Clusters stay interactive. */}
