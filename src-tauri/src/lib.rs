@@ -46,8 +46,8 @@ pub fn run() {
         workspace::commands::remove_group_root,
         workspace::commands::list_session_roots,
         workspace::commands::set_session_roots,
-        workspace::commands::get_repo_config,
-        workspace::commands::update_repo_config,
+        workspace::commands::get_worktree_config,
+        workspace::commands::update_worktree_config,
         // sessions
         session::commands::get_events,
         session::commands::create_session,

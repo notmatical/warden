@@ -129,17 +129,17 @@ async setSessionRoots(sessionId: string, projectIds: string[]) : Promise<Result<
     else return { status: "error", error: e  as any };
 }
 },
-async getRepoConfig(projectId: string) : Promise<Result<RepoConfig, IpcError>> {
+async getWorktreeConfig(projectId: string) : Promise<Result<WorktreeConfig, IpcError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("get_repo_config", { projectId }) };
+    return { status: "ok", data: await TAURI_INVOKE("get_worktree_config", { projectId }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
 },
-async updateRepoConfig(projectId: string, config: RepoConfig) : Promise<Result<RepoConfig, IpcError>> {
+async updateWorktreeConfig(projectId: string, config: WorktreeConfig) : Promise<Result<WorktreeConfig, IpcError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("update_repo_config", { projectId, config }) };
+    return { status: "ok", data: await TAURI_INVOKE("update_worktree_config", { projectId, config }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -1358,20 +1358,6 @@ export type Project = { id: string; name: string; path: string; isGit: boolean; 
 export type ProjectLabels = { labels: Label[]; assignments: Partial<{ [key in string]: string[] }> }
 export type ProjectLinearBinding = { projectId: string; binding: LinearBinding }
 export type RepoComment = { author: string; body: string }
-/**
- * Per-repo config. All fields default so a partial file stays valid.
- */
-export type RepoConfig = { 
-/**
- * Commands run in a fresh worktree right after it is created (e.g.
- * `pnpm install`, copying `.env`). Joined with `&&`, so the first
- * failure stops the chain.
- */
-setup: string[]; 
-/**
- * Commands run in a worktree just before it is removed.
- */
-teardown: string[] }
 export type RepoRef = { number: number; title: string; 
 /**
  * "issue" or "pr".
@@ -1570,6 +1556,20 @@ export type WorkflowNodeRun = { runId: string; nodeId: string; status: NodeRunSt
  */
 export type WorkflowRun = { id: string; workflowId: string | null; projectId: string; groupId: string; status: RunStatus; error: string | null; createdAt: string; updatedAt: string }
 export type WorkflowRunView = { run: WorkflowRun; nodes: WorkflowNodeRun[] }
+/**
+ * The `worktrees` section: lifecycle commands for isolated worktrees.
+ */
+export type WorktreeConfig = {
+/**
+ * Commands run in a fresh worktree right after it is created (e.g.
+ * `pnpm install`, copying `.env`). Joined with `&&`, so the first
+ * failure stops the chain.
+ */
+setup: string[];
+/**
+ * Commands run in a worktree just before it is removed.
+ */
+teardown: string[] }
 
 /** tauri-specta globals **/
 
