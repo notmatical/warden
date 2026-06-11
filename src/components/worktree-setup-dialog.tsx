@@ -100,7 +100,7 @@ export function WorktreeSetupDialog({
     setSaveState("idle")
     setLoading(true)
     ipc
-      .getRepoConfig(projectId)
+      .getWorktreeConfig(projectId)
       .then((config) => {
         setValues({
           setup: toLines(config.setup),
@@ -120,7 +120,7 @@ export function WorktreeSetupDialog({
     dirtyRef.current = false
     setSaveState("saving")
     try {
-      await ipc.updateRepoConfig(projectId, {
+      await ipc.updateWorktreeConfig(projectId, {
         setup: toCommands(valuesRef.current.setup),
         teardown: toCommands(valuesRef.current.teardown),
       })
