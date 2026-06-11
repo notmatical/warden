@@ -167,7 +167,7 @@ export function AgentToolbar({ sessionId }: { sessionId: string }) {
             )}
           >
             {running > 0 ? (
-              <BrailleSpinner className="size-3.5 text-primary" />
+              <BrailleSpinner className="size-3.5" />
             ) : (
               <Bot className="size-3.5" />
             )}

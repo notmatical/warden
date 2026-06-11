@@ -24,7 +24,7 @@ export function BrailleSpinner({ className }: { className?: string }) {
     <span
       aria-hidden
       className={cn(
-        "inline-flex items-center justify-center select-none font-mono text-sm leading-none text-amber-500",
+        "inline-flex items-center justify-center select-none font-mono text-sm leading-none text-primary",
         className
       )}
     >

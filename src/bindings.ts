@@ -445,19 +445,6 @@ async pullSession(sessionId: string) : Promise<Result<SyncOutcome, IpcError>> {
 }
 },
 /**
- * Fold a session's worktree branch back into its base branch, then remove the
- * worktree + branch and mark the session merged. On conflict nothing changes
- * and the clashing files are returned for the user to resolve.
- */
-async integrateSession(sessionId: string, message: string | null, mode: string | null) : Promise<Result<IntegrateOutcome, IpcError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("integrate_session", { sessionId, message, mode }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
  * Every change a session has made since it forked, for the diff view. Empty
  * when the session has no base commit (non-git or merged).
  */
@@ -784,12 +771,12 @@ async refreshPrStatus(sessionId: string) : Promise<Result<PrInfo | null, IpcErro
 }
 },
 /**
- * Merge the session's open PR from the app, then clean up the worktree and
- * branch and mark the session merged — mirroring local integrate cleanup.
+ * Rich state of the session's PR — review decision, diff stats, per-check CI
+ * rows — fetched lazily when the user hovers the PR chip.
  */
-async mergePullRequest(sessionId: string, strategy: string) : Promise<Result<null, IpcError>> {
+async prDetails(sessionId: string) : Promise<Result<PrDetails | null, IpcError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("merge_pull_request", { sessionId, strategy }) };
+    return { status: "ok", data: await TAURI_INVOKE("pr_details", { sessionId }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -1227,14 +1214,6 @@ export type Group = { id: string; name: string;
  */
 layout: string; createdAt: string }
 /**
- * The result of folding a session's branch into its base.
- */
-export type IntegrateOutcome = { status: "merged" } | 
-/**
- * The merge stopped on conflicts (and was aborted); these files clashed.
- */
-{ status: "conflict"; files: string[] }
-/**
  * What an agent node does. The intent carries a built-in instruction and the
  * right read/write posture, so downstream nodes need no hand-written task —
  * the edge supplies the content (the upstream plan/review/diff as context).
@@ -1327,9 +1306,31 @@ export type PermissionMode = "acceptEdits" | "bypassPermissions" | "plan" | "def
  */
 export type PlanToCodeResult = { planner: Session; coder: Session }
 /**
+ * One CI check (check run or commit status) on a PR's head commit.
+ */
+export type PrCheck = { name: string; state: PrCheckState; url: string | null; startedAt: string | null; completedAt: string | null }
+/**
+ * One CI check's outcome on a PR, for the hover card's per-check rows.
+ */
+export type PrCheckState = "success" | "failure" | "pending" | "skipped" | "cancelled"
+/**
  * A generated PR title and body, for the user to review before opening.
  */
 export type PrContent = { title: string; body: string }
+/**
+ * Richer PR state for the hover card: review decision, diff stats, and the
+ * individual CI checks behind the aggregate glyph.
+ */
+export type PrDetails = { number: number; url: string; 
+/**
+ * GitHub's PR state: `OPEN`, `MERGED`, or `CLOSED`.
+ */
+state: string; title: string; isDraft: boolean; 
+/**
+ * `APPROVED`, `CHANGES_REQUESTED`, or `REVIEW_REQUIRED` (empty when the
+ * repo requires no review).
+ */
+reviewDecision: string | null; additions: number; deletions: number; updatedAt: string | null; checks: PrCheck[] }
 /**
  * A pull request's identity and state, as surfaced to the UI.
  */

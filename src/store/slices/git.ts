@@ -7,30 +7,15 @@ import type { AppState } from "../types"
 
 type GitSlice = Pick<
   AppState,
-  | "integrateSession"
-  | "openPullRequest"
-  | "refreshPrStatus"
-  | "mergePullRequest"
-  | "syncWorktree"
-  | "checkoutPr"
+  "openPullRequest" | "refreshPrStatus" | "syncWorktree" | "checkoutPr"
 >
 
-/** Worktree integration and pull-request actions for a session. Outcomes land
- *  on the session via the session-updated event; `checkoutPr` opens a new one. */
+/** Worktree and pull-request actions for a session. Outcomes land on the
+ *  session via the session-updated event; `checkoutPr` opens a new one. */
 export const createGitSlice: StateCreator<AppState, [], [], GitSlice> = (
   set,
   get
 ) => ({
-  integrateSession: async (sessionId, message, mode) => {
-    // Success updates the session (mergedAt) via the session-updated event.
-    try {
-      return await ipc.integrateSession(sessionId, message, mode)
-    } catch (error) {
-      reportError("Failed to merge session", error)
-      return null
-    }
-  },
-
   openPullRequest: async (sessionId, title, body, draft) => {
     // Success records the PR on the session via the session-updated event.
     try {
@@ -46,17 +31,6 @@ export const createGitSlice: StateCreator<AppState, [], [], GitSlice> = (
       return await ipc.refreshPrStatus(sessionId)
     } catch {
       return null
-    }
-  },
-
-  mergePullRequest: async (sessionId, strategy) => {
-    // Success marks the session merged via the session-updated event.
-    try {
-      await ipc.mergePullRequest(sessionId, strategy)
-      return true
-    } catch (error) {
-      reportError("Failed to merge pull request", error)
-      return false
     }
   },
 
