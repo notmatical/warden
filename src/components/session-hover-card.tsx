@@ -60,7 +60,7 @@ export function SessionHoverCard({
         side="right"
         align="start"
         sideOffset={12}
-        className="w-64 space-y-2.5 rounded-2xl p-3"
+        className="w-64 space-y-2.5 p-3"
       >
         <div className="flex items-center gap-2">
           <SessionFavicon
