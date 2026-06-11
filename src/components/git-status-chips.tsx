@@ -12,7 +12,7 @@ import {
 import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 
-import { PrStatusDot } from "@/components/common/pr-status-dot"
+import { CheckDot } from "@/components/common/check-dot"
 import { PrHoverCard } from "@/components/pr-hover-card"
 import { Button } from "@/components/ui/button"
 import {
@@ -224,8 +224,9 @@ function StatusChip({
   )
 }
 
-/** A link chip to the session's pull request: a status dot (state + CI rollup)
- *  and the number. Hovering surfaces the full PR hover card. */
+/** A link chip to the session's pull request: the PR icon tinted by state,
+ *  the number, and a trailing CI-checks dot. Hovering surfaces the full PR
+ *  hover card. */
 function PrChip({
   sessionId,
   number,
@@ -239,6 +240,12 @@ function PrChip({
   state: string | null
   checkStatus: CheckStatus | null
 }) {
+  const tone =
+    state === "MERGED"
+      ? "text-violet-500"
+      : state === "CLOSED"
+        ? "text-red-500"
+        : "text-emerald-500"
   return (
     <PrHoverCard sessionId={sessionId}>
       <Button
@@ -247,8 +254,9 @@ function PrChip({
         onClick={() => url && void openUrl(url)}
         className="gap-1.5"
       >
-        <PrStatusDot state={state} checkStatus={checkStatus} />
+        <GitPullRequest className={cn("size-3.5", tone)} />
         <span className="font-medium">#{number}</span>
+        <CheckDot status={checkStatus} />
       </Button>
     </PrHoverCard>
   )

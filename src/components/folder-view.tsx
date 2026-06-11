@@ -4,6 +4,7 @@ import {
   ExternalLink,
   FolderGit2,
   GitBranch,
+  GitPullRequest,
   MoreHorizontal,
   Pin,
   PinOff,
@@ -15,6 +16,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { AgentProvidersIcon } from "@/components/agent-providers-icon"
+import { CheckDot } from "@/components/common/check-dot"
 import { CountChip } from "@/components/common/count-chip"
 import {
   DataTable,
@@ -26,7 +28,6 @@ import {
   FilterMenu,
   SwatchStack,
 } from "@/components/common/filter-menu"
-import { PrStatusDot } from "@/components/common/pr-status-dot"
 import { useConfirm } from "@/components/confirm-dialog"
 import { ClaudeIcon, CodexIcon } from "@/components/icons/brand"
 import { LabelChip, LabelPicker, labelColor } from "@/components/label-picker"
@@ -322,13 +323,11 @@ function OpenPrsSection({ projectId }: { projectId: string }) {
           >
             <PrHoverCard sessionId={session.id}>
               <span className="flex w-fit items-center gap-1.5 text-xs">
-                <PrStatusDot
-                  state={session.prState}
-                  checkStatus={session.prCheckStatus}
-                />
+                <GitPullRequest className="size-3.5 shrink-0 text-emerald-500" />
                 <span className="font-medium text-foreground tabular-nums">
                   #{session.prNumber}
                 </span>
+                <CheckDot status={session.prCheckStatus} />
               </span>
             </PrHoverCard>
 

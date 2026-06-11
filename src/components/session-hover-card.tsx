@@ -1,8 +1,8 @@
 import { openUrl } from "@tauri-apps/plugin-opener"
-import { GitBranch } from "lucide-react"
+import { GitBranch, GitPullRequest } from "lucide-react"
 import type { ReactNode } from "react"
 
-import { PrStatusDot } from "@/components/common/pr-status-dot"
+import { CheckDot } from "@/components/common/check-dot"
 import { SessionFavicon } from "@/components/session-favicon"
 import {
   HoverCard,
@@ -46,6 +46,13 @@ export function SessionHoverCard({
   session: Session
   children: ReactNode
 }) {
+  const prTone =
+    session.prState === "MERGED"
+      ? "text-violet-500"
+      : session.prState === "CLOSED"
+        ? "text-red-500"
+        : "text-emerald-500"
+
   return (
     <HoverCard openDelay={600} closeDelay={100}>
       <HoverCardTrigger asChild>{children}</HoverCardTrigger>
@@ -91,12 +98,12 @@ export function SessionHoverCard({
                 disabled={!session.prUrl}
                 className="inline-flex items-center gap-1 rounded transition hover:text-foreground disabled:cursor-default"
               >
-                <PrStatusDot
-                  state={session.prState}
-                  checkStatus={session.prCheckStatus}
+                <GitPullRequest className={cn("size-3 shrink-0", prTone)} />
+                <span className="font-medium">#{session.prNumber}</span>
+                <CheckDot
+                  status={session.prCheckStatus}
                   className="size-1.5"
                 />
-                <span className="font-medium">#{session.prNumber}</span>
               </button>
             </Row>
           ) : null}

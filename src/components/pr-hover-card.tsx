@@ -169,10 +169,9 @@ export function PrHoverCard({
   children: ReactNode
 }) {
   const [details, setDetails] = useState<PrDetails | null>(null)
-  const [failed, setFailed] = useState(false)
   const inflight = useRef(false)
 
-  // Refetch on every open (CI moves fast) but keep showing the previous
+  // Refetch on every hover (CI moves fast) but keep showing the previous
   // snapshot while the refresh is in flight.
   const load = () => {
     if (inflight.current) return
@@ -181,33 +180,25 @@ export function PrHoverCard({
       .prDetails(sessionId)
       .then((d) => {
         if (d) setDetails(d)
-        else setFailed(true)
       })
-      .catch(() => setFailed(true))
+      .catch(() => {})
       .finally(() => {
         inflight.current = false
       })
   }
 
+  // No placeholder UI: the card only exists once there's something to show.
+  // The first hover fetches; the card pops in as soon as the data lands.
   return (
     <HoverCard openDelay={200} closeDelay={120}>
       <HoverCardTrigger asChild onPointerEnter={load}>
         {children}
       </HoverCardTrigger>
-      <HoverCardContent side="bottom" align="end" className="w-80 p-3">
-        {details ? (
+      {details ? (
+        <HoverCardContent side="top" align="end" className="w-80 p-3">
           <Details pr={details} />
-        ) : failed ? (
-          <span className="text-muted-foreground text-xs">
-            Couldn't load the pull request's details.
-          </span>
-        ) : (
-          <span className="flex items-center gap-1.5 text-muted-foreground text-xs">
-            <Loader2 className="size-3 animate-spin" />
-            Fetching pull request…
-          </span>
-        )}
-      </HoverCardContent>
+        </HoverCardContent>
+      ) : null}
     </HoverCard>
   )
 }
