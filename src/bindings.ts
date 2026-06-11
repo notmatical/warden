@@ -1560,13 +1560,13 @@ export type WorkflowRunView = { run: WorkflowRun; nodes: WorkflowNodeRun[] }
 /**
  * The `worktrees` section: lifecycle commands for isolated worktrees.
  */
-export type WorktreeConfig = {
+export type WorktreeConfig = { 
 /**
  * Commands run in a fresh worktree right after it is created (e.g.
  * `pnpm install`, copying `.env`). Joined with `&&`, so the first
  * failure stops the chain.
  */
-setup: string[];
+setup: string[]; 
 /**
  * Commands run in a worktree just before it is removed.
  */
