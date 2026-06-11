@@ -34,6 +34,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card"
 import { Input } from "@/components/ui/input"
 import {
   SidebarContent,
@@ -46,6 +51,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
   Sidebar as SidebarRoot,
+  useSidebar,
 } from "@/components/ui/sidebar"
 import {
   Tooltip,
@@ -372,6 +378,77 @@ function GroupRow({
   )
 }
 
+/** A group in the collapsed rail: an icon whose hover popover lists the
+ *  group's folders — clicking one opens that folder's tab. */
+function CollapsedGroupRow({
+  group,
+  active,
+  onSelect,
+}: {
+  group: Group
+  active: boolean
+  onSelect: () => void
+}) {
+  const roots = useAppStore((s) => s.rootsByGroup[group.id])
+  const addRoot = useAppStore((s) => s.addRoot)
+  const openTab = useAppStore((s) => s.openTab)
+  const activeTabId = useAppStore((s) => s.activeTabId)
+
+  return (
+    <SidebarMenuItem>
+      <HoverCard openDelay={150} closeDelay={100}>
+        <HoverCardTrigger asChild>
+          <SidebarMenuButton
+            isActive={active}
+            onClick={onSelect}
+            aria-label={group.name}
+          >
+            <Layers className="opacity-70" />
+          </SidebarMenuButton>
+        </HoverCardTrigger>
+        <HoverCardContent
+          side="right"
+          align="start"
+          sideOffset={14}
+          className="w-56 p-1.5"
+        >
+          <p className="truncate px-2 pt-1 pb-1.5 font-medium text-muted-foreground text-xs uppercase tracking-wide">
+            {group.name}
+          </p>
+          {roots && roots.length > 0 ? (
+            roots.map((root) => (
+              <button
+                key={root.id}
+                type="button"
+                onClick={() => openTab(folderTabId(root.id))}
+                title={root.path}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] transition-colors hover:bg-accent hover:text-accent-foreground",
+                  activeTabId === folderTabId(root.id)
+                    ? "font-medium text-foreground"
+                    : "text-foreground/75"
+                )}
+              >
+                <FolderGit2 className="size-4 shrink-0 opacity-70" />
+                <span className="min-w-0 flex-1 truncate">{root.name}</span>
+              </button>
+            ))
+          ) : (
+            <button
+              type="button"
+              onClick={() => void addRoot(group.id)}
+              className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <FolderPlus className="size-4 shrink-0" />
+              Add folder
+            </button>
+          )}
+        </HoverCardContent>
+      </HoverCard>
+    </SidebarMenuItem>
+  )
+}
+
 const PRIMARY_NAV = [
   { id: WORKFLOWS_TAB_ID, label: "Workflows", icon: WorkflowIcon },
   { id: TASKS_TAB_ID, label: "Tasks", icon: ListTodo },
@@ -424,9 +501,11 @@ function PrimaryNav() {
                 </span>
               ) : null}
             </SidebarMenuButton>
-            {/* Collapsed rail: surface active runs as a corner dot. */}
+            {/* Collapsed rail: surface active runs as a corner dot. Anchored
+                off the icon's left edge so it stays put while the sidebar's
+                width animates. */}
             {running > 0 ? (
-              <span className="pointer-events-none absolute top-1 right-1 hidden size-1.5 animate-pulse rounded-full bg-blue-500 group-data-[collapsible=icon]:block" />
+              <span className="pointer-events-none absolute top-1 left-6 hidden size-1.5 animate-pulse rounded-full bg-blue-500 group-data-[collapsible=icon]:block" />
             ) : null}
           </SidebarMenuItem>
         )
@@ -445,6 +524,8 @@ export function Sidebar() {
   const needsSetup = useAppStore((s) =>
     s.providers.some((p) => !p.installed || !p.authed)
   )
+  const { state, isMobile } = useSidebar()
+  const collapsed = state === "collapsed" && !isMobile
 
   // Populate the global workflow set once so the count badge + Workflows page
   // reflect every project, not just the active group's.
@@ -479,6 +560,13 @@ export function Sidebar() {
     void selectGroup(id)
   }
 
+  // In the collapsed rail there's no visible tree, so selecting shouldn't
+  // collapse the group once the sidebar reopens.
+  const select = (id: string) => {
+    setExpanded((prev) => new Set(prev).add(id))
+    void selectGroup(id)
+  }
+
   return (
     <SidebarRoot variant="floating" collapsible="icon">
       <SidebarContent className="gap-0 overflow-hidden">
@@ -505,47 +593,97 @@ export function Sidebar() {
           </div>
           <SidebarMenu className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
             {groups.length === 0 ? (
-              <p className="px-2 py-4 text-xs text-muted-foreground">
-                No groups yet — create one to start.
-              </p>
+              // Both forms stay mounted and crossfade, so the open/close
+              // animation never pops content in or out mid-flight.
+              <li className="relative flex min-h-0 flex-1 flex-col">
+                <div className="pointer-events-none absolute inset-x-0 top-0 opacity-0 transition-opacity duration-200 group-data-[collapsible=icon]:pointer-events-auto group-data-[collapsible=icon]:opacity-100">
+                  <SidebarMenuButton
+                    tooltip="New group"
+                    onClick={() => void createGroup("New group")}
+                  >
+                    <Plus />
+                    <span>New group</span>
+                  </SidebarMenuButton>
+                </div>
+                {/* Fixed at the expanded tree's width so the text never
+                    reflows while the sidebar animates; it clips instead. */}
+                <div className="flex w-56 flex-1 flex-col items-center justify-center gap-2.5 pb-8 text-center transition-opacity duration-200 group-data-[collapsible=icon]:pointer-events-none group-data-[collapsible=icon]:opacity-0">
+                  <Layers className="size-5 text-muted-foreground/40" />
+                  <div>
+                    <p className="font-medium text-foreground text-xs">
+                      No groups yet
+                    </p>
+                    <p className="mt-0.5 text-muted-foreground text-xs">
+                      Groups keep your repos organized.
+                    </p>
+                  </div>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="h-7 gap-1.5 text-xs"
+                    onClick={() => void createGroup("New group")}
+                  >
+                    <Plus className="size-3.5" />
+                    New group
+                  </Button>
+                </div>
+              </li>
             ) : (
-              groups.map((group) => (
-                <GroupRow
-                  key={group.id}
-                  group={group}
-                  active={group.id === activeGroupId}
-                  expanded={expanded.has(group.id)}
-                  onToggle={() => toggle(group.id)}
-                />
-              ))
+              groups.map((group) =>
+                collapsed ? (
+                  <CollapsedGroupRow
+                    key={group.id}
+                    group={group}
+                    active={group.id === activeGroupId}
+                    onSelect={() => select(group.id)}
+                  />
+                ) : (
+                  <GroupRow
+                    key={group.id}
+                    group={group}
+                    active={group.id === activeGroupId}
+                    expanded={expanded.has(group.id)}
+                    onToggle={() => toggle(group.id)}
+                  />
+                )
+              )
             )}
           </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="p-2 pt-0">
+      <SidebarFooter className="overflow-hidden p-2 pt-0">
         <UpdateBanner />
-        <button
-          type="button"
-          onClick={() => openSettings()}
-          aria-label="Settings"
-          className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
-        >
-          <Settings2 className="size-4 shrink-0" />
-          <span className="truncate">Settings</span>
-          <span className="ml-auto flex shrink-0 items-center gap-2">
-            {needsSetup && (
-              <span
-                className="size-1.5 rounded-full bg-amber-500"
-                title="A provider needs setup"
-              />
-            )}
-            {version ? (
-              <span className="text-[11px] tabular-nums text-muted-foreground/45">
-                v{version}
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              onClick={() => openSettings()}
+              tooltip={version ? `Settings · v${version}` : "Settings"}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <Settings2 />
+              <span>Settings</span>
+              <span className="ml-auto flex shrink-0 items-center gap-2 group-data-[collapsible=icon]:hidden">
+                {needsSetup && (
+                  <span
+                    className="size-1.5 rounded-full bg-amber-500"
+                    title="A provider needs setup"
+                  />
+                )}
+                {version ? (
+                  <span className="text-[11px] tabular-nums text-muted-foreground/45">
+                    v{version}
+                  </span>
+                ) : null}
               </span>
+            </SidebarMenuButton>
+            {/* Collapsed rail: keep the needs-setup signal as a corner dot,
+                anchored off the icon's left edge so it stays put while the
+                sidebar's width animates. */}
+            {needsSetup ? (
+              <span className="pointer-events-none absolute top-1 left-6 hidden size-1.5 rounded-full bg-amber-500 group-data-[collapsible=icon]:block" />
             ) : null}
-          </span>
-        </button>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarFooter>
     </SidebarRoot>
   )
