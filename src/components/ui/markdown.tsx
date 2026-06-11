@@ -256,7 +256,7 @@ export const Markdown = memo(function Markdown({
   return (
     <div
       className={cn(
-        "markdown min-w-0 text-[0.875rem] leading-[1.7] font-[450] break-words text-foreground/90",
+        "markdown min-w-0 text-[0.9375rem] leading-[1.7] font-[450] break-words text-foreground/90",
         "[&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
         className
       )}

@@ -3,6 +3,8 @@ import { toast } from "sonner"
 import { findLeafByRef, firstLeaf, setLeafRef } from "@/lib/viewport"
 import type { PaneTree, Provider } from "@/types"
 
+import type { TranscriptView } from "./types"
+
 /** Surface a failed store action as an error toast. */
 export function reportError(scope: string, error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
@@ -37,6 +39,17 @@ export const NATIVE_TITLE: Record<Provider, string> = {
 
 export const SIDEBAR_KEY = "warden:sidebar-collapsed"
 export const SIDEBAR_WIDTH_KEY = "warden:sidebar-width"
+export const TRANSCRIPT_VIEW_KEY = "warden:transcript-view"
+
+export function readTranscriptView(): TranscriptView {
+  try {
+    return localStorage.getItem(TRANSCRIPT_VIEW_KEY) === "verbose"
+      ? "verbose"
+      : "normal"
+  } catch {
+    return "normal"
+  }
+}
 const DEFAULT_SIDEBAR_WIDTH = 256
 const MIN_SIDEBAR_WIDTH = 208
 const MAX_SIDEBAR_WIDTH = 420
