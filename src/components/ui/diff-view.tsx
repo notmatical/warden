@@ -1,4 +1,11 @@
-import { type CSSProperties, useEffect, useMemo, useState } from "react"
+import {
+  type CSSProperties,
+  type RefObject,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 
 import { type Highlighted, highlightTokens, langFromPath } from "@/lib/shiki"
 import { cn } from "@/lib/utils"
@@ -57,10 +64,19 @@ function parseDiff(patch: string): { rows: DiffRow[]; code: string[] } {
   return { rows, code }
 }
 
-function useHighlighted(code: string[], lang: string): Highlighted | null {
+export function useHighlighted(
+  code: string[],
+  lang: string
+): Highlighted | null {
   const joined = useMemo(() => code.join("\n"), [code])
   const [hl, setHl] = useState<Highlighted | null>(null)
   useEffect(() => {
+    // Nothing to highlight (or a caller gating on visibility passed []):
+    // skip the tokenizer and its grammar load entirely.
+    if (!joined) {
+      setHl(null)
+      return
+    }
     let active = true
     void highlightTokens(joined, lang).then((r) => {
       if (active) setHl(r)
@@ -71,6 +87,33 @@ function useHighlighted(code: string[], lang: string): Highlighted | null {
   }, [joined, lang])
   return hl
 }
+
+const NO_CODE: string[] = []
+
+/** True once the element has come within ~a screen of the viewport. One-shot:
+ *  flips true and stays, so revealed content never tears back down. Lets long
+ *  transcripts defer Shiki + full row DOM for panels far offscreen. */
+export function useNearViewport(ref: RefObject<HTMLElement | null>): boolean {
+  const [near, setNear] = useState(false)
+  useEffect(() => {
+    if (near) return
+    const el = ref.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) setNear(true)
+      },
+      { rootMargin: "600px" }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [near, ref])
+  return near
+}
+
+/** Rows rendered for a panel that hasn't scrolled near the viewport yet — the
+ *  panel is height-capped and scrollable, so this is more than it can show. */
+export const PREVIEW_ROWS = 48
 
 const SIGN = { add: "+", del: "−", ctx: " " } as const
 
@@ -83,12 +126,19 @@ export function DiffLines({
   path?: string
   lang?: string
 }) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const near = useNearViewport(containerRef)
   const { rows, code } = useMemo(() => parseDiff(patch), [patch])
-  const hl = useHighlighted(code, lang ?? langFromPath(path))
+  // Far offscreen: plain text, truncated rows — tokenize + fill in on approach.
+  const hl = useHighlighted(near ? code : NO_CODE, lang ?? langFromPath(path))
+  const shown = near ? rows : rows.slice(0, PREVIEW_ROWS)
 
   return (
-    <div className="w-max min-w-full bg-card font-mono text-sm leading-[1.55] text-foreground">
-      {rows.map((row, i) => {
+    <div
+      ref={containerRef}
+      className="w-max min-w-full bg-card font-mono text-sm leading-[1.55] text-foreground"
+    >
+      {shown.map((row, i) => {
         if (row.kind === "hunk") {
           return (
             <div
@@ -186,7 +236,10 @@ export function DiffView({
           {path}
         </div>
       ) : null}
-      <div className="max-h-72 overflow-auto">
+      {/* content-visibility lets offscreen panels skip layout/paint; the
+          intrinsic-size estimate matches the height cap so scroll geometry
+          stays roughly stable before first render. */}
+      <div className="max-h-72 overflow-auto [contain-intrinsic-size:auto_18rem] [content-visibility:auto]">
         <DiffLines patch={patch} path={pathTitle ?? path} />
       </div>
     </div>
