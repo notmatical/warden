@@ -1,8 +1,10 @@
+import { openUrl } from "@tauri-apps/plugin-opener"
 import {
   ChevronDown,
   ExternalLink,
   FolderGit2,
   GitBranch,
+  GitPullRequest,
   MoreHorizontal,
   Pin,
   PinOff,
@@ -14,6 +16,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { AgentProvidersIcon } from "@/components/agent-providers-icon"
+import { CheckGlyph } from "@/components/common/check-glyph"
 import { CountChip } from "@/components/common/count-chip"
 import {
   DataTable,
@@ -262,6 +265,8 @@ export function FolderView({ projectId }: { projectId: string }) {
           />
         ) : null}
 
+        <OpenPrsSection projectId={projectId} />
+
         <SessionsSection projectId={projectId} />
 
         {linear.phase === "bound" && linear.binding ? (
@@ -273,6 +278,96 @@ export function FolderView({ projectId }: { projectId: string }) {
         ) : null}
       </div>
     </div>
+  )
+}
+
+// PR · Session · Branch · Last active · link.
+const PR_COLS =
+  "grid grid-cols-[110px_minmax(0,1.5fr)_minmax(0,1fr)_92px_36px] items-center gap-x-4"
+
+/** Sessions with an open pull request, surfaced ahead of the full list.
+ *  Click a row to jump to the session; the trailing link opens the PR. */
+function OpenPrsSection({ projectId }: { projectId: string }) {
+  const sessionsMap = useAppStore((s) => s.sessions)
+  const openSession = useAppStore((s) => s.openSession)
+
+  const rows = useMemo(
+    () =>
+      Object.values(sessionsMap)
+        .filter(
+          (s) =>
+            s.projectId === projectId &&
+            s.prNumber != null &&
+            s.prState === "OPEN"
+        )
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+    [sessionsMap, projectId]
+  )
+  if (rows.length === 0) return null
+
+  return (
+    <section className="flex flex-col gap-3">
+      <div className="flex h-7 shrink-0 items-center gap-2">
+        <h2 className="font-semibold text-base text-foreground">
+          Open pull requests
+        </h2>
+        <CountChip>{rows.length}</CountChip>
+      </div>
+      <DataTable>
+        {rows.map((session) => (
+          <DataTableRow
+            key={session.id}
+            className={PR_COLS}
+            onClick={() => openSession(session.id)}
+          >
+            <span className="flex items-center gap-1.5 text-muted-foreground text-xs">
+              <GitPullRequest className="size-3.5 shrink-0 text-emerald-500" />
+              <span className="font-medium text-foreground tabular-nums">
+                #{session.prNumber}
+              </span>
+              <CheckGlyph status={session.prCheckStatus} />
+            </span>
+
+            <span className="truncate font-medium text-[13px] text-foreground">
+              {session.title}
+            </span>
+
+            {session.branch ? (
+              <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground text-xs">
+                <GitBranch className="size-3 shrink-0 opacity-60" />
+                <span className="truncate font-mono">{session.branch}</span>
+              </span>
+            ) : (
+              <span className="text-muted-foreground/40 text-xs">—</span>
+            )}
+
+            <span className="text-muted-foreground text-xs tabular-nums">
+              {relativeTime(session.updatedAt)}
+            </span>
+
+            <div className="flex items-center justify-end">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`View pull request #${session.prNumber} on GitHub`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (session.prUrl) void openUrl(session.prUrl)
+                    }}
+                    className="text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+                  >
+                    <ExternalLink className="size-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>View pull request on GitHub</TooltipContent>
+              </Tooltip>
+            </div>
+          </DataTableRow>
+        ))}
+      </DataTable>
+    </section>
   )
 }
 

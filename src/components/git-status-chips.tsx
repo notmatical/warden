@@ -2,18 +2,17 @@ import { openUrl } from "@tauri-apps/plugin-opener"
 import {
   ArrowDown,
   ArrowUp,
-  CheckCircle2,
   FileDiff,
   GitBranch,
   GitPullRequest,
   Loader2,
   Plus,
   X,
-  XCircle,
 } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 
+import { CheckGlyph } from "@/components/common/check-glyph"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -224,16 +223,6 @@ function StatusChip({
   )
 }
 
-/** The PR's CI-check rollup, as a small leading glyph. */
-function CheckGlyph({ status }: { status: CheckStatus | null }) {
-  if (status === "pending")
-    return <Loader2 className="size-3 animate-spin text-amber-500" />
-  if (status === "failure") return <XCircle className="size-3 text-red-500" />
-  if (status === "success")
-    return <CheckCircle2 className="size-3 text-emerald-500" />
-  return null
-}
-
 /** A link chip to the session's pull request, tinted by its state, with CI status. */
 function PrChip({
   number,
@@ -255,12 +244,13 @@ function PrChip({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="xs"
           onClick={() => url && void openUrl(url)}
-          className="inline-flex items-center gap-1 rounded-lg bg-muted/60 px-2 py-0.5 text-xs text-muted-foreground transition hover:bg-muted hover:text-foreground"
+          className="gap-1.5"
         >
-          <GitPullRequest className={cn("size-3", tone)} />
+          <GitPullRequest className={cn("size-3.5", tone)} />
           <span className="font-medium">#{number}</span>
           {state ? (
             <span className="text-[10px] text-muted-foreground/70">
@@ -268,7 +258,7 @@ function PrChip({
             </span>
           ) : null}
           <CheckGlyph status={checkStatus} />
-        </button>
+        </Button>
       </TooltipTrigger>
       <TooltipContent>View pull request #{number}</TooltipContent>
     </Tooltip>
