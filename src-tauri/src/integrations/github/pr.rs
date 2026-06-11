@@ -23,6 +23,48 @@ pub struct PrInfo {
     pub check_status: Option<CheckStatus>,
 }
 
+/// One CI check's outcome on a PR, for the hover card's per-check rows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum PrCheckState {
+    Success,
+    Failure,
+    Pending,
+    Skipped,
+    Cancelled,
+}
+
+/// One CI check (check run or commit status) on a PR's head commit.
+#[derive(Debug, Clone, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PrCheck {
+    pub name: String,
+    pub state: PrCheckState,
+    pub url: Option<String>,
+    pub started_at: Option<String>,
+    pub completed_at: Option<String>,
+}
+
+/// Richer PR state for the hover card: review decision, diff stats, and the
+/// individual CI checks behind the aggregate glyph.
+#[derive(Debug, Clone, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PrDetails {
+    pub number: i64,
+    pub url: String,
+    /// GitHub's PR state: `OPEN`, `MERGED`, or `CLOSED`.
+    pub state: String,
+    pub title: String,
+    pub is_draft: bool,
+    /// `APPROVED`, `CHANGES_REQUESTED`, or `REVIEW_REQUIRED` (empty when the
+    /// repo requires no review).
+    pub review_decision: Option<String>,
+    pub additions: i64,
+    pub deletions: i64,
+    pub updated_at: Option<String>,
+    pub checks: Vec<PrCheck>,
+}
+
 /// An open PR in a repo, for the review-checkout picker.
 #[derive(Debug, Clone, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -131,6 +173,91 @@ fn rollup_to_status(rollup: Option<&Value>) -> Option<CheckStatus> {
     } else {
         CheckStatus::Success
     })
+}
+
+/// Map one `statusCheckRollup` item to a check row. CheckRuns carry
+/// `name`/`status`/`conclusion`; StatusContexts carry `context`/`state`.
+fn check_row(item: &Value) -> Option<PrCheck> {
+    let text = |key: &str| {
+        item.get(key)
+            .and_then(Value::as_str)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+    };
+    let name = text("name").or_else(|| text("context"))?;
+    let verdict = text("conclusion")
+        .or_else(|| text("state"))
+        .unwrap_or_default()
+        .to_uppercase();
+    let completed = match item.get("status").and_then(Value::as_str) {
+        Some(s) => s.eq_ignore_ascii_case("COMPLETED"),
+        None => true, // StatusContexts have no `status`; their `state` is final
+    };
+    let state = match verdict.as_str() {
+        _ if !completed => PrCheckState::Pending,
+        "SUCCESS" | "NEUTRAL" => PrCheckState::Success,
+        "SKIPPED" => PrCheckState::Skipped,
+        "CANCELLED" => PrCheckState::Cancelled,
+        "FAILURE" | "ERROR" | "TIMED_OUT" | "ACTION_REQUIRED" | "STARTUP_FAILURE" | "STALE" => {
+            PrCheckState::Failure
+        }
+        _ => PrCheckState::Pending,
+    };
+    Some(PrCheck {
+        name,
+        state,
+        url: text("detailsUrl").or_else(|| text("targetUrl")),
+        started_at: text("startedAt"),
+        completed_at: text("completedAt"),
+    })
+}
+
+/// Rich state of PR `number`, for the hover card. `None` when gh can't see it.
+pub fn details(repo: &Path, number: i64) -> Result<Option<PrDetails>> {
+    let out = gh(
+        repo,
+        &[
+            "pr",
+            "view",
+            &number.to_string(),
+            "--json",
+            "number,url,state,title,isDraft,reviewDecision,additions,deletions,updatedAt,statusCheckRollup",
+        ],
+    )
+    .output()
+    .map_err(|e| AppError::Git(format!("failed to run gh: {e}")))?;
+    if !out.status.success() {
+        return Ok(None);
+    }
+
+    let value: Value = serde_json::from_slice(&out.stdout)
+        .map_err(|e| AppError::Git(format!("could not parse gh output: {e}")))?;
+    let text = |key: &str| {
+        value
+            .get(key)
+            .and_then(Value::as_str)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+    };
+    Ok(Some(PrDetails {
+        number: value.get("number").and_then(Value::as_i64).unwrap_or(0),
+        url: text("url").unwrap_or_default(),
+        state: text("state").unwrap_or_else(|| "OPEN".to_string()),
+        title: text("title").unwrap_or_default(),
+        is_draft: value
+            .get("isDraft")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        review_decision: text("reviewDecision"),
+        additions: value.get("additions").and_then(Value::as_i64).unwrap_or(0),
+        deletions: value.get("deletions").and_then(Value::as_i64).unwrap_or(0),
+        updated_at: text("updatedAt"),
+        checks: value
+            .get("statusCheckRollup")
+            .and_then(Value::as_array)
+            .map(|items| items.iter().filter_map(check_row).collect())
+            .unwrap_or_default(),
+    }))
 }
 
 use super::gh_command as gh;

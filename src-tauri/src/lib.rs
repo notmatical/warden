@@ -115,6 +115,7 @@ pub fn run() {
         integrations::github::commands::set_github_source,
         integrations::github::commands::open_pull_request,
         integrations::github::commands::refresh_pr_status,
+        integrations::github::commands::pr_details,
         integrations::github::commands::generate_pr_content,
         integrations::github::commands::list_open_prs,
         integrations::github::commands::checkout_pr,

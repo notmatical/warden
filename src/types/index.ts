@@ -225,6 +225,40 @@ export interface PrInfo {
   title: string
 }
 
+/** One CI check's outcome on a PR. */
+export type PrCheckState =
+  | "success"
+  | "failure"
+  | "pending"
+  | "skipped"
+  | "cancelled"
+
+/** One CI check (check run or commit status) on a PR's head commit. */
+export interface PrCheck {
+  name: string
+  state: PrCheckState
+  url: string | null
+  startedAt: string | null
+  completedAt: string | null
+}
+
+/** Richer PR state for the hover card: review decision, diff stats, and the
+ *  individual CI checks behind the aggregate glyph. */
+export interface PrDetails {
+  number: number
+  url: string
+  /** GitHub PR state: "OPEN" | "MERGED" | "CLOSED". */
+  state: string
+  title: string
+  isDraft: boolean
+  /** "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" when reviews apply. */
+  reviewDecision: string | null
+  additions: number
+  deletions: number
+  updatedAt: string | null
+  checks: PrCheck[]
+}
+
 export interface RepoStatus {
   projectId: string
   name: string

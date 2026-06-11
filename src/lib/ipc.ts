@@ -13,6 +13,7 @@ import type {
   PermissionMode,
   PlanToCodeResult,
   PrContent,
+  PrDetails,
   PrInfo,
   Project,
   ProjectLabels,
@@ -240,6 +241,10 @@ export function checkoutPr(
 
 export function refreshPrStatus(sessionId: string): Promise<PrInfo | null> {
   return invoke("refresh_pr_status", { sessionId })
+}
+
+export function prDetails(sessionId: string): Promise<PrDetails | null> {
+  return invoke("pr_details", { sessionId })
 }
 
 export function getEvents(sessionId: string): Promise<EventRecord[]> {

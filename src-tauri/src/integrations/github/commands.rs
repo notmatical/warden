@@ -165,6 +165,21 @@ pub async fn github_issue_comments(
     Ok(issues::issue_comments(Path::new(&project.path), number)?)
 }
 
+/// Rich state of the session's PR — review decision, diff stats, per-check CI
+/// rows — fetched lazily when the user hovers the PR chip.
+#[tauri::command]
+#[specta::specta]
+pub async fn pr_details(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> CommandResult<Option<pr::PrDetails>> {
+    let session = state.store.get_session(&session_id)?;
+    let number = session
+        .pr_number
+        .ok_or_else(|| AppError::Invalid("session has no pull request".to_string()))?;
+    Ok(pr::details(Path::new(&session.working_dir), number)?)
+}
+
 /// Generate a suggested PR title and body from the session branch's changes,
 /// for the user to review before opening. Falls back to the session title.
 #[tauri::command]

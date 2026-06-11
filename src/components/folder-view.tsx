@@ -31,6 +31,7 @@ import {
 import { useConfirm } from "@/components/confirm-dialog"
 import { ClaudeIcon, CodexIcon } from "@/components/icons/brand"
 import { LabelChip, LabelPicker, labelColor } from "@/components/label-picker"
+import { PrHoverCard } from "@/components/pr-hover-card"
 import { SessionFavicon } from "@/components/session-favicon"
 import { Button } from "@/components/ui/button"
 import {
@@ -320,13 +321,15 @@ function OpenPrsSection({ projectId }: { projectId: string }) {
             className={PR_COLS}
             onClick={() => openSession(session.id)}
           >
-            <span className="flex items-center gap-1.5 text-muted-foreground text-xs">
-              <GitPullRequest className="size-3.5 shrink-0 text-emerald-500" />
-              <span className="font-medium text-foreground tabular-nums">
-                #{session.prNumber}
+            <PrHoverCard sessionId={session.id}>
+              <span className="flex w-fit items-center gap-1.5 text-muted-foreground text-xs">
+                <GitPullRequest className="size-3.5 shrink-0 text-emerald-500" />
+                <span className="font-medium text-foreground tabular-nums">
+                  #{session.prNumber}
+                </span>
+                <CheckGlyph status={session.prCheckStatus} />
               </span>
-              <CheckGlyph status={session.prCheckStatus} />
-            </span>
+            </PrHoverCard>
 
             <span className="truncate font-medium text-[13px] text-foreground">
               {session.title}

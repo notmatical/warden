@@ -771,6 +771,18 @@ async refreshPrStatus(sessionId: string) : Promise<Result<PrInfo | null, IpcErro
 }
 },
 /**
+ * Rich state of the session's PR — review decision, diff stats, per-check CI
+ * rows — fetched lazily when the user hovers the PR chip.
+ */
+async prDetails(sessionId: string) : Promise<Result<PrDetails | null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("pr_details", { sessionId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Generate a suggested PR title and body from the session branch's changes,
  * for the user to review before opening. Falls back to the session title.
  */
@@ -1294,9 +1306,31 @@ export type PermissionMode = "acceptEdits" | "bypassPermissions" | "plan" | "def
  */
 export type PlanToCodeResult = { planner: Session; coder: Session }
 /**
+ * One CI check (check run or commit status) on a PR's head commit.
+ */
+export type PrCheck = { name: string; state: PrCheckState; url: string | null; startedAt: string | null; completedAt: string | null }
+/**
+ * One CI check's outcome on a PR, for the hover card's per-check rows.
+ */
+export type PrCheckState = "success" | "failure" | "pending" | "skipped" | "cancelled"
+/**
  * A generated PR title and body, for the user to review before opening.
  */
 export type PrContent = { title: string; body: string }
+/**
+ * Richer PR state for the hover card: review decision, diff stats, and the
+ * individual CI checks behind the aggregate glyph.
+ */
+export type PrDetails = { number: number; url: string; 
+/**
+ * GitHub's PR state: `OPEN`, `MERGED`, or `CLOSED`.
+ */
+state: string; title: string; isDraft: boolean; 
+/**
+ * `APPROVED`, `CHANGES_REQUESTED`, or `REVIEW_REQUIRED` (empty when the
+ * repo requires no review).
+ */
+reviewDecision: string | null; additions: number; deletions: number; updatedAt: string | null; checks: PrCheck[] }
 /**
  * A pull request's identity and state, as surfaced to the UI.
  */

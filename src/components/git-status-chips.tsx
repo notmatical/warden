@@ -13,6 +13,7 @@ import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 
 import { CheckGlyph } from "@/components/common/check-glyph"
+import { PrHoverCard } from "@/components/pr-hover-card"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -223,13 +224,16 @@ function StatusChip({
   )
 }
 
-/** A link chip to the session's pull request, tinted by its state, with CI status. */
+/** A link chip to the session's pull request, tinted by its state, with CI
+ *  status. Hovering surfaces the full PR hover card. */
 function PrChip({
+  sessionId,
   number,
   url,
   state,
   checkStatus,
 }: {
+  sessionId: string
   number: number
   url: string | null
   state: string | null
@@ -242,26 +246,23 @@ function PrChip({
         ? "text-red-500"
         : "text-emerald-500"
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          variant="secondary"
-          size="xs"
-          onClick={() => url && void openUrl(url)}
-          className="gap-1.5"
-        >
-          <GitPullRequest className={cn("size-3.5", tone)} />
-          <span className="font-medium">#{number}</span>
-          {state ? (
-            <span className="text-[10px] text-muted-foreground/70">
-              {state.toLowerCase()}
-            </span>
-          ) : null}
-          <CheckGlyph status={checkStatus} />
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>View pull request #{number}</TooltipContent>
-    </Tooltip>
+    <PrHoverCard sessionId={sessionId}>
+      <Button
+        variant="secondary"
+        size="xs"
+        onClick={() => url && void openUrl(url)}
+        className="gap-1.5"
+      >
+        <GitPullRequest className={cn("size-3.5", tone)} />
+        <span className="font-medium">#{number}</span>
+        {state ? (
+          <span className="text-[10px] text-muted-foreground/70">
+            {state.toLowerCase()}
+          </span>
+        ) : null}
+        <CheckGlyph status={checkStatus} />
+      </Button>
+    </PrHoverCard>
   )
 }
 
@@ -570,6 +571,7 @@ export function GitStatusChips({
         ) : null}
         {session?.prNumber ? (
           <PrChip
+            sessionId={sessionId}
             number={session.prNumber}
             url={session.prUrl}
             state={session.prState}
