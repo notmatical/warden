@@ -30,9 +30,15 @@ export interface ToolView {
   /** A shorter display form of `target` (e.g. a path's last segments), so the
    *  filename survives truncation. Falls back to `target` when unset. */
   label?: string
+  /** Set when `target` is a file path — the renderer relativizes it against
+   *  the session working directory before shortening for the summary line. */
+  path?: string
   added?: number
   removed?: number
   detail?: ToolDetail
+  /** Tool-call input fields worth surfacing in the verbose view (a Grep's
+   *  pattern/path/flags, a search's query, …). */
+  params?: { key: string; value: string }[]
 }
 
 function asStr(value: unknown): string | undefined {
@@ -41,10 +47,11 @@ function asStr(value: unknown): string | undefined {
 
 /** A path's last two segments (handling both `/` and `\`), so a long absolute
  *  path truncates without hiding the filename. */
-function shortenPath(path: string | undefined): string | undefined {
+export function shortenPath(path: string | undefined): string | undefined {
   if (!path) return undefined
   const segments = path.split(/[/\\]/).filter(Boolean)
-  if (segments.length <= 2) return path
+  if (segments.length === 0) return path
+  // Always join with `/` so Windows paths read uniformly in summary lines.
   return segments.slice(-2).join("/")
 }
 
@@ -72,13 +79,29 @@ export function pathRelativeTo(
   return path
 }
 
+/** Flatten a tool input's fields to display pairs for the verbose view. */
+function inputParams(inp: Record<string, unknown>): {
+  key: string
+  value: string
+}[] {
+  const out: { key: string; value: string }[] = []
+  for (const [key, value] of Object.entries(inp)) {
+    if (value === undefined || value === null) continue
+    out.push({
+      key,
+      value: typeof value === "string" ? value : JSON.stringify(value),
+    })
+  }
+  return out
+}
+
 /** A file view: full path in `target` (tooltip), tail in `label` (display). */
 function fileView(
   verb: string,
   path: string | undefined,
   extra?: Partial<ToolView>
 ): ToolView {
-  return { verb, target: path, label: shortenPath(path), ...extra }
+  return { verb, target: path, label: shortenPath(path), path, ...extra }
 }
 
 /** First changed file path in a Codex `Edit` input (`{ changes: [{ path }] }`). */
@@ -254,9 +277,12 @@ export function describeTool(
 
     case "Bash": {
       const command = asStr(inp.command) ?? ""
+      // The agent's own description of the command reads better in a summary
+      // line than the raw command (which stays in the tooltip + panel).
       return {
         verb: "Ran",
         target: command,
+        label: asStr(inp.description),
         detail: {
           kind: "terminal",
           command,
@@ -271,6 +297,7 @@ export function describeTool(
       return {
         verb: "Searched",
         target: pattern,
+        params: inputParams(inp),
         detail: result?.content
           ? { kind: "text", text: result.content }
           : undefined,
@@ -282,6 +309,7 @@ export function describeTool(
       return {
         verb: "Globbed",
         target: pattern,
+        params: inputParams(inp),
         detail: result?.content
           ? { kind: "text", text: result.content }
           : undefined,
@@ -292,6 +320,7 @@ export function describeTool(
       return {
         verb: "Fetched",
         target: asStr(inp.url),
+        params: inputParams(inp),
         detail: result?.content
           ? { kind: "text", text: result.content }
           : undefined,
@@ -302,6 +331,7 @@ export function describeTool(
       return {
         verb: "Searched",
         target: asStr(inp.query),
+        params: inputParams(inp),
         detail: result?.content
           ? { kind: "text", text: result.content }
           : undefined,
