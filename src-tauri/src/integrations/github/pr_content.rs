@@ -1,19 +1,16 @@
-//! Draft a pull request's title and body from a branch's commits and diffstat,
-//! via one cheap `claude` (Haiku) invocation — mirroring background naming.
+//! Draft a pull request's title and body from a branch's changes, via one
+//! cheap one-shot on the session's own backend — mirroring background naming.
 
 use std::path::Path;
-use std::process::Stdio;
 
 use serde::Serialize;
 use specta::Type;
-use tokio::process::Command;
 
-use crate::error::{AppError, Result};
+use crate::agent::oneshot;
+use crate::domain::Backend;
+use crate::error::Result;
 use crate::git;
-use crate::providers::claude::agent::{resolve_claude, run_oneshot};
 
-/// A small, fast model is plenty for a PR title + body.
-const MODEL: &str = "haiku";
 /// Cap the diffstat fed to the model so a huge change stays cheap.
 const MAX_STAT_CHARS: usize = 6000;
 /// Cap the unified diff likewise — enough substance for a good body.
@@ -64,7 +61,13 @@ fn build_prompt(ctx: &PromptContext) -> String {
         Some(t) => format!(
             "\n\nThe repository uses this PR template — follow its structure for the body:\n{t}"
         ),
-        None => String::new(),
+        None => "\n\nThere is no PR template. Structure the body as:\n\
+                 ## What changed\n(bullet points of the notable changes)\n\
+                 ## Why\n(a short paragraph on the motivation)\n\
+                 ## Notes for review\n(only things a reviewer genuinely needs — \
+                 caveats, behavior changes, verification done; omit the whole \
+                 section when there are none)"
+            .to_string(),
     };
     let subjects = if ctx.subjects.is_empty() {
         "(none yet — the changes below are still uncommitted; they will be \
@@ -80,8 +83,7 @@ fn build_prompt(ctx: &PromptContext) -> String {
          Output the PR TITLE on the first line (imperative mood, under 70 chars, no \
          trailing period; match the style of the repository's commit subjects — e.g. \
          Conventional Commits like `feat(scope): …` — when they follow one), then a \
-         blank line, then the PR BODY in GitHub-flavored markdown (a short summary \
-         followed by bullet points of the notable changes). \
+         blank line, then the PR BODY in GitHub-flavored markdown. \
          Do not wrap the output in code fences. Output only the title and body.\
          {template_block}\n\n\
          Commits on this branch:\n{subjects}\n\n\
@@ -123,9 +125,11 @@ fn capped(text: String, max: usize) -> String {
 }
 
 /// Generate a PR title + body for `worktree`'s changes since `base` —
-/// committed or not (the caller commits before opening the PR). Falls back to
-/// the session title + commit list if there's no context or the call fails.
+/// committed or not (the caller commits before opening the PR) — on the
+/// session's own `backend`. Falls back to the session title + commit list if
+/// there's no context or the call fails.
 pub async fn generate_pr_content(
+    backend: Backend,
     worktree: &Path,
     base: &str,
     base_branch: Option<&str>,
@@ -173,35 +177,6 @@ pub async fn generate_pr_content(
         patch: &patch,
         template: template.as_deref(),
     });
-    // The prompt is fed over stdin, not as an argument: a multiline prompt can't
-    // be passed to a Windows `claude.cmd` shim ("batch file arguments are invalid").
-    let mut cmd = Command::new(resolve_claude());
-    cmd.args([
-        "-p",
-        "--output-format",
-        "json",
-        "--model",
-        MODEL,
-        "--permission-mode",
-        "bypassPermissions",
-        "--max-turns",
-        "1",
-    ])
-    .current_dir(worktree)
-    .stdin(Stdio::piped())
-    .stdout(Stdio::piped())
-    .stderr(Stdio::null())
-    .kill_on_drop(true);
-    let output = run_oneshot(cmd, &prompt)
-        .await
-        .map_err(|e| AppError::Agent(format!("failed to run claude: {e}")))?;
-
-    if !output.status.success() {
-        return Ok(fallback());
-    }
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let result = serde_json::from_str::<serde_json::Value>(stdout.trim())
-        .ok()
-        .and_then(|v| v.get("result").and_then(|r| r.as_str()).map(str::to_string));
+    let result = oneshot::run(backend, worktree, &prompt).await;
     Ok(result.as_deref().and_then(parse).unwrap_or_else(fallback))
 }

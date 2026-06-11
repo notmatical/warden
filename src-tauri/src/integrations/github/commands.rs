@@ -194,6 +194,7 @@ pub async fn generate_pr_content(
         .clone()
         .ok_or_else(|| AppError::Invalid("session has no base commit".to_string()))?;
     crate::integrations::github::pr_content::generate_pr_content(
+        session.backend,
         std::path::Path::new(&session.working_dir),
         &base,
         session.base_branch.as_deref(),

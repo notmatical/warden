@@ -14,7 +14,7 @@ mod workspace;
 
 // Keep the foundation modules reachable at their familiar crate-root paths
 // (`crate::error`, `crate::util`, …) while they live under `core/`.
-pub use core::{error, events, platform, state, util};
+pub use core::{error, events, model_config, platform, state, util};
 
 use tauri::Manager;
 #[cfg(target_os = "macos")]

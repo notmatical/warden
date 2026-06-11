@@ -3,6 +3,7 @@
 
 pub mod attachments;
 mod naming;
+pub mod oneshot;
 pub mod recipes;
 mod session_proc;
 mod stream;

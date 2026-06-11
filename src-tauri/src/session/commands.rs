@@ -458,7 +458,7 @@ pub async fn send_message(
     // off the user's own words, before attachment references are appended.
     let naming_ctx =
         (session.turns == 0 && session.auto_named && session.role == SessionRole::Chat)
-            .then(|| (session.working_dir.clone(), text.clone()));
+            .then(|| (session.backend, session.working_dir.clone(), text.clone()));
 
     // Append a reference line per attachment so the agent reads it via its tools.
     let message = match attachments {
@@ -478,10 +478,11 @@ pub async fn send_message(
         .run_turn(app.clone(), state.store.clone(), session, message)
         .await?;
 
-    if let Some((working_dir, message)) = naming_ctx {
+    if let Some((backend, working_dir, message)) = naming_ctx {
         let store = state.store.clone();
         tauri::async_runtime::spawn(async move {
-            let Some(title) = crate::agent::generate_session_title(&working_dir, &message).await
+            let Some(title) =
+                crate::agent::generate_session_title(backend, &working_dir, &message).await
             else {
                 return;
             };

@@ -3,6 +3,7 @@
 
 pub mod error;
 pub mod events;
+pub mod model_config;
 pub mod platform;
 pub mod poll_tier;
 pub mod state;
