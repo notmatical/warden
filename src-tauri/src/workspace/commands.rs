@@ -11,7 +11,7 @@ use crate::error::{AppError, CommandResult};
 use crate::git;
 use crate::state::AppState;
 
-use super::config::{self, RepoConfig};
+use super::config::{self, WorktreeConfig};
 
 // --- Projects ---------------------------------------------------------------
 
@@ -189,23 +189,23 @@ pub async fn set_session_roots(
 
 #[tauri::command]
 #[specta::specta]
-pub async fn get_repo_config(
+pub async fn get_worktree_config(
     state: State<'_, AppState>,
     project_id: String,
-) -> CommandResult<RepoConfig> {
+) -> CommandResult<WorktreeConfig> {
     let project = state.store.get_project(&project_id)?;
     config::load(Path::new(&project.path)).map_err(Into::into)
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn update_repo_config(
+pub async fn update_worktree_config(
     state: State<'_, AppState>,
     project_id: String,
-    config: RepoConfig,
-) -> CommandResult<RepoConfig> {
+    config: WorktreeConfig,
+) -> CommandResult<WorktreeConfig> {
     let project = state.store.get_project(&project_id)?;
-    let config = RepoConfig {
+    let config = WorktreeConfig {
         setup: config::clean(config.setup),
         teardown: config::clean(config.teardown),
     };
