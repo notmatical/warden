@@ -1,21 +1,20 @@
-//! Draft a pull request's title and body from a branch's commits and diffstat,
-//! via one cheap `claude` (Haiku) invocation — mirroring background naming.
+//! Draft a pull request's title and body from a branch's changes, via one
+//! cheap one-shot on the session's own backend — mirroring background naming.
 
 use std::path::Path;
-use std::process::Stdio;
 
 use serde::Serialize;
 use specta::Type;
-use tokio::process::Command;
 
-use crate::error::{AppError, Result};
+use crate::agent::oneshot;
+use crate::domain::Backend;
+use crate::error::Result;
 use crate::git;
-use crate::providers::claude::agent::{resolve_claude, run_oneshot};
 
-/// A small, fast model is plenty for a PR title + body.
-const MODEL: &str = "haiku";
 /// Cap the diffstat fed to the model so a huge change stays cheap.
 const MAX_STAT_CHARS: usize = 6000;
+/// Cap the unified diff likewise — enough substance for a good body.
+const MAX_PATCH_CHARS: usize = 12000;
 
 /// A generated PR title and body, for the user to review before opening.
 #[derive(Debug, Clone, Serialize, Type)]
@@ -42,23 +41,58 @@ fn pr_template(worktree: &Path) -> Option<String> {
     None
 }
 
-fn build_prompt(subjects: &str, stat: &str, template: Option<&str>) -> String {
-    let template_block = match template {
+/// Everything the model gets to see about the change.
+struct PromptContext<'a> {
+    base_branch: Option<&'a str>,
+    subjects: &'a str,
+    recent_style: &'a str,
+    status: &'a str,
+    stat: &'a str,
+    patch: &'a str,
+    template: Option<&'a str>,
+}
+
+fn build_prompt(ctx: &PromptContext) -> String {
+    let target = match ctx.base_branch {
+        Some(b) => format!(" The PR targets the `{b}` branch."),
+        None => String::new(),
+    };
+    let template_block = match ctx.template {
         Some(t) => format!(
             "\n\nThe repository uses this PR template — follow its structure for the body:\n{t}"
         ),
-        None => String::new(),
+        None => "\n\nThere is no PR template. Structure the body as:\n\
+                 ## What changed\n(bullet points of the notable changes)\n\
+                 ## Why\n(a short paragraph on the motivation)\n\
+                 ## Notes for review\n(only things a reviewer genuinely needs — \
+                 caveats, behavior changes, verification done; omit the whole \
+                 section when there are none)"
+            .to_string(),
+    };
+    let subjects = if ctx.subjects.is_empty() {
+        "(none yet — the changes below are still uncommitted; they will be \
+         committed before the PR opens)"
+    } else {
+        ctx.subjects
     };
     format!(
         "You are writing a GitHub pull request for a set of changes. This is a \
-         writing task, not a conversation.\n\n\
+         writing task, not a conversation: you already have all the context you \
+         will get, below. Never ask questions or request more information — write \
+         the best PR you can from it.{target}\n\n\
          Output the PR TITLE on the first line (imperative mood, under 70 chars, no \
-         trailing period), then a blank line, then the PR BODY in GitHub-flavored \
-         markdown (a short summary followed by bullet points of the notable changes). \
+         trailing period; match the style of the repository's commit subjects — e.g. \
+         Conventional Commits like `feat(scope): …` — when they follow one), then a \
+         blank line, then the PR BODY in GitHub-flavored markdown. \
          Do not wrap the output in code fences. Output only the title and body.\
          {template_block}\n\n\
-         Commits:\n{subjects}\n\n\
-         Files changed:\n{stat}"
+         Commits on this branch:\n{subjects}\n\n\
+         Recent commits in this repository (style reference only):\n{}\n\n\
+         Uncommitted changes (`git status --porcelain`):\n{}\n\n\
+         Files changed:\n{}\n\n\
+         Diff against the base (may be truncated; content of new untracked files \
+         is not shown — see the status above):\n{}",
+        ctx.recent_style, ctx.status, ctx.stat, ctx.patch
     )
 }
 
@@ -81,11 +115,24 @@ fn parse(raw: &str) -> Option<PrContent> {
     Some(PrContent { title, body })
 }
 
-/// Generate a PR title + body for `worktree`'s changes since `base`. Falls back
-/// to the session title + commit list if the model call fails.
+fn capped(text: String, max: usize) -> String {
+    if text.chars().count() <= max {
+        return text;
+    }
+    let mut out: String = text.chars().take(max).collect();
+    out.push_str("\n… (truncated)");
+    out
+}
+
+/// Generate a PR title + body for `worktree`'s changes since `base` —
+/// committed or not (the caller commits before opening the PR) — on the
+/// session's own `backend`. Falls back to the session title + commit list if
+/// there's no context or the call fails.
 pub async fn generate_pr_content(
+    backend: Backend,
     worktree: &Path,
     base: &str,
+    base_branch: Option<&str>,
     fallback_title: &str,
 ) -> Result<PrContent> {
     let commits = git::diff::commits_since(worktree, base, 30).unwrap_or_default();
@@ -94,47 +141,42 @@ pub async fn generate_pr_content(
         .map(|c| format!("- {}", c.subject))
         .collect::<Vec<_>>()
         .join("\n");
-    let stat: String = git::run(worktree, &["diff", base, "--stat"])
+    // `git diff` is blind to untracked files, and an agent session's work is
+    // often uncommitted new files — the porcelain status is what catches those.
+    let status = git::run(worktree, &["status", "--porcelain"]).unwrap_or_default();
+    let stat = capped(
+        git::run(worktree, &["diff", base, "--stat"]).unwrap_or_default(),
+        MAX_STAT_CHARS,
+    );
+    let patch = capped(
+        git::run(worktree, &["diff", base]).unwrap_or_default(),
+        MAX_PATCH_CHARS,
+    );
+    let recent_style = git::run(worktree, &["log", "-8", "--format=- %s", base])
         .unwrap_or_default()
-        .chars()
-        .take(MAX_STAT_CHARS)
-        .collect();
+        .trim()
+        .to_string();
 
     let fallback = || PrContent {
         title: fallback_title.to_string(),
         body: subjects.clone(),
     };
 
-    let prompt = build_prompt(&subjects, &stat, pr_template(worktree).as_deref());
-    // The prompt is fed over stdin, not as an argument: a multiline prompt can't
-    // be passed to a Windows `claude.cmd` shim ("batch file arguments are invalid").
-    let mut cmd = Command::new(resolve_claude());
-    cmd.args([
-        "-p",
-        "--output-format",
-        "json",
-        "--model",
-        MODEL,
-        "--permission-mode",
-        "bypassPermissions",
-        "--max-turns",
-        "1",
-    ])
-    .current_dir(worktree)
-    .stdin(Stdio::piped())
-    .stdout(Stdio::piped())
-    .stderr(Stdio::null())
-    .kill_on_drop(true);
-    let output = run_oneshot(cmd, &prompt)
-        .await
-        .map_err(|e| AppError::Agent(format!("failed to run claude: {e}")))?;
-
-    if !output.status.success() {
+    // Nothing to describe — asking the model would only invite made-up output.
+    if subjects.is_empty() && status.trim().is_empty() && stat.trim().is_empty() {
         return Ok(fallback());
     }
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let result = serde_json::from_str::<serde_json::Value>(stdout.trim())
-        .ok()
-        .and_then(|v| v.get("result").and_then(|r| r.as_str()).map(str::to_string));
+
+    let template = pr_template(worktree);
+    let prompt = build_prompt(&PromptContext {
+        base_branch,
+        subjects: &subjects,
+        recent_style: &recent_style,
+        status: &status,
+        stat: &stat,
+        patch: &patch,
+        template: template.as_deref(),
+    });
+    let result = oneshot::run(backend, worktree, &prompt).await;
     Ok(result.as_deref().and_then(parse).unwrap_or_else(fallback))
 }

@@ -1,3 +1,4 @@
+import modelConfig from "@/config/models.json"
 import type { Backend, EffortLevel } from "@/types"
 
 export interface ModelOption {
@@ -9,38 +10,14 @@ export interface ModelOption {
 }
 
 /**
- * Selectable models, grouped by provider. Standard-context models come first
- * and are the defaults; the `[1m]` suffix enables the 1M-token context window
- * (which requires paid usage credits), so those are explicit opt-ins. The fast
- * service tier is a per-model toggle (see {@link withFast}), not a list entry.
+ * Selectable models, grouped by provider, from the shared models config
+ * (src/config/models.json — also read by the Rust backend). Standard-context
+ * models come first and are the defaults; the `[1m]` suffix enables the
+ * 1M-token context window (which requires paid usage credits), so those are
+ * explicit opt-ins. The fast service tier is a per-model toggle (see
+ * {@link withFast}), not a list entry.
  */
-export const MODELS: ModelOption[] = [
-  // Anthropic
-  { id: "claude-fable-5[1m]", label: "Fable 5 (1M)", provider: "Anthropic" },
-  { id: "claude-fable-5", label: "Fable 5", provider: "Anthropic" },
-  { id: "claude-opus-4-8[1m]", label: "Opus 4.8 (1M)", provider: "Anthropic" },
-  { id: "claude-opus-4-8", label: "Opus 4.8", provider: "Anthropic" },
-  { id: "claude-opus-4-7[1m]", label: "Opus 4.7 (1M)", provider: "Anthropic" },
-  { id: "claude-opus-4-7", label: "Opus 4.7", provider: "Anthropic" },
-  {
-    id: "claude-sonnet-4-6[1m]",
-    label: "Sonnet 4.6 (1M)",
-    provider: "Anthropic",
-  },
-  { id: "claude-sonnet-4-6", label: "Sonnet 4.6", provider: "Anthropic" },
-  { id: "haiku", label: "Haiku", provider: "Anthropic" },
-
-  // OpenAI
-  { id: "gpt-5.5", label: "GPT-5.5", provider: "OpenAI" },
-  { id: "gpt-5.4", label: "GPT-5.4", provider: "OpenAI" },
-  { id: "gpt-5.4-mini", label: "GPT-5.4 Mini", provider: "OpenAI" },
-  { id: "gpt-5.3", label: "GPT-5.3", provider: "OpenAI" },
-  { id: "gpt-5.3-codex", label: "GPT-5.3 Codex", provider: "OpenAI" },
-  { id: "gpt-5.2-codex", label: "GPT-5.2 Codex", provider: "OpenAI" },
-  { id: "gpt-5.1-codex-max", label: "GPT-5.1 Codex Max", provider: "OpenAI" },
-  { id: "gpt-5.2", label: "GPT-5.2", provider: "OpenAI" },
-  { id: "gpt-5.1-codex-mini", label: "GPT-5.1 Codex Mini", provider: "OpenAI" },
-]
+export const MODELS: ModelOption[] = modelConfig.models
 
 /**
  * The agent backend that runs a model id, mirroring the backend's own rule
@@ -66,12 +43,7 @@ const FAST_SUFFIX = "-fast"
  * service tier exposed via the picker's toggle, not a standalone list entry.
  * Codex tags its fast tier with the same `-fast` suffix the backend expects.
  */
-const FAST_VARIANTS: Record<string, string> = {
-  "claude-opus-4-8[1m]": `claude-opus-4-8[1m]${FAST_SUFFIX}`,
-  "gpt-5.5": `gpt-5.5${FAST_SUFFIX}`,
-  "gpt-5.4": `gpt-5.4${FAST_SUFFIX}`,
-  "gpt-5.4-mini": `gpt-5.4-mini${FAST_SUFFIX}`,
-}
+const FAST_VARIANTS: Record<string, string> = modelConfig.fastVariants
 
 /** Whether a model id selects the fast service tier. */
 export function isFastModel(id: string): boolean {
@@ -94,11 +66,11 @@ export function withFast(id: string, fast: boolean): string {
   return fast && base in FAST_VARIANTS ? FAST_VARIANTS[base] : base
 }
 
-export const DEFAULT_CHAT_MODEL = "claude-opus-4-8"
-export const DEFAULT_PLANNER_MODEL = "claude-sonnet-4-6"
-export const DEFAULT_CODER_MODEL = "claude-opus-4-8"
+export const DEFAULT_CHAT_MODEL = modelConfig.defaults.chat
+export const DEFAULT_PLANNER_MODEL = modelConfig.defaults.planner
+export const DEFAULT_CODER_MODEL = modelConfig.defaults.coder
 /** Default model shown for Codex sessions (Codex's current default). */
-export const DEFAULT_CODEX_MODEL = "gpt-5.5"
+export const DEFAULT_CODEX_MODEL = modelConfig.defaults.codexChat
 
 const MODEL_ALIASES: Record<string, string> = {
   opus: "Opus",

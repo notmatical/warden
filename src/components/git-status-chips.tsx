@@ -2,19 +2,18 @@ import { openUrl } from "@tauri-apps/plugin-opener"
 import {
   ArrowDown,
   ArrowUp,
-  CheckCircle2,
   FileDiff,
   GitBranch,
   GitPullRequest,
   Loader2,
   Plus,
   X,
-  XCircle,
 } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 
-import { LandSessionButton } from "@/components/land-session-dialog"
+import { CheckDot } from "@/components/common/check-dot"
+import { PrHoverCard } from "@/components/pr-hover-card"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -225,23 +224,17 @@ function StatusChip({
   )
 }
 
-/** The PR's CI-check rollup, as a small leading glyph. */
-function CheckGlyph({ status }: { status: CheckStatus | null }) {
-  if (status === "pending")
-    return <Loader2 className="size-3 animate-spin text-amber-500" />
-  if (status === "failure") return <XCircle className="size-3 text-red-500" />
-  if (status === "success")
-    return <CheckCircle2 className="size-3 text-emerald-500" />
-  return null
-}
-
-/** A link chip to the session's pull request, tinted by its state, with CI status. */
+/** A link chip to the session's pull request: the PR icon tinted by state,
+ *  the number, and a trailing CI-checks dot. Hovering surfaces the full PR
+ *  hover card. */
 function PrChip({
+  sessionId,
   number,
   url,
   state,
   checkStatus,
 }: {
+  sessionId: string
   number: number
   url: string | null
   state: string | null
@@ -254,25 +247,18 @@ function PrChip({
         ? "text-red-500"
         : "text-emerald-500"
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          onClick={() => url && void openUrl(url)}
-          className="inline-flex items-center gap-1 rounded-lg bg-muted/60 px-2 py-0.5 text-xs text-muted-foreground transition hover:bg-muted hover:text-foreground"
-        >
-          <GitPullRequest className={cn("size-3", tone)} />
-          <span className="font-medium">#{number}</span>
-          {state ? (
-            <span className="text-[10px] text-muted-foreground/70">
-              {state.toLowerCase()}
-            </span>
-          ) : null}
-          <CheckGlyph status={checkStatus} />
-        </button>
-      </TooltipTrigger>
-      <TooltipContent>View pull request #{number}</TooltipContent>
-    </Tooltip>
+    <PrHoverCard sessionId={sessionId}>
+      <Button
+        variant="secondary"
+        size="xs"
+        onClick={() => url && void openUrl(url)}
+        className="gap-1.5"
+      >
+        <GitPullRequest className={cn("size-3.5", tone)} />
+        <span className="font-medium">#{number}</span>
+        <CheckDot status={checkStatus} />
+      </Button>
+    </PrHoverCard>
   )
 }
 
@@ -321,6 +307,64 @@ function SyncButton({
         </Button>
       </TooltipTrigger>
       <TooltipContent>Rebase onto the latest base branch</TooltipContent>
+    </Tooltip>
+  )
+}
+
+/** One-click PR, the way `claude /create-pr` does it: draft a title + body from
+ *  the branch's changes, commit everything, push, and open the PR against the
+ *  session's base — no dialog. */
+function CreatePrButton({
+  sessionId,
+  refresh,
+}: {
+  sessionId: string
+  refresh: () => void
+}) {
+  const session = useAppStore((s) => s.sessions[sessionId])
+  const openPr = useAppStore((s) => s.openPullRequest)
+  const [busy, setBusy] = useState(false)
+
+  const run = async () => {
+    setBusy(true)
+    // Best-effort AI draft; the backend already falls back to the session title.
+    const content = await ipc.generatePrContent(sessionId).catch(() => null)
+    const pr = await openPr(
+      sessionId,
+      content?.title ?? session?.title ?? "",
+      content?.body ?? "",
+      false
+    )
+    setBusy(false)
+    if (!pr) return
+    toast.success(`Opened pull request #${pr.number}`, {
+      action: { label: "View", onClick: () => void openUrl(pr.url) },
+    })
+    refresh()
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="secondary"
+          size="xs"
+          onClick={() => void run()}
+          disabled={busy}
+          className="gap-1.5"
+        >
+          {busy ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            <GitPullRequest className="size-3.5" />
+          )}
+          {busy ? "Creating PR…" : "Create PR"}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>
+        Commit, push, and open a pull request — the title and description are
+        drafted for you
+      </TooltipContent>
     </Tooltip>
   )
 }
@@ -416,6 +460,18 @@ export function GitStatusChips({
   // Any session that recorded a fork point can show its changes — isolation
   // is irrelevant; in-checkout sessions diff against HEAD-at-start.
   const canViewDiff = !!session?.baseSha && !session.mergedAt
+  // A PR can open once the branch has anything over its base (committed,
+  // uncommitted, or already pushed) and no PR exists yet.
+  const hasWork =
+    (primary?.added ?? 0) + (primary?.removed ?? 0) > 0 ||
+    (primary?.ahead ?? 0) > 0
+  const canCreatePr =
+    !!session?.isIsolated &&
+    !!session.branch &&
+    !session.mergedAt &&
+    !session.prNumber &&
+    hasRemote &&
+    hasWork
 
   // Re-check the PR's state whenever this session's view mounts.
   const prNumber = session?.prNumber ?? null
@@ -511,6 +567,7 @@ export function GitStatusChips({
         ) : null}
         {session?.prNumber ? (
           <PrChip
+            sessionId={sessionId}
             number={session.prNumber}
             url={session.prUrl}
             state={session.prState}
@@ -535,11 +592,9 @@ export function GitStatusChips({
             </TooltipContent>
           </Tooltip>
         ) : null}
-        <LandSessionButton
-          sessionId={sessionId}
-          hasRemote={hasRemote}
-          refresh={refresh}
-        />
+        {canCreatePr ? (
+          <CreatePrButton sessionId={sessionId} refresh={refresh} />
+        ) : null}
       </div>
     </div>
   )

@@ -1,13 +1,8 @@
 import { openUrl } from "@tauri-apps/plugin-opener"
-import {
-  CheckCircle2,
-  GitBranch,
-  GitPullRequest,
-  Loader2,
-  XCircle,
-} from "lucide-react"
+import { GitBranch, GitPullRequest } from "lucide-react"
 import type { ReactNode } from "react"
 
+import { CheckDot } from "@/components/common/check-dot"
 import { SessionFavicon } from "@/components/session-favicon"
 import {
   HoverCard,
@@ -17,22 +12,12 @@ import {
 import { formatModelName } from "@/lib/models"
 import { relativeTime } from "@/lib/time"
 import { cn } from "@/lib/utils"
-import type { CheckStatus, Session } from "@/types"
+import type { Session } from "@/types"
 
 const STATUS_DOT: Record<Session["status"], string> = {
   idle: "bg-muted-foreground/40",
   running: "animate-pulse bg-amber-500",
   error: "bg-red-500",
-}
-
-/** The PR's CI-check rollup, as a small trailing glyph. */
-function CheckGlyph({ status }: { status: CheckStatus | null }) {
-  if (status === "pending")
-    return <Loader2 className="size-3 animate-spin text-amber-500" />
-  if (status === "failure") return <XCircle className="size-3 text-red-500" />
-  if (status === "success")
-    return <CheckCircle2 className="size-3 text-emerald-500" />
-  return null
 }
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
@@ -75,7 +60,7 @@ export function SessionHoverCard({
         side="right"
         align="start"
         sideOffset={12}
-        className="w-64 space-y-2.5 rounded-2xl p-3"
+        className="w-64 space-y-2.5 p-3"
       >
         <div className="flex items-center gap-2">
           <SessionFavicon
@@ -115,12 +100,7 @@ export function SessionHoverCard({
               >
                 <GitPullRequest className={cn("size-3 shrink-0", prTone)} />
                 <span className="font-medium">#{session.prNumber}</span>
-                {session.prState ? (
-                  <span className="text-[10px] text-muted-foreground/70">
-                    {session.prState.toLowerCase()}
-                  </span>
-                ) : null}
-                <CheckGlyph status={session.prCheckStatus} />
+                <CheckDot status={session.prCheckStatus} className="size-1.5" />
               </button>
             </Row>
           ) : null}
