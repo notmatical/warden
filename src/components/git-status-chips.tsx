@@ -360,11 +360,11 @@ function CreatePrButton({
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
-          variant="ghost"
+          variant="secondary"
           size="xs"
           onClick={() => void run()}
           disabled={busy}
-          className="gap-1.5 text-muted-foreground hover:text-foreground"
+          className="gap-1.5"
         >
           {busy ? (
             <Loader2 className="size-3.5 animate-spin" />
