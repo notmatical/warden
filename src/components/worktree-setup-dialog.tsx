@@ -1,7 +1,9 @@
 import { Check, Loader2 } from "lucide-react"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
+import { Badge } from "@/components/ui/badge"
+import { Callout } from "@/components/ui/callout"
 import {
   Dialog,
   DialogContent,
@@ -9,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { SegmentedTabs } from "@/components/ui/segmented-tabs"
+import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import {
   Tooltip,
@@ -26,10 +28,10 @@ const toCommands = (text: string) =>
     .map((line) => line.trim())
     .filter(Boolean)
 
-type TabId = "setup" | "teardown"
+type SectionId = "setup" | "teardown"
 
-const TABS: {
-  id: TabId
+const SECTIONS: {
+  id: SectionId
   label: string
   hint: string
   placeholder: string
@@ -58,7 +60,7 @@ const VARIABLES: { name: string; description: string }[] = [
   {
     name: "WARDEN_ROOT_PATH",
     description:
-      "Absolute path of the main checkout — reach canonical files like .env without copying them into git.",
+      "Absolute path of the main checkout, for reaching canonical files like .env without copying them into git.",
   },
 ]
 
@@ -66,9 +68,10 @@ const varToken = (name: string) => (isWindows ? `%${name}%` : `$${name}`)
 
 type SaveState = "idle" | "saving" | "saved"
 
-/** Edits the repo's `.warden/config.json` worktree commands, a reference app-style:
- *  Setup/Teardown tabs, auto-save with a quiet Saved indicator, and one-click
- *  insertion of the template variables. Opened from the folder view header. */
+/** Edits the repo's `.warden/config.json` worktree commands: stacked
+ *  Setup/Teardown sections, auto-save with a quiet Saved indicator, and
+ *  one-click insertion of the template variables. Opened from the folder
+ *  view header. */
 export function WorktreeSetupDialog({
   projectId,
   open,
@@ -78,14 +81,18 @@ export function WorktreeSetupDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
-  const [tab, setTab] = useState<TabId>("setup")
-  const [values, setValues] = useState<Record<TabId, string>>({
+  const [values, setValues] = useState<Record<SectionId, string>>({
     setup: "",
     teardown: "",
   })
   const [loading, setLoading] = useState(false)
   const [saveState, setSaveState] = useState<SaveState>("idle")
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const textareaRefs = useRef<Record<SectionId, HTMLTextAreaElement | null>>({
+    setup: null,
+    teardown: null,
+  })
+  // Variable chips insert into whichever section was edited last.
+  const lastFocusedRef = useRef<SectionId>("setup")
 
   // Refs mirror state so debounced/unmount flushes never save stale text.
   const valuesRef = useRef(values)
@@ -96,7 +103,6 @@ export function WorktreeSetupDialog({
 
   useEffect(() => {
     if (!open) return
-    setTab("setup")
     setSaveState("idle")
     setLoading(true)
     ipc
@@ -149,26 +155,26 @@ export function WorktreeSetupDialog({
     onOpenChange(next)
   }
 
-  const setValue = (text: string) => {
-    setValues((prev) => ({ ...prev, [tab]: text }))
+  const setValue = (id: SectionId, text: string) => {
+    setValues((prev) => ({ ...prev, [id]: text }))
     scheduleSave()
   }
 
-  /** Insert a variable token at the textarea's caret, keeping focus there. */
+  /** Insert a variable token at the caret of the last-focused textarea,
+   *  keeping focus there. */
   const insertVariable = (name: string) => {
     const token = varToken(name)
-    const el = textareaRef.current
-    const value = values[tab]
+    const id = lastFocusedRef.current
+    const el = textareaRefs.current[id]
+    const value = values[id]
     const start = el?.selectionStart ?? value.length
     const end = el?.selectionEnd ?? start
-    setValue(value.slice(0, start) + token + value.slice(end))
+    setValue(id, value.slice(0, start) + token + value.slice(end))
     requestAnimationFrame(() => {
       el?.focus()
       el?.setSelectionRange(start + token.length, start + token.length)
     })
   }
-
-  const active = useMemo(() => TABS.find((t) => t.id === tab) ?? TABS[0], [tab])
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -182,51 +188,46 @@ export function WorktreeSetupDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <SegmentedTabs
-          tabs={TABS.map(({ id, label }) => ({ id, label }))}
-          value={tab}
-          onChange={setTab}
-        >
-          <span
-            aria-live="polite"
-            className="flex items-center gap-1 pr-1 text-[11px]"
-          >
-            {saveState === "saving" ? (
-              <span className="text-muted-foreground">Saving…</span>
-            ) : saveState === "saved" ? (
-              <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-                <Check className="size-3" />
-                Saved
-              </span>
-            ) : null}
-          </span>
-        </SegmentedTabs>
-
         {loading ? (
           <div className="flex items-center justify-center py-12 text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />
           </div>
         ) : (
-          <div className="flex flex-col gap-2">
-            <p className="text-[11px] text-muted-foreground">
-              {active.hint} One command per line — chained with{" "}
-              <span className="font-mono">&amp;&amp;</span>, so the first
-              failure stops the rest.
-            </p>
-            <Textarea
-              ref={textareaRef}
-              key={tab}
-              value={values[tab]}
-              onChange={(e) => setValue(e.target.value)}
-              onBlur={() => {
-                if (saveTimer.current) window.clearTimeout(saveTimer.current)
-                void save()
-              }}
-              placeholder={active.placeholder}
-              rows={7}
-              className="resize-y font-mono text-[13px] leading-relaxed"
-              spellCheck={false}
-            />
+          <div className="flex flex-col gap-4">
+            <Callout variant="info">
+              Each line runs as its own command, in order. If one fails, the
+              rest are skipped.
+            </Callout>
+
+            {SECTIONS.map(({ id, label, hint, placeholder }) => (
+              <div key={id} className="flex flex-col gap-1.5">
+                <div className="space-y-0.5">
+                  <Label htmlFor={`worktree-${id}-commands`}>{label}</Label>
+                  <p className="text-xs text-muted-foreground">{hint}</p>
+                </div>
+                <Textarea
+                  ref={(el) => {
+                    textareaRefs.current[id] = el
+                  }}
+                  id={`worktree-${id}-commands`}
+                  value={values[id]}
+                  onChange={(e) => setValue(id, e.target.value)}
+                  onFocus={() => {
+                    lastFocusedRef.current = id
+                  }}
+                  onBlur={() => {
+                    if (saveTimer.current)
+                      window.clearTimeout(saveTimer.current)
+                    void save()
+                  }}
+                  placeholder={placeholder}
+                  rows={4}
+                  className="resize-y font-mono text-[13px] leading-relaxed"
+                  spellCheck={false}
+                />
+              </div>
+            ))}
+
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-[10px] font-medium tracking-wide text-muted-foreground/70 uppercase">
                 Variables
@@ -234,19 +235,34 @@ export function WorktreeSetupDialog({
               {VARIABLES.map((v) => (
                 <Tooltip key={v.name}>
                   <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      onClick={() => insertVariable(v.name)}
-                      className="rounded-md border border-border/60 bg-muted/40 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground transition-colors hover:border-border hover:bg-muted hover:text-foreground"
-                    >
-                      {varToken(v.name)}
-                    </button>
+                    <Badge asChild variant="secondary">
+                      <button
+                        type="button"
+                        onClick={() => insertVariable(v.name)}
+                        className="cursor-pointer font-mono"
+                      >
+                        {varToken(v.name)}
+                      </button>
+                    </Badge>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" className="max-w-64">
                     {v.description} Click to insert at the cursor.
                   </TooltipContent>
                 </Tooltip>
               ))}
+              <span
+                aria-live="polite"
+                className="ml-auto flex items-center gap-1 text-[11px]"
+              >
+                {saveState === "saving" ? (
+                  <span className="text-muted-foreground">Saving…</span>
+                ) : saveState === "saved" ? (
+                  <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                    <Check className="size-3" />
+                    Saved
+                  </span>
+                ) : null}
+              </span>
             </div>
           </div>
         )}
