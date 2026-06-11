@@ -181,6 +181,7 @@ pub async fn generate_pr_content(
     crate::integrations::github::pr_content::generate_pr_content(
         std::path::Path::new(&session.working_dir),
         &base,
+        session.base_branch.as_deref(),
         &session.title,
     )
     .await
