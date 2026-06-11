@@ -2,21 +2,27 @@ import { ArrowUp, Loader2, X } from "lucide-react"
 import { type ReactNode, useState } from "react"
 
 import { Button } from "@/components/ui/button"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import {
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  useSidebar,
+} from "@/components/ui/sidebar"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { useAppUpdate } from "@/hooks/use-app-update"
-import { useAppStore } from "@/store/app-store"
 
-const DISMISS_KEY = "warden:dismissed-updates"
-
-function readDismissed(): Record<string, string> {
-  try {
-    return JSON.parse(localStorage.getItem(DISMISS_KEY) ?? "{}")
-  } catch {
-    return {}
-  }
-}
-
-/** The shared banner shell, above the settings button. */
-function BannerCard({
+/** The banner's inner content — shared between the expanded card and the
+ *  collapsed rail's popover. */
+function BannerBody({
   title,
   description,
   actionLabel,
@@ -32,7 +38,7 @@ function BannerCard({
   onDismiss?: () => void
 }) {
   return (
-    <div className="mb-2 rounded-lg border border-border/60 bg-muted/40 p-3">
+    <>
       <div className="flex items-start gap-2.5">
         <span className="mt-px flex size-5 shrink-0 items-center justify-center rounded-md bg-foreground/10 text-foreground/70">
           <ArrowUp className="size-3.5" />
@@ -69,66 +75,89 @@ function BannerCard({
           actionLabel
         )}
       </Button>
+    </>
+  )
+}
+
+/** The shared banner shell, above the settings button. Expanded it's an inline
+ *  card; in the collapsed rail it shrinks to an icon button whose popover holds
+ *  the same content. */
+function BannerCard(props: {
+  title: string
+  description: ReactNode
+  actionLabel: string
+  onAction: () => void
+  busy: boolean
+  onDismiss?: () => void
+}) {
+  const { state, isMobile } = useSidebar()
+
+  if (state === "collapsed" && !isMobile) {
+    return (
+      <SidebarMenu>
+        <SidebarMenuItem>
+          <Popover>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <PopoverTrigger asChild>
+                  <SidebarMenuButton
+                    aria-label={props.title}
+                    className="text-muted-foreground hover:text-foreground data-open:bg-sidebar-accent data-open:text-foreground"
+                  >
+                    {props.busy ? (
+                      <Loader2 className="animate-spin" />
+                    ) : (
+                      <ArrowUp />
+                    )}
+                    <span>{props.title}</span>
+                  </SidebarMenuButton>
+                </PopoverTrigger>
+              </TooltipTrigger>
+              <TooltipContent side="right">{props.title}</TooltipContent>
+            </Tooltip>
+            <PopoverContent
+              side="right"
+              align="end"
+              sideOffset={12}
+              className="w-64 p-3"
+            >
+              <BannerBody {...props} />
+            </PopoverContent>
+          </Popover>
+          {/* Anchored off the icon's left edge so it stays put while the
+              sidebar's width animates. */}
+          <span className="pointer-events-none absolute top-1 left-6 size-1.5 rounded-full bg-blue-500" />
+        </SidebarMenuItem>
+      </SidebarMenu>
+    )
+  }
+
+  // Fixed at the expanded footer's inner width (sidebar minus the floating
+  // container's and the footer's padding): the open/close animation reveals
+  // the card edge-on instead of reflowing its text.
+  return (
+    <div className="mb-2 w-[calc(var(--sidebar-width)-2rem)] rounded-lg border border-border/60 bg-muted/40 p-3">
+      <BannerBody {...props} />
     </div>
   )
 }
 
-/** Surfaces an available update above the settings button. A Warden app update
- *  (Tauri updater) takes priority — it's how users get new features; CLI-provider
- *  updates fall back below it. Dismissals are remembered per version. */
+/** Surfaces an available Warden app update (Tauri updater) above the settings
+ *  button — agent CLI updates live in the titlebar's CliUpdates control. */
 export function UpdateBanner() {
-  const { update: appUpdate, installing, install } = useAppUpdate()
-  const [appDismissed, setAppDismissed] = useState<string | null>(null)
+  const { update, installing, install } = useAppUpdate()
+  const [dismissed, setDismissed] = useState<string | null>(null)
 
-  const providers = useAppStore((s) => s.providers)
-  const updateProvider = useAppStore((s) => s.updateProvider)
-  const [dismissed, setDismissed] = useState(readDismissed)
-  const [updating, setUpdating] = useState(false)
-
-  // Warden self-update first.
-  if (appUpdate && appDismissed !== appUpdate.version) {
-    return (
-      <BannerCard
-        title="Update available"
-        description={`Warden ${appUpdate.version} is ready — restart to get the latest features.`}
-        actionLabel="Restart & update"
-        onAction={() => void install()}
-        busy={installing}
-        onDismiss={() => setAppDismissed(appUpdate.version)}
-      />
-    )
-  }
-
-  // Otherwise, an available CLI-provider update.
-  const pending = providers.find(
-    (p) => p.updateAvailable && dismissed[p.id] !== (p.latestVersion ?? "")
-  )
-  if (!pending) return null
-
-  const dismissProvider = () => {
-    const next = { ...dismissed, [pending.id]: pending.latestVersion ?? "" }
-    setDismissed(next)
-    try {
-      localStorage.setItem(DISMISS_KEY, JSON.stringify(next))
-    } catch {
-      // ignore storage failures
-    }
-  }
-
-  const runProviderUpdate = async () => {
-    setUpdating(true)
-    await updateProvider(pending.id)
-    setUpdating(false)
-  }
+  if (!update || dismissed === update.version) return null
 
   return (
     <BannerCard
       title="Update available"
-      description={`${pending.name} ${pending.latestVersion} is ready to install.`}
-      actionLabel="Update"
-      onAction={() => void runProviderUpdate()}
-      busy={updating}
-      onDismiss={dismissProvider}
+      description={`Warden ${update.version} is ready. Restart to get the latest features.`}
+      actionLabel="Restart & update"
+      onAction={() => void install()}
+      busy={installing}
+      onDismiss={() => setDismissed(update.version)}
     />
   )
 }
