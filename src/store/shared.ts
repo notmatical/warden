@@ -38,7 +38,6 @@ export const NATIVE_TITLE: Record<Provider, string> = {
 }
 
 export const SIDEBAR_KEY = "warden:sidebar-collapsed"
-export const SIDEBAR_WIDTH_KEY = "warden:sidebar-width"
 export const TRANSCRIPT_VIEW_KEY = "warden:transcript-view"
 
 export function readTranscriptView(): TranscriptView {
@@ -50,32 +49,10 @@ export function readTranscriptView(): TranscriptView {
     return "normal"
   }
 }
-const DEFAULT_SIDEBAR_WIDTH = 256
-const MIN_SIDEBAR_WIDTH = 208
-const MAX_SIDEBAR_WIDTH = 420
-
 export function readSidebarCollapsed(): boolean {
   try {
     return localStorage.getItem(SIDEBAR_KEY) === "1"
   } catch {
     return false
-  }
-}
-
-export function clampWidth(px: number): number {
-  return Math.max(
-    MIN_SIDEBAR_WIDTH,
-    Math.min(MAX_SIDEBAR_WIDTH, Math.round(px))
-  )
-}
-
-export function readSidebarWidth(): number {
-  try {
-    const stored = Number(localStorage.getItem(SIDEBAR_WIDTH_KEY))
-    return Number.isFinite(stored) && stored > 0
-      ? clampWidth(stored)
-      : DEFAULT_SIDEBAR_WIDTH
-  } catch {
-    return DEFAULT_SIDEBAR_WIDTH
   }
 }

@@ -15,7 +15,6 @@ import { EmptyState } from "@/components/empty-state"
 import { PaneGrid } from "@/components/pane-grid"
 import { SessionTabs } from "@/components/session-tabs"
 import { Sidebar } from "@/components/sidebar"
-import { SidebarResizer } from "@/components/sidebar-resizer"
 import { Titlebar } from "@/components/titlebar"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -33,7 +32,6 @@ export function AppShell() {
   const draggingSessionId = useAppStore((s) => s.draggingSessionId)
   const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed)
   const setSidebarCollapsed = useAppStore((s) => s.setSidebarCollapsed)
-  const sidebarWidth = useAppStore((s) => s.sidebarWidth)
 
   const onOpenChange = useCallback(
     (open: boolean) => setSidebarCollapsed(!open),
@@ -96,11 +94,9 @@ export function AppShell() {
           <SidebarProvider
             open={!sidebarCollapsed}
             onOpenChange={onOpenChange}
-            style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
             className="relative min-h-0 flex-1 overflow-hidden"
           >
             <Sidebar />
-            {sidebarCollapsed ? null : <SidebarResizer />}
             <SidebarInset className="min-w-0">
               <SessionTabs />
               <main className="min-h-0 flex-1">
