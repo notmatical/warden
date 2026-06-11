@@ -310,23 +310,23 @@ export function createSession(input: CreateSessionInput): Promise<Session> {
   })
 }
 
-/** Per-repo config stored in `.warden/config.json` (committed to the repo). */
-export interface RepoConfig {
+/** The `worktrees` section of `.warden/config.json` (committed to the repo). */
+export interface WorktreeConfig {
   /** Commands run in a fresh worktree after it's created, joined with `&&`. */
   setup: string[]
   /** Commands run in a worktree before it's removed. */
   teardown: string[]
 }
 
-export function getRepoConfig(projectId: string): Promise<RepoConfig> {
-  return invoke("get_repo_config", { projectId })
+export function getWorktreeConfig(projectId: string): Promise<WorktreeConfig> {
+  return invoke("get_worktree_config", { projectId })
 }
 
-export function updateRepoConfig(
+export function updateWorktreeConfig(
   projectId: string,
-  config: RepoConfig
-): Promise<RepoConfig> {
-  return invoke("update_repo_config", { projectId, config })
+  config: WorktreeConfig
+): Promise<WorktreeConfig> {
+  return invoke("update_worktree_config", { projectId, config })
 }
 
 export interface TerminalEvent {
