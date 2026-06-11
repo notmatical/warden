@@ -26,6 +26,8 @@ import type {
   WorkflowRunView,
 } from "@/types/workflow"
 
+export type TranscriptView = "normal" | "verbose"
+
 export interface CreateSessionOptions {
   projectId: string
   /** Explicit owning group — needed when the same root lives in several
@@ -94,6 +96,10 @@ export interface AppState {
   sidebarCollapsed: boolean
   sidebarWidth: number
 
+  /** Transcript detail level: "normal" keeps tool activity collapsed to summary
+   *  lines; "verbose" expands detail panels and surfaces tool inputs. */
+  transcriptView: TranscriptView
+
   /** Remembered section for the Settings tab — restored when it reopens, and
    *  set by `openSettings(section)` deep links. */
   settingsSection: string
@@ -150,6 +156,7 @@ export interface AppState {
   restoreView: () => void
   setSidebarCollapsed: (collapsed: boolean) => void
   setSidebarWidth: (width: number) => void
+  setTranscriptView: (view: TranscriptView) => void
   loadProviders: () => Promise<void>
   installProvider: (id: Provider) => Promise<void>
   updateProvider: (id: Provider) => Promise<void>

@@ -6,8 +6,10 @@ import {
   clampWidth,
   readSidebarCollapsed,
   readSidebarWidth,
+  readTranscriptView,
   SIDEBAR_KEY,
   SIDEBAR_WIDTH_KEY,
+  TRANSCRIPT_VIEW_KEY,
 } from "../shared"
 import type { AppState } from "../types"
 
@@ -15,9 +17,11 @@ type UiSlice = Pick<
   AppState,
   | "sidebarCollapsed"
   | "sidebarWidth"
+  | "transcriptView"
   | "settingsSection"
   | "setSidebarCollapsed"
   | "setSidebarWidth"
+  | "setTranscriptView"
   | "openSettings"
   | "setSettingsSection"
 >
@@ -30,6 +34,7 @@ export const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (
 ) => ({
   sidebarCollapsed: readSidebarCollapsed(),
   sidebarWidth: readSidebarWidth(),
+  transcriptView: readTranscriptView(),
   settingsSection: "providers",
 
   setSidebarCollapsed: (collapsed) => {
@@ -49,6 +54,15 @@ export const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (
       // ignore storage failures
     }
     set({ sidebarWidth: clamped })
+  },
+
+  setTranscriptView: (view) => {
+    try {
+      localStorage.setItem(TRANSCRIPT_VIEW_KEY, view)
+    } catch {
+      // ignore storage failures
+    }
+    set({ transcriptView: view })
   },
 
   openSettings: (section) => {
