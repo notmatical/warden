@@ -12,7 +12,7 @@ import {
 import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 
-import { CheckGlyph } from "@/components/common/check-glyph"
+import { PrStatusDot } from "@/components/common/pr-status-dot"
 import { PrHoverCard } from "@/components/pr-hover-card"
 import { Button } from "@/components/ui/button"
 import {
@@ -224,8 +224,8 @@ function StatusChip({
   )
 }
 
-/** A link chip to the session's pull request, tinted by its state, with CI
- *  status. Hovering surfaces the full PR hover card. */
+/** A link chip to the session's pull request: a status dot (state + CI rollup)
+ *  and the number. Hovering surfaces the full PR hover card. */
 function PrChip({
   sessionId,
   number,
@@ -239,12 +239,6 @@ function PrChip({
   state: string | null
   checkStatus: CheckStatus | null
 }) {
-  const tone =
-    state === "MERGED"
-      ? "text-violet-500"
-      : state === "CLOSED"
-        ? "text-red-500"
-        : "text-emerald-500"
   return (
     <PrHoverCard sessionId={sessionId}>
       <Button
@@ -253,14 +247,8 @@ function PrChip({
         onClick={() => url && void openUrl(url)}
         className="gap-1.5"
       >
-        <GitPullRequest className={cn("size-3.5", tone)} />
+        <PrStatusDot state={state} checkStatus={checkStatus} />
         <span className="font-medium">#{number}</span>
-        {state ? (
-          <span className="text-[10px] text-muted-foreground/70">
-            {state.toLowerCase()}
-          </span>
-        ) : null}
-        <CheckGlyph status={checkStatus} />
       </Button>
     </PrHoverCard>
   )
