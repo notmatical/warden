@@ -2,5 +2,11 @@
   "linear": {
     "projectId": "4e15810d-fa59-4578-a8fc-e7d3ec257546",
     "teamId": "06074937-ab2b-4491-a7ff-17a18e1867d0"
+  },
+  "worktrees": {
+    "setup": [
+      "bun install"
+    ],
+    "teardown": []
   }
 }
