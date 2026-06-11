@@ -141,65 +141,6 @@ pub async fn refresh_pr_status(
     Ok(info)
 }
 
-/// Merge the session's open PR from the app, then clean up the worktree and
-/// branch and mark the session merged — mirroring local integrate cleanup.
-#[tauri::command]
-#[specta::specta]
-pub async fn merge_pull_request(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    session_id: String,
-    strategy: String,
-) -> CommandResult<()> {
-    let session = state.store.get_session(&session_id)?;
-    if session.merged_at.is_some() {
-        return Err(AppError::Invalid("session is already merged".to_string()).into());
-    }
-    if session.pr_number.is_none() {
-        return Err(AppError::Invalid("session has no open pull request".to_string()).into());
-    }
-    let branch = session
-        .branch
-        .clone()
-        .ok_or_else(|| AppError::Invalid("session has no branch".to_string()))?;
-    let mode = crate::git::MergeMode::parse(&strategy)
-        .ok_or_else(|| AppError::Invalid(format!("unknown merge strategy: {strategy}")))?;
-
-    let project = state.store.get_project(&session.project_id)?;
-    let repo = std::path::Path::new(&project.path);
-    let worktree = std::path::Path::new(&session.working_dir);
-
-    // Stop in-flight work, then merge the PR on GitHub.
-    state.manager.cancel(&app, &state.store, &session_id);
-    crate::terminal::kill(&session_id);
-    crate::integrations::github::pr::merge(worktree, mode)?;
-
-    // Land & clean up locally (best-effort; the PR is already merged). Runs
-    // the repo's teardown commands before removal, like every other cleanup.
-    crate::git::setup::spawn_teardown_and_remove(
-        repo.to_path_buf(),
-        worktree.to_path_buf(),
-        Some(branch),
-    );
-    state.store.mark_session_merged(&session_id)?;
-    if let Ok(updated) = state.store.get_session(&session_id) {
-        emit_session(&app, &updated);
-    }
-    // Linear writeback: the work landed, so complete the issue (best-effort).
-    if let Some(issue_id) = session.linear_issue_id.as_deref() {
-        crate::integrations::linear::writeback::complete_issue(issue_id).await;
-        if let Ok(Some(key)) = crate::integrations::linear::key::load() {
-            if matches!(
-                crate::integrations::linear::sync::sync_once(&state.store, &key).await,
-                Ok(true)
-            ) {
-                crate::events::emit_linear_changed(&app);
-            }
-        }
-    }
-    Ok(())
-}
-
 /// Open issues assigned to the user in one repo. Soft-fails to empty (no
 /// remote / unauthenticated) so multi-repo aggregation degrades per repo.
 #[tauri::command]
@@ -224,6 +165,21 @@ pub async fn github_issue_comments(
     Ok(issues::issue_comments(Path::new(&project.path), number)?)
 }
 
+/// Rich state of the session's PR — review decision, diff stats, per-check CI
+/// rows — fetched lazily when the user hovers the PR chip.
+#[tauri::command]
+#[specta::specta]
+pub async fn pr_details(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> CommandResult<Option<pr::PrDetails>> {
+    let session = state.store.get_session(&session_id)?;
+    let number = session
+        .pr_number
+        .ok_or_else(|| AppError::Invalid("session has no pull request".to_string()))?;
+    Ok(pr::details(Path::new(&session.working_dir), number)?)
+}
+
 /// Generate a suggested PR title and body from the session branch's changes,
 /// for the user to review before opening. Falls back to the session title.
 #[tauri::command]
@@ -238,8 +194,10 @@ pub async fn generate_pr_content(
         .clone()
         .ok_or_else(|| AppError::Invalid("session has no base commit".to_string()))?;
     crate::integrations::github::pr_content::generate_pr_content(
+        session.backend,
         std::path::Path::new(&session.working_dir),
         &base,
+        session.base_branch.as_deref(),
         &session.title,
     )
     .await

@@ -34,7 +34,7 @@ pub fn spawn(app: AppHandle) {
             let due = !last_poll.is_some_and(|t| t.elapsed() < INTERVALS.interval(tier));
             if due || regained {
                 last_poll = Some(Instant::now());
-                poll_once(&app);
+                poll_once(&app).await;
             }
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
@@ -43,7 +43,7 @@ pub fn spawn(app: AppHandle) {
 
 /// Refresh every session that has an open PR. Synchronous `gh` calls run on the
 /// poll task; cheap enough at this cadence.
-fn poll_once(app: &AppHandle) {
+async fn poll_once(app: &AppHandle) {
     let state = app.state::<AppState>();
     let store = state.store.clone();
     let Ok(sessions) = store.sessions_with_open_pr() else {
@@ -86,6 +86,19 @@ fn poll_once(app: &AppHandle) {
                 }
             }
             let _ = store.mark_session_merged(&session.id);
+            // Linear writeback: the work landed, so complete the issue
+            // (best-effort) and refresh the cached issue list.
+            if let Some(issue_id) = session.linear_issue_id.as_deref() {
+                crate::integrations::linear::writeback::complete_issue(issue_id).await;
+                if let Ok(Some(key)) = crate::integrations::linear::key::load() {
+                    if matches!(
+                        crate::integrations::linear::sync::sync_once(&store, &key).await,
+                        Ok(true)
+                    ) {
+                        crate::events::emit_linear_changed(app);
+                    }
+                }
+            }
             emit_notification(
                 app,
                 &Notification {

@@ -1,14 +1,11 @@
 //! Background generation of a concise, human-friendly session title from the
-//! user's first message, via a single cheap `claude` invocation.
+//! user's first message, via one cheap one-shot on the session's own backend.
 
-use std::process::Stdio;
+use std::path::Path;
 
-use tokio::process::Command;
+use crate::agent::oneshot;
+use crate::domain::Backend;
 
-use crate::providers::claude::agent::{resolve_claude, run_oneshot};
-
-/// A small, fast model is plenty for a few-word title.
-const NAMING_MODEL: &str = "haiku";
 /// Cap the message we send so a huge first prompt stays cheap.
 const MAX_MESSAGE_CHARS: usize = 2000;
 /// Cap the resulting title length.
@@ -66,60 +63,14 @@ fn sanitize_title(raw: &str) -> Option<String> {
 
 /// Generate a title for a session from its first message. Returns `None` on any
 /// failure so the caller can keep the existing title.
-pub async fn generate_session_title(working_dir: &str, message: &str) -> Option<String> {
-    let bin = resolve_claude();
+pub async fn generate_session_title(
+    backend: Backend,
+    working_dir: &str,
+    message: &str,
+) -> Option<String> {
     let prompt = build_prompt(message);
-
-    // The prompt goes over stdin, not as an argument: a multiline prompt can't be
-    // passed to a Windows `claude.cmd` shim ("batch file arguments are invalid").
-    let mut cmd = Command::new(&bin);
-    cmd.args([
-        "-p",
-        "--output-format",
-        "json",
-        "--model",
-        NAMING_MODEL,
-        "--permission-mode",
-        "bypassPermissions",
-        "--max-turns",
-        "1",
-    ])
-    .current_dir(working_dir)
-    .stdin(Stdio::piped())
-    .stdout(Stdio::piped())
-    .stderr(Stdio::piped())
-    .kill_on_drop(true);
-
-    let output = match run_oneshot(cmd, &prompt).await {
-        Ok(output) => output,
-        Err(e) => {
-            log::warn!("session naming: failed to spawn {:?}: {e}", bin);
-            return None;
-        }
-    };
-
-    if !output.status.success() {
-        log::warn!(
-            "session naming: claude exited with {}: {}",
-            output.status,
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
-        return None;
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let value: serde_json::Value = match serde_json::from_str(stdout.trim()) {
-        Ok(value) => value,
-        Err(e) => {
-            log::warn!("session naming: unparseable JSON ({e}): {}", stdout.trim());
-            return None;
-        }
-    };
-    let Some(result) = value.get("result").and_then(|r| r.as_str()) else {
-        log::warn!("session naming: response had no `result` string: {value}");
-        return None;
-    };
-    let title = sanitize_title(result);
+    let result = oneshot::run(backend, Path::new(working_dir), &prompt).await?;
+    let title = sanitize_title(&result);
     if title.is_none() {
         log::warn!("session naming: rejected model output: {result:?}");
     }

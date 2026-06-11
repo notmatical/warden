@@ -8,12 +8,12 @@ import type {
   EventRecord,
   FileEntry,
   Group,
-  IntegrateOutcome,
   Label,
   MergeMode,
   PermissionMode,
   PlanToCodeResult,
   PrContent,
+  PrDetails,
   PrInfo,
   Project,
   ProjectLabels,
@@ -209,14 +209,6 @@ export function pullSession(sessionId: string): Promise<SyncOutcome> {
   return invoke("pull_session", { sessionId })
 }
 
-export function integrateSession(
-  sessionId: string,
-  message: string,
-  mode: MergeMode
-): Promise<IntegrateOutcome> {
-  return invoke("integrate_session", { sessionId, message, mode })
-}
-
 export function openPullRequest(
   sessionId: string,
   title: string,
@@ -251,11 +243,8 @@ export function refreshPrStatus(sessionId: string): Promise<PrInfo | null> {
   return invoke("refresh_pr_status", { sessionId })
 }
 
-export function mergePullRequest(
-  sessionId: string,
-  strategy: MergeMode
-): Promise<void> {
-  return invoke("merge_pull_request", { sessionId, strategy })
+export function prDetails(sessionId: string): Promise<PrDetails | null> {
+  return invoke("pr_details", { sessionId })
 }
 
 export function getEvents(sessionId: string): Promise<EventRecord[]> {

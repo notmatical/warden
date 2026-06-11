@@ -5,10 +5,9 @@ use std::path::Path;
 
 use serde::Serialize;
 use specta::Type;
-use tauri::{AppHandle, State};
+use tauri::State;
 
 use crate::error::{AppError, CommandResult};
-use crate::events::emit_session;
 use crate::git;
 use crate::state::AppState;
 
@@ -90,91 +89,6 @@ pub async fn session_git_status(
     }
 
     Ok(out)
-}
-
-/// The result of folding a session's branch into its base.
-#[derive(Serialize, Type)]
-#[serde(tag = "status", rename_all = "camelCase")]
-pub enum IntegrateOutcome {
-    Merged,
-    /// The merge stopped on conflicts (and was aborted); these files clashed.
-    Conflict {
-        files: Vec<String>,
-    },
-}
-
-/// Fold a session's worktree branch back into its base branch, then remove the
-/// worktree + branch and mark the session merged. On conflict nothing changes
-/// and the clashing files are returned for the user to resolve.
-#[tauri::command]
-#[specta::specta]
-pub async fn integrate_session(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    session_id: String,
-    message: Option<String>,
-    mode: Option<String>,
-) -> CommandResult<IntegrateOutcome> {
-    let session = state.store.get_session(&session_id)?;
-    if session.merged_at.is_some() {
-        return Err(AppError::Invalid("session is already merged".to_string()).into());
-    }
-    if !session.is_isolated {
-        return Err(
-            AppError::Invalid("only isolated worktree sessions can be merged".to_string()).into(),
-        );
-    }
-    let branch = session
-        .branch
-        .clone()
-        .ok_or_else(|| AppError::Invalid("session has no branch".to_string()))?;
-    let base = session
-        .base_branch
-        .clone()
-        .ok_or_else(|| AppError::Invalid("session has no base branch to merge into".to_string()))?;
-
-    let project = state.store.get_project(&session.project_id)?;
-    let repo = Path::new(&project.path);
-    let worktree = Path::new(&session.working_dir);
-
-    let mode = mode
-        .as_deref()
-        .and_then(git::MergeMode::parse)
-        .unwrap_or(git::MergeMode::Squash);
-    let message = message
-        .map(|m| m.trim().to_string())
-        .filter(|m| !m.is_empty())
-        .unwrap_or_else(|| session.title.clone());
-
-    // Stop any in-flight agent turn or PTY so the worktree isn't mutated/locked.
-    state.manager.cancel(&app, &state.store, &session_id);
-    crate::terminal::kill(&session_id);
-
-    // Commit the worktree's working changes onto its branch first.
-    git::stage_and_commit(worktree, &message)?;
-
-    if !git::has_changes_to_integrate(repo, &branch, &base) {
-        return Err(AppError::Invalid(
-            "nothing to merge — the session has no changes over its base".to_string(),
-        )
-        .into());
-    }
-
-    match git::merge_into_base(repo, worktree, &branch, &base, mode, &message)? {
-        git::MergeOutcome::Conflict(files) => Ok(IntegrateOutcome::Conflict { files }),
-        git::MergeOutcome::Merged => {
-            git::setup::spawn_teardown_and_remove(
-                repo.to_path_buf(),
-                worktree.to_path_buf(),
-                Some(branch),
-            );
-            state.store.mark_session_merged(&session_id)?;
-            if let Ok(updated) = state.store.get_session(&session_id) {
-                emit_session(&app, &updated);
-            }
-            Ok(IntegrateOutcome::Merged)
-        }
-    }
 }
 
 /// Every change a session has made since it forked, for the diff view. Empty

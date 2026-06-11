@@ -4,7 +4,6 @@ import type {
   EffortLevel,
   EventRecord,
   Group,
-  IntegrateOutcome,
   Label,
   MergeMode,
   PaneTree,
@@ -167,11 +166,6 @@ export interface AppState {
   setGithubSource: (source: ProviderSource) => Promise<void>
   openSettings: (section?: string) => void
   setSettingsSection: (section: string) => void
-  integrateSession: (
-    sessionId: string,
-    message: string,
-    mode: MergeMode
-  ) => Promise<IntegrateOutcome | null>
   openPullRequest: (
     sessionId: string,
     title: string,
@@ -179,7 +173,6 @@ export interface AppState {
     draft?: boolean
   ) => Promise<PrInfo | null>
   refreshPrStatus: (sessionId: string) => Promise<PrInfo | null>
-  mergePullRequest: (sessionId: string, strategy: MergeMode) => Promise<boolean>
   syncWorktree: (
     sessionId: string,
     mode?: MergeMode

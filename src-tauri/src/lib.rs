@@ -14,7 +14,7 @@ mod workspace;
 
 // Keep the foundation modules reachable at their familiar crate-root paths
 // (`crate::error`, `crate::util`, …) while they live under `core/`.
-pub use core::{error, events, platform, state, util};
+pub use core::{error, events, model_config, platform, state, util};
 
 use tauri::Manager;
 #[cfg(target_os = "macos")]
@@ -78,7 +78,6 @@ pub fn run() {
         git::commands::repo_browse_url,
         git::commands::push_session,
         git::commands::pull_session,
-        git::commands::integrate_session,
         git::commands::get_session_diff,
         git::commands::get_session_file_versions,
         git::commands::get_session_commits,
@@ -116,7 +115,7 @@ pub fn run() {
         integrations::github::commands::set_github_source,
         integrations::github::commands::open_pull_request,
         integrations::github::commands::refresh_pr_status,
-        integrations::github::commands::merge_pull_request,
+        integrations::github::commands::pr_details,
         integrations::github::commands::generate_pr_content,
         integrations::github::commands::list_open_prs,
         integrations::github::commands::checkout_pr,
