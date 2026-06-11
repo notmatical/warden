@@ -100,10 +100,7 @@ export function SessionHoverCard({
               >
                 <GitPullRequest className={cn("size-3 shrink-0", prTone)} />
                 <span className="font-medium">#{session.prNumber}</span>
-                <CheckDot
-                  status={session.prCheckStatus}
-                  className="size-1.5"
-                />
+                <CheckDot status={session.prCheckStatus} className="size-1.5" />
               </button>
             </Row>
           ) : null}
