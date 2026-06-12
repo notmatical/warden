@@ -4,7 +4,6 @@ import {
   ExternalLink,
   FolderGit2,
   GitBranch,
-  GitPullRequest,
   MoreHorizontal,
   Pin,
   PinOff,
@@ -28,6 +27,11 @@ import {
   FilterMenu,
   SwatchStack,
 } from "@/components/common/filter-menu"
+import {
+  CheckCounts,
+  PrStateIcon,
+  PrStatusPill,
+} from "@/components/common/pr-badges"
 import { useConfirm } from "@/components/confirm-dialog"
 import { ClaudeIcon, CodexIcon } from "@/components/icons/brand"
 import { LabelChip, LabelPicker, labelColor } from "@/components/label-picker"
@@ -65,9 +69,9 @@ import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store/app-store"
 import type { Label, Session, SessionKind, SessionStatus } from "@/types"
 
-// Session · Labels · Branch · Status · Last active · actions.
+// Session · Labels · Branch · Pull request · Status · Last active · actions.
 const COLS =
-  "grid grid-cols-[minmax(0,1.5fr)_minmax(0,1.3fr)_minmax(0,1fr)_108px_92px_60px] items-center gap-x-4"
+  "grid grid-cols-[minmax(0,1.5fr)_minmax(0,1.1fr)_minmax(0,1fr)_132px_108px_92px_60px] items-center gap-x-4"
 
 const MENU_ITEM = "gap-2 text-[13px]"
 
@@ -121,6 +125,49 @@ function StatusBadge({ status }: { status: SessionStatus }) {
 function subtitle(session: Session): string {
   if (session.kind === "terminal") return session.terminalCommand ?? "Terminal"
   return session.model
+}
+
+/** The session's pull request at a glance: state-tinted icon, number, one
+ *  status pill (merged/closed/draft/review), and per-state CI tallies.
+ *  Hover for the full card; click to open the PR on GitHub. */
+function SessionPrCell({ session }: { session: Session }) {
+  if (session.prNumber == null) {
+    return <span className="text-muted-foreground/40 text-xs">—</span>
+  }
+  return (
+    <PrHoverCard sessionId={session.id}>
+      <button
+        type="button"
+        aria-label={`Pull request #${session.prNumber}`}
+        onClick={(e) => {
+          e.stopPropagation()
+          if (session.prUrl) void openUrl(session.prUrl)
+        }}
+        className="-mx-1.5 -my-1 flex w-fit max-w-full flex-col items-start gap-0.5 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-muted/60"
+      >
+        <span className="flex max-w-full items-center gap-1.5 text-xs">
+          <PrStateIcon
+            state={session.prState}
+            isDraft={session.prIsDraft}
+            className="size-3.5 shrink-0"
+          />
+          <span className="font-medium text-foreground tabular-nums">
+            #{session.prNumber}
+          </span>
+          <PrStatusPill
+            state={session.prState}
+            isDraft={session.prIsDraft}
+            reviewDecision={session.prReviewDecision}
+          />
+        </span>
+        {session.prCheckCounts ? (
+          <CheckCounts counts={session.prCheckCounts} />
+        ) : (
+          <CheckDot status={session.prCheckStatus} />
+        )}
+      </button>
+    </PrHoverCard>
+  )
 }
 
 /** A folder's dashboard: its sessions, and — when the repo is bound to a
@@ -284,7 +331,7 @@ export function FolderView({ projectId }: { projectId: string }) {
 
 // PR · Session · Branch · Last active · link.
 const PR_COLS =
-  "grid grid-cols-[110px_minmax(0,1.5fr)_minmax(0,1fr)_92px_36px] items-center gap-x-4"
+  "grid grid-cols-[minmax(180px,auto)_minmax(0,1.5fr)_minmax(0,1fr)_92px_36px] items-center gap-x-4"
 
 /** Sessions with an open pull request, surfaced ahead of the full list.
  *  Click a row to jump to the session; the trailing link opens the PR. */
@@ -323,11 +370,24 @@ function OpenPrsSection({ projectId }: { projectId: string }) {
           >
             <PrHoverCard sessionId={session.id}>
               <span className="flex w-fit items-center gap-1.5 text-xs">
-                <GitPullRequest className="size-3.5 shrink-0 text-emerald-500" />
+                <PrStateIcon
+                  state={session.prState}
+                  isDraft={session.prIsDraft}
+                  className="size-3.5 shrink-0"
+                />
                 <span className="font-medium text-foreground tabular-nums">
                   #{session.prNumber}
                 </span>
-                <CheckDot status={session.prCheckStatus} />
+                <PrStatusPill
+                  state={session.prState}
+                  isDraft={session.prIsDraft}
+                  reviewDecision={session.prReviewDecision}
+                />
+                {session.prCheckCounts ? (
+                  <CheckCounts counts={session.prCheckCounts} />
+                ) : (
+                  <CheckDot status={session.prCheckStatus} />
+                )}
               </span>
             </PrHoverCard>
 
@@ -633,6 +693,8 @@ function SessionsSection({ projectId }: { projectId: string }) {
                         —
                       </span>
                     )}
+
+                    <SessionPrCell session={session} />
 
                     <StatusBadge status={session.status} />
 
