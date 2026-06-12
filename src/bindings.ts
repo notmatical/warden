@@ -1310,6 +1310,11 @@ export type PlanToCodeResult = { planner: Session; coder: Session }
  */
 export type PrCheck = { name: string; state: PrCheckState; url: string | null; startedAt: string | null; completedAt: string | null }
 /**
+ * Per-state tallies of a PR's CI checks, persisted alongside the aggregate
+ * rollup so list views can render counts without shelling out to `gh`.
+ */
+export type PrCheckCounts = { passed: number; failed: number; pending: number; skipped: number }
+/**
  * One CI check's outcome on a PR, for the hover card's per-check rows.
  */
 export type PrCheckState = "success" | "failure" | "pending" | "skipped" | "cancelled"
@@ -1334,29 +1339,24 @@ reviewDecision: string | null; additions: number; deletions: number; updatedAt: 
 /**
  * A pull request's identity and state, as surfaced to the UI.
  */
-export type PrInfo = { number: number; url: string;
+export type PrInfo = { number: number; url: string; 
 /**
  * GitHub's PR state: `OPEN`, `MERGED`, or `CLOSED`.
  */
-state: string; title: string; isDraft: boolean;
+state: string; title: string; isDraft: boolean; 
 /**
  * `APPROVED`, `CHANGES_REQUESTED`, or `REVIEW_REQUIRED` (absent when the
  * repo requires no review).
  */
-reviewDecision: string | null;
+reviewDecision: string | null; 
 /**
  * Aggregate CI-check state, or `None` when the PR has no checks.
  */
-checkStatus: CheckStatus | null;
+checkStatus: CheckStatus | null; 
 /**
  * Per-state CI check tallies, `None` when the PR has no checks.
  */
 checkCounts: PrCheckCounts | null }
-/**
- * Per-state tallies of a PR's CI checks, persisted alongside the aggregate
- * rollup so list views can render counts without shelling out to `gh`.
- */
-export type PrCheckCounts = { passed: number; failed: number; pending: number; skipped: number }
 /**
  * An open PR in a repo, for the review-checkout picker.
  */
@@ -1479,16 +1479,16 @@ prState: string | null;
 /**
  * Aggregate CI-check state for the PR, and when it was last polled (epoch s).
  */
-prCheckStatus: CheckStatus | null; prCheckedAt: number | null; prIsDraft: boolean;
+prCheckStatus: CheckStatus | null; prCheckedAt: number | null; prIsDraft: boolean; 
 /**
  * GitHub's review decision (`APPROVED`/`CHANGES_REQUESTED`/`REVIEW_REQUIRED`),
  * absent when the repo requires no review.
  */
-prReviewDecision: string | null;
+prReviewDecision: string | null; 
 /**
  * Per-state CI check tallies, `None` when the PR has no checks.
  */
-prCheckCounts: PrCheckCounts | null;
+prCheckCounts: PrCheckCounts | null; 
 /**
  * Pinned sessions sort to the top of the folder's session list.
  */
