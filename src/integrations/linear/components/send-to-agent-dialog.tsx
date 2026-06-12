@@ -63,6 +63,7 @@ export function SendToAgentDialog({
       onOpenChange={onOpenChange}
       buildTitle={() => `${issue.identifier}: ${issue.title}`}
       buildFirstMessage={() => buildIssuePrompt(issue, comments)}
+      branchHint={`feature/${issue.identifier}`}
       preselectProjectId={preselect}
       defaultProjectId={defaultProjectId}
       createOverrides={{ linearIssueId: issue.id }}

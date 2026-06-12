@@ -34,12 +34,15 @@ export function SendToAgentDialogCore({
   buildFirstMessage,
   preselectProjectId,
   defaultProjectId,
+  branchHint,
   createOverrides,
   children,
   onSent,
 }: {
   /** Short display id of the thing being sent (e.g. "WAR-12", "#42"). */
   identifier: string
+  /** Worktree branch name when isolating (e.g. "feature/WAR-12"). */
+  branchHint?: string
   open: boolean
   onOpenChange: (open: boolean) => void
   buildTitle: () => string
@@ -120,6 +123,7 @@ export function SendToAgentDialogCore({
         backend: backendForModel(model),
         role: "chat",
         isolate,
+        branchHint: isolate ? branchHint : undefined,
         firstMessage: buildFirstMessage(),
         ...createOverrides,
       })
@@ -174,7 +178,14 @@ export function SendToAgentDialogCore({
             <label htmlFor="send-isolate" className="flex flex-col">
               <span className="text-sm">Isolate in worktree</span>
               <span className="text-muted-foreground text-xs">
-                Work on a separate branch, merge when done.
+                {isolate && branchHint ? (
+                  <>
+                    Work on <span className="font-mono">{branchHint}</span>,
+                    merge when done.
+                  </>
+                ) : (
+                  "Work on a separate branch, merge when done."
+                )}
               </span>
             </label>
             <Switch

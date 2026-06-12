@@ -27,6 +27,7 @@ export function SendGithubIssueDialog({
       onOpenChange={onOpenChange}
       buildTitle={() => `#${issue.number}: ${issue.title}`}
       buildFirstMessage={() => buildGithubIssuePrompt(issue, comments)}
+      branchHint={`feature/issue-${issue.number}`}
       defaultProjectId={issue.projectId}
       onSent={() => onSent?.()}
     />
