@@ -275,11 +275,11 @@ export function FolderView({ projectId }: { projectId: string }) {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
-                    variant="ghost"
-                    size="icon-sm"
+                    variant="secondary"
+                    size="icon"
                     aria-label="Worktree commands"
                     onClick={() => setSetupOpen(true)}
-                    className="shrink-0 text-muted-foreground"
+                    className="shrink-0"
                   >
                     <Wrench className="size-4" />
                   </Button>
@@ -297,7 +297,7 @@ export function FolderView({ projectId }: { projectId: string }) {
           ) : null}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="sm" className="shrink-0 gap-1.5">
+              <Button className="shrink-0 gap-1.5">
                 New session
                 <ChevronDown className="size-3.5 opacity-70" />
               </Button>
