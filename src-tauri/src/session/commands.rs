@@ -46,6 +46,8 @@ pub struct CreateSessionOptions {
     pub working_dir: Option<String>,
     /// Linear issue this session works on; drives writeback on PR open/merge.
     pub linear_issue_id: Option<String>,
+    /// Worktree branch name (e.g. `feature/WAR-123` derived from an issue).
+    pub branch_hint: Option<String>,
 }
 
 #[tauri::command]
@@ -99,7 +101,7 @@ pub async fn create_session(
         },
         None => {
             let isolate = options.isolate.unwrap_or(kind != SessionKind::Terminal);
-            provision_working_dir(&project, isolate, None)?
+            provision_working_dir(&project, isolate, options.branch_hint.as_deref())?
         }
     };
     // An explicit backend wins; otherwise it follows from the model id, since

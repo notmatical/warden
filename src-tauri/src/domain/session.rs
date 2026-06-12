@@ -208,6 +208,17 @@ impl CheckStatus {
     }
 }
 
+/// Per-state tallies of a PR's CI checks, persisted alongside the aggregate
+/// rollup so list views can render counts without shelling out to `gh`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PrCheckCounts {
+    pub passed: i64,
+    pub failed: i64,
+    pub pending: i64,
+    pub skipped: i64,
+}
+
 /// Whether a session is a headless agent (stream-json adapter) or an
 /// interactive terminal running the native `claude` TUI in a PTY.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
@@ -331,6 +342,12 @@ pub struct Session {
     /// Aggregate CI-check state for the PR, and when it was last polled (epoch s).
     pub pr_check_status: Option<CheckStatus>,
     pub pr_checked_at: Option<i64>,
+    pub pr_is_draft: bool,
+    /// GitHub's review decision (`APPROVED`/`CHANGES_REQUESTED`/`REVIEW_REQUIRED`),
+    /// absent when the repo requires no review.
+    pub pr_review_decision: Option<String>,
+    /// Per-state CI check tallies, `None` when the PR has no checks.
+    pub pr_check_counts: Option<PrCheckCounts>,
     /// Pinned sessions sort to the top of the folder's session list.
     pub pinned: bool,
     pub created_at: String,

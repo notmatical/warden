@@ -7,7 +7,7 @@ use serde::Serialize;
 use serde_json::Value;
 use specta::Type;
 
-use crate::domain::CheckStatus;
+use crate::domain::{CheckStatus, PrCheckCounts};
 use crate::error::{AppError, Result};
 
 /// A pull request's identity and state, as surfaced to the UI.
@@ -19,8 +19,14 @@ pub struct PrInfo {
     /// GitHub's PR state: `OPEN`, `MERGED`, or `CLOSED`.
     pub state: String,
     pub title: String,
+    pub is_draft: bool,
+    /// `APPROVED`, `CHANGES_REQUESTED`, or `REVIEW_REQUIRED` (absent when the
+    /// repo requires no review).
+    pub review_decision: Option<String>,
     /// Aggregate CI-check state, or `None` when the PR has no checks.
     pub check_status: Option<CheckStatus>,
+    /// Per-state CI check tallies, `None` when the PR has no checks.
+    pub check_counts: Option<PrCheckCounts>,
 }
 
 /// One CI check's outcome on a PR, for the hover card's per-check rows.
@@ -175,6 +181,25 @@ fn rollup_to_status(rollup: Option<&Value>) -> Option<CheckStatus> {
     })
 }
 
+/// Tally `statusCheckRollup` items per state, folding cancelled into failed
+/// (matching `rollup_to_status`). Empty/absent ⇒ None.
+fn rollup_counts(rollup: Option<&Value>) -> Option<PrCheckCounts> {
+    let items = rollup?.as_array()?;
+    if items.is_empty() {
+        return None;
+    }
+    let mut counts = PrCheckCounts::default();
+    for state in items.iter().filter_map(|i| check_row(i).map(|c| c.state)) {
+        match state {
+            PrCheckState::Success => counts.passed += 1,
+            PrCheckState::Failure | PrCheckState::Cancelled => counts.failed += 1,
+            PrCheckState::Pending => counts.pending += 1,
+            PrCheckState::Skipped => counts.skipped += 1,
+        }
+    }
+    Some(counts)
+}
+
 /// Map one `statusCheckRollup` item to a check row. CheckRuns carry
 /// `name`/`status`/`conclusion`; StatusContexts carry `context`/`state`.
 fn check_row(item: &Value) -> Option<PrCheck> {
@@ -302,7 +327,7 @@ pub fn status(worktree: &Path) -> Result<Option<PrInfo>> {
             "pr",
             "view",
             "--json",
-            "number,url,state,title,statusCheckRollup",
+            "number,url,state,title,isDraft,reviewDecision,statusCheckRollup",
         ],
     )
     .output()
@@ -331,6 +356,16 @@ pub fn status(worktree: &Path) -> Result<Option<PrInfo>> {
             .and_then(Value::as_str)
             .unwrap_or_default()
             .to_string(),
+        is_draft: value
+            .get("isDraft")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        review_decision: value
+            .get("reviewDecision")
+            .and_then(Value::as_str)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string),
         check_status: rollup_to_status(value.get("statusCheckRollup")),
+        check_counts: rollup_counts(value.get("statusCheckRollup")),
     }))
 }

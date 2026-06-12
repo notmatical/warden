@@ -126,11 +126,14 @@ pub fn provision_working_dir(
 
     let short = short_id(&uuid(), 8);
     // A caller-named branch (e.g. `feat/x`) wins; otherwise `warden/<short>`.
-    // The directory segment is always sanitized + uniquified with `short`.
+    // A taken hint gets a `-<short>` suffix since `worktree add -b` refuses
+    // existing branches. The directory segment is always sanitized + uniquified.
     let hint = branch_hint.map(str::trim).filter(|b| !b.is_empty());
-    let branch = hint
-        .map(str::to_string)
-        .unwrap_or_else(|| format!("warden/{short}"));
+    let branch = match hint {
+        Some(b) if git::branch_exists(repo, b) => format!("{b}-{short}"),
+        Some(b) => b.to_string(),
+        None => format!("warden/{short}"),
+    };
     let dir_seg = match hint {
         Some(b) => format!("{}-{short}", sanitize(b)),
         None => short.clone(),

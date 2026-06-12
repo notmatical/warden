@@ -48,6 +48,8 @@ export interface CreateSessionOptions {
   workingDir?: string
   /** Linear issue this session works on; drives writeback on PR open/merge. */
   linearIssueId?: string
+  /** Worktree branch name (e.g. "feature/WAR-123" derived from an issue). */
+  branchHint?: string
 }
 
 export interface SessionSettingsPatch {

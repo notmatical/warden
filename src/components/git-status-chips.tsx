@@ -13,6 +13,7 @@ import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 
 import { CheckDot } from "@/components/common/check-dot"
+import { CheckCounts, PrStateIcon } from "@/components/common/pr-badges"
 import { PrHoverCard } from "@/components/pr-hover-card"
 import { Button } from "@/components/ui/button"
 import {
@@ -32,7 +33,7 @@ import * as ipc from "@/lib/ipc"
 import { cn } from "@/lib/utils"
 import { diffTabId } from "@/lib/viewport"
 import { useAppStore } from "@/store/app-store"
-import type { CheckStatus, Project, RepoStatus } from "@/types"
+import type { Project, RepoStatus, Session } from "@/types"
 
 // Stable empty reference so the `?? EMPTY` fallback doesn't allocate each run.
 const EMPTY: Project[] = []
@@ -225,38 +226,33 @@ function StatusChip({
 }
 
 /** A link chip to the session's pull request: the PR icon tinted by state,
- *  the number, and a trailing CI-checks dot. Hovering surfaces the full PR
- *  hover card. */
-function PrChip({
-  sessionId,
-  number,
-  url,
-  state,
-  checkStatus,
-}: {
-  sessionId: string
-  number: number
-  url: string | null
-  state: string | null
-  checkStatus: CheckStatus | null
-}) {
-  const tone =
-    state === "MERGED"
-      ? "text-violet-500"
-      : state === "CLOSED"
-        ? "text-red-500"
-        : "text-emerald-500"
+ *  the number, and trailing per-state CI tallies (a plain dot when the
+ *  tallies haven't been polled yet). Hovering surfaces the full PR card. */
+function PrChip({ session }: { session: Session }) {
   return (
-    <PrHoverCard sessionId={sessionId}>
+    <PrHoverCard sessionId={session.id}>
       <Button
         variant="secondary"
         size="xs"
-        onClick={() => url && void openUrl(url)}
+        onClick={() => session.prUrl && void openUrl(session.prUrl)}
         className="gap-1.5"
       >
-        <GitPullRequest className={cn("size-3.5", tone)} />
-        <span className="font-medium">#{number}</span>
-        <CheckDot status={checkStatus} />
+        <PrStateIcon
+          state={session.prState}
+          isDraft={session.prIsDraft}
+          className="size-3.5"
+        />
+        <span className="font-medium">#{session.prNumber}</span>
+        {session.prCheckCounts || session.prCheckStatus ? (
+          <>
+            <span aria-hidden className="h-3 w-px shrink-0 bg-border" />
+            {session.prCheckCounts ? (
+              <CheckCounts counts={session.prCheckCounts} />
+            ) : (
+              <CheckDot status={session.prCheckStatus} />
+            )}
+          </>
+        ) : null}
       </Button>
     </PrHoverCard>
   )
@@ -565,15 +561,7 @@ export function GitStatusChips({
             refresh={refresh}
           />
         ) : null}
-        {session?.prNumber ? (
-          <PrChip
-            sessionId={sessionId}
-            number={session.prNumber}
-            url={session.prUrl}
-            state={session.prState}
-            checkStatus={session.prCheckStatus}
-          />
-        ) : null}
+        {session?.prNumber ? <PrChip session={session} /> : null}
         {canViewDiff ? (
           <Tooltip>
             <TooltipTrigger asChild>

@@ -13,6 +13,7 @@ use crate::domain::{
     WorkflowGraph, WorkflowNodeRun, WorkflowRun,
 };
 use crate::error::{AppError, Result};
+use crate::integrations::github::pr::PrInfo;
 use crate::util::{now_rfc3339, uuid};
 
 /// Layout a freshly created group starts with: a single full-window pane.
@@ -728,6 +729,9 @@ impl Store {
             pr_state: None,
             pr_check_status: None,
             pr_checked_at: None,
+            pr_is_draft: false,
+            pr_review_decision: None,
+            pr_check_counts: None,
             pinned: false,
             created_at: now.clone(),
             updated_at: now,
@@ -1008,33 +1012,36 @@ impl Store {
     }
 
     /// Record (or refresh) the pull request bound to a session's branch, with its
-    /// CI-check rollup and the poll time.
-    pub fn set_session_pr(
-        &self,
-        id: &str,
-        number: i64,
-        url: &str,
-        state: &str,
-        check_status: Option<CheckStatus>,
-    ) -> Result<()> {
+    /// review/draft state, CI-check rollup + tallies, and the poll time.
+    /// Deliberately does *not* touch `updated_at` — background polling isn't
+    /// activity, and "last active" staleness keys off that column.
+    pub fn set_session_pr(&self, id: &str, pr: &PrInfo) -> Result<()> {
         let checked_at = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_secs() as i64)
             .unwrap_or_default();
+        let check_counts = pr
+            .check_counts
+            .as_ref()
+            .map(serde_json::to_string)
+            .transpose()?;
         let conn = self.lock();
         conn.execute(
             "UPDATE sessions
              SET pr_number = ?2, pr_url = ?3, pr_state = ?4, pr_check_status = ?5,
-                 pr_checked_at = ?6, updated_at = ?7
+                 pr_checked_at = ?6, pr_is_draft = ?7, pr_review_decision = ?8,
+                 pr_check_counts = ?9
              WHERE id = ?1",
             (
                 id,
-                number,
-                url,
-                state,
-                check_status.map(|c| c.as_str()),
+                pr.number,
+                &pr.url,
+                &pr.state,
+                pr.check_status.map(|c| c.as_str()),
                 checked_at,
-                now_rfc3339(),
+                pr.is_draft as i64,
+                &pr.review_decision,
+                check_counts,
             ),
         )?;
         Ok(())
@@ -1407,7 +1414,7 @@ const SESSION_SELECT: &str =
     allowed_tools, turns, cost_usd, \
     parent_id, workflow_id, created_at, updated_at, effort, auto_named, kind, terminal_command, terminal_started, \
     terminal_resume_id, base_branch, linear_issue_id, merged_at, pr_number, pr_url, pr_state, pr_check_status, \
-    pr_checked_at, pinned FROM sessions WHERE id = ?1";
+    pr_checked_at, pr_is_draft, pr_review_decision, pr_check_counts, pinned FROM sessions WHERE id = ?1";
 
 const SESSION_SELECT_ALL: &str =
     "SELECT id, group_id, project_id, title, backend, model, permission_mode, status, role, \
@@ -1415,7 +1422,7 @@ const SESSION_SELECT_ALL: &str =
     allowed_tools, turns, cost_usd, \
     parent_id, workflow_id, created_at, updated_at, effort, auto_named, kind, terminal_command, terminal_started, \
     terminal_resume_id, base_branch, linear_issue_id, merged_at, pr_number, pr_url, pr_state, pr_check_status, \
-    pr_checked_at, pinned FROM sessions";
+    pr_checked_at, pr_is_draft, pr_review_decision, pr_check_counts, pinned FROM sessions";
 
 fn map_project(row: &Row<'_>) -> rusqlite::Result<Project> {
     Ok(Project {
@@ -1502,6 +1509,11 @@ fn map_session(row: &Row<'_>) -> rusqlite::Result<Session> {
             .get::<_, Option<String>>("pr_check_status")?
             .and_then(|s| CheckStatus::parse(&s)),
         pr_checked_at: row.get("pr_checked_at")?,
+        pr_is_draft: row.get::<_, i64>("pr_is_draft")? != 0,
+        pr_review_decision: row.get("pr_review_decision")?,
+        pr_check_counts: row
+            .get::<_, Option<String>>("pr_check_counts")?
+            .and_then(|s| serde_json::from_str(&s).ok()),
         pinned: row.get::<_, i64>("pinned")? != 0,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
