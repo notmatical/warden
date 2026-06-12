@@ -15,6 +15,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -172,13 +175,28 @@ export function OpenInButtons({ path }: { path: string | null | undefined }) {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
-          {editorTargets.map((target) => (
-            <DropdownMenuItem key={target.id} onSelect={() => void run(target)}>
-              <TargetIcon target={target} />
-              {target.label}
-            </DropdownMenuItem>
-          ))}
-          {editorTargets.length > 0 ? <DropdownMenuSeparator /> : null}
+          {editorTargets.length > 0 ? (
+            <>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <Code className="text-muted-foreground" />
+                  IDE
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  {editorTargets.map((target) => (
+                    <DropdownMenuItem
+                      key={target.id}
+                      onSelect={() => void run(target)}
+                    >
+                      <TargetIcon target={target} />
+                      {target.label}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              <DropdownMenuSeparator />
+            </>
+          ) : null}
           {terminalRows.map((target) => (
             <DropdownMenuItem key={target.id} onSelect={() => void run(target)}>
               <TargetIcon target={target} />
