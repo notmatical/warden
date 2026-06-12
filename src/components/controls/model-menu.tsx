@@ -30,7 +30,7 @@ import {
   supportsFast,
   withFast,
 } from "@/lib/models"
-import { PRODUCT_ICON, PROVIDER_ICON } from "@/lib/provider-icons"
+import { PRODUCT_ICON } from "@/lib/provider-icons"
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store/app-store"
 import type { Backend } from "@/types"
@@ -163,7 +163,7 @@ export function ModelMenu({
           className="h-9 w-full justify-between gap-2 border-input bg-transparent px-3 font-normal hover:bg-input/30 dark:bg-input/30 dark:hover:bg-input/50"
         >
           <span className="flex min-w-0 items-center gap-2">
-            <ValueIcon className="size-3.5 shrink-0 text-muted-foreground" />
+            <ValueIcon className="size-3.5 shrink-0" />
             <span className="truncate text-sm">{formatModelName(value)}</span>
             {fast && <AnimatedZap active className="size-3" />}
           </span>
@@ -224,7 +224,7 @@ export function ModelMenu({
           {showRail ? (
             <div className="flex w-12 shrink-0 flex-col gap-1 border-r border-border/50 p-1.5">
               {entries.map((entry) => {
-                const Icon = PROVIDER_ICON[entry.backend]
+                const Icon = PRODUCT_ICON[entry.backend]
                 const selected = entry.name === paneName
                 return (
                   <button
@@ -240,13 +240,15 @@ export function ModelMenu({
                     onClick={() => {
                       if (entry.enabled) selectPane(entry.name)
                     }}
+                    // Product marks render in their brand colors, so state is
+                    // carried by the backing and opacity, not icon tinting.
                     className={cn(
                       "flex aspect-square items-center justify-center rounded-md transition-colors",
                       !entry.enabled
-                        ? "cursor-not-allowed text-muted-foreground/25"
+                        ? "cursor-not-allowed opacity-30"
                         : selected
-                          ? "bg-accent text-accent-foreground"
-                          : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                          ? "bg-accent"
+                          : "hover:bg-accent/50"
                     )}
                   >
                     <Icon className="size-4" />
