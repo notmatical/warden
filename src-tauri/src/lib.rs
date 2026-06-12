@@ -104,6 +104,7 @@ pub fn run() {
         mentions::commands::fetch_repo_ref,
         // external
         core::external::open_in,
+        core::external::list_open_apps,
         // providers
         providers::commands::list_provider_status,
         providers::commands::list_opencode_models,

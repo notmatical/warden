@@ -461,10 +461,21 @@ export function dismissSetupError(sessionId: string): Promise<void> {
   return invoke("dismiss_setup_error", { sessionId })
 }
 
-export type OpenTarget = "folder" | "terminal" | "zed" | "vscode"
+/** `"folder"`, `"terminal"`, or an installed editor id from `listOpenApps`. */
+export type OpenTarget = string
 
 export function openIn(target: OpenTarget, path: string): Promise<void> {
   return invoke("open_in", { target, path })
+}
+
+/** An editor installed on this machine, offered by the "open in…" menu. */
+export interface OpenApp {
+  id: string
+  name: string
+}
+
+export function listOpenApps(): Promise<OpenApp[]> {
+  return invoke("list_open_apps")
 }
 
 export function sendMessage(

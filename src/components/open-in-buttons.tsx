@@ -1,11 +1,11 @@
 import {
   ChevronDown,
   Code,
+  Copy,
   FolderOpen,
-  SquareCode,
   SquareTerminal,
 } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -14,6 +14,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -21,52 +22,94 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { type OpenTarget, openIn } from "@/lib/ipc"
+import { copyText } from "@/lib/clipboard"
+import { listOpenApps, type OpenApp, openIn } from "@/lib/ipc"
 
-const TARGETS: { target: OpenTarget; label: string; icon: typeof Code }[] = [
-  { target: "zed", label: "Zed", icon: SquareCode },
-  { target: "vscode", label: "VS Code", icon: Code },
-  { target: "terminal", label: "Terminal", icon: SquareTerminal },
-  { target: "folder", label: "File explorer", icon: FolderOpen },
-]
+interface Target {
+  id: string
+  label: string
+  icon: typeof Code
+}
+
+const TERMINAL: Target = {
+  id: "terminal",
+  label: "Terminal",
+  icon: SquareTerminal,
+}
+const FOLDER: Target = { id: "folder", label: "File explorer", icon: FolderOpen }
+
+/** Editors installed on this machine. Probed once for the initial paint and
+ *  re-probed each time the menu opens (cheap PATH lookups), so an editor
+ *  installed mid-run shows up without a restart. */
+let appsCache: Promise<OpenApp[]> | null = null
+function detectedApps(refresh = false): Promise<OpenApp[]> {
+  if (refresh || !appsCache) {
+    appsCache = listOpenApps().catch(() => [])
+  }
+  return appsCache
+}
 
 const LAST_KEY = "warden:open-in-target"
 
-function readLast(): OpenTarget {
+function readLastId(): string | null {
   try {
-    const value = localStorage.getItem(LAST_KEY)
-    return TARGETS.some((t) => t.target === value)
-      ? (value as OpenTarget)
-      : "zed"
+    return localStorage.getItem(LAST_KEY)
   } catch {
-    return "zed"
+    return null
   }
 }
 
 /** Open the active directory in an external app. The icon runs your last-used
- *  target in one click; the chevron picks another (and remembers it). */
+ *  target in one click; the chevron lists the editors installed on this
+ *  machine, the terminal and file manager, and copy-path. */
 export function OpenInButtons({ path }: { path: string | null | undefined }) {
-  const [last, setLast] = useState<OpenTarget>(readLast)
+  const [editors, setEditors] = useState<OpenApp[]>([])
+  const [lastId, setLastId] = useState<string | null>(null)
+
+  useEffect(() => {
+    let live = true
+    void detectedApps().then((apps) => {
+      if (live) setEditors(apps)
+    })
+    return () => {
+      live = false
+    }
+  }, [])
 
   if (!path) {
     return null
   }
 
-  const lastMeta = TARGETS.find((t) => t.target === last) ?? TARGETS[0]
-  const LastIcon = lastMeta.icon
+  const editorTargets: Target[] = editors.map((app) => ({
+    id: app.id,
+    label: app.name,
+    icon: Code,
+  }))
+  const targets: Target[] = [...editorTargets, TERMINAL, FOLDER]
+  // Last-used target if it's still available; else the first detected editor,
+  // else the file manager.
+  const last =
+    targets.find((t) => t.id === (lastId ?? readLastId())) ??
+    editorTargets[0] ??
+    FOLDER
+  const LastIcon = last.icon
 
-  const run = async (target: OpenTarget) => {
-    setLast(target)
+  const run = async (target: Target) => {
+    setLastId(target.id)
     try {
-      localStorage.setItem(LAST_KEY, target)
+      localStorage.setItem(LAST_KEY, target.id)
     } catch {
       // ignore storage failures
     }
     try {
-      await openIn(target, path)
+      await openIn(target.id, path)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error))
     }
+  }
+
+  const copyPath = async () => {
+    if (await copyText(path)) toast.success("Path copied")
   }
 
   return (
@@ -77,15 +120,19 @@ export function OpenInButtons({ path }: { path: string | null | undefined }) {
             variant="ghost"
             size="icon-sm"
             onClick={() => void run(last)}
-            aria-label={`Open in ${lastMeta.label}`}
+            aria-label={`Open in ${last.label}`}
             className="text-muted-foreground hover:text-foreground"
           >
             <LastIcon />
           </Button>
         </TooltipTrigger>
-        <TooltipContent>Open in {lastMeta.label}</TooltipContent>
+        <TooltipContent>Open in {last.label}</TooltipContent>
       </Tooltip>
-      <DropdownMenu>
+      <DropdownMenu
+        onOpenChange={(open) => {
+          if (open) void detectedApps(true).then(setEditors)
+        }}
+      >
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
@@ -96,13 +143,27 @@ export function OpenInButtons({ path }: { path: string | null | undefined }) {
             <ChevronDown />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-44">
-          {TARGETS.map(({ target, label, icon: Icon }) => (
-            <DropdownMenuItem key={target} onSelect={() => void run(target)}>
-              <Icon />
-              Open in {label}
+        <DropdownMenuContent align="end" className="w-48">
+          {editorTargets.map((target) => (
+            <DropdownMenuItem key={target.id} onSelect={() => void run(target)}>
+              <Code />
+              {target.label}
             </DropdownMenuItem>
           ))}
+          {editorTargets.length > 0 ? <DropdownMenuSeparator /> : null}
+          <DropdownMenuItem onSelect={() => void run(TERMINAL)}>
+            <SquareTerminal />
+            Terminal
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => void run(FOLDER)}>
+            <FolderOpen />
+            File explorer
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => void copyPath()}>
+            <Copy />
+            Copy path
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </ButtonGroup>
