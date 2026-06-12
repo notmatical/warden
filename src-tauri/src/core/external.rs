@@ -226,9 +226,15 @@ pub async fn list_open_apps() -> CommandResult<Vec<OpenApp>> {
                     kind,
                 })
         };
-        detect(EDITORS, OpenAppKind::Editor)
+        let mut apps: Vec<OpenApp> = detect(EDITORS, OpenAppKind::Editor)
             .chain(detect(TERMINALS, OpenAppKind::Terminal))
-            .collect::<Vec<_>>()
+            .collect();
+        // Windows Terminal hosts PowerShell by default, so the standalone
+        // PowerShell entry is redundant when it's installed — drop it.
+        if apps.iter().any(|a| a.id == "wt") {
+            apps.retain(|a| a.id != "powershell");
+        }
+        apps
     })
     .await
     .map_err(|e| AppError::Agent(format!("app probe failed: {e}")))?;
