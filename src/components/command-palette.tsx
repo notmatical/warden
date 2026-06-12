@@ -381,7 +381,7 @@ export function CommandPalette() {
         <Command loop onKeyDown={onCommandKeyDown}>
           <SelectionTracker target={selectedValue} />
           {pageTitle ? (
-            <div className="flex items-center gap-1 px-2.5 pt-2 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1 border-b border-border/50 px-3 py-2 text-xs text-muted-foreground">
               <span>Warden</span>
               <ChevronRight className="size-3" />
               <span className="font-medium text-foreground">{pageTitle}</span>
@@ -611,7 +611,10 @@ export function CommandPalette() {
               </>
             ) : null}
 
-            {page.id === "folders" ? (
+            {/* cmdk only auto-hides groups when a search filters their items
+                out, so empty pages must skip the group to keep the heading
+                from rendering above the empty state. */}
+            {page.id === "folders" && folderPairs.length > 0 ? (
               <CommandGroup heading="Folders">
                 {folderPairs.map(({ group, project }) => (
                   <CommandItem
@@ -632,7 +635,7 @@ export function CommandPalette() {
               </CommandGroup>
             ) : null}
 
-            {page.id === "linear" ? (
+            {page.id === "linear" && sortedIssues.length > 0 ? (
               <CommandGroup heading="Issues">
                 {sortedIssues.map((issue) => (
                   <IssueItem
