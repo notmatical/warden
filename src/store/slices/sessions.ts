@@ -1,11 +1,7 @@
 import type { StateCreator } from "zustand"
 import { refreshGitStatus } from "@/hooks/use-git-status"
 import * as ipc from "@/lib/ipc"
-import {
-  backendForModel,
-  DEFAULT_CHAT_MODEL,
-  DEFAULT_CODEX_MODEL,
-} from "@/lib/models"
+import { backendForModel, DEFAULT_MODEL_BY_BACKEND } from "@/lib/models"
 import { notifyFor, windowFocused } from "@/lib/notify"
 import * as terminals from "@/lib/terminal-instances"
 import { detachRef, diffTabId, firstLeaf } from "@/lib/viewport"
@@ -104,7 +100,7 @@ export const createSessionsSlice: StateCreator<
     await get().createSession({
       projectId,
       title: NATIVE_TITLE[provider],
-      model: provider === "codex" ? DEFAULT_CODEX_MODEL : DEFAULT_CHAT_MODEL,
+      model: DEFAULT_MODEL_BY_BACKEND[provider],
       permissionMode: "bypassPermissions",
       role: "chat",
       kind: "terminal",
@@ -119,12 +115,17 @@ export const createSessionsSlice: StateCreator<
     // A model change re-homes the session to that model's backend (gpt → codex);
     // reflect it optimistically so the provider icon/menu update instantly.
     const backend = patch.model ? backendForModel(patch.model) : current.backend
+    // Ultracode is Claude-only; landing on another backend falls back to the
+    // next highest tier (the Rust command applies the same rule).
+    const effort = patch.effort ?? current.effort
+    const clamped =
+      backend !== "claude" && effort === "ultracode" ? "max" : effort
     // Optimistically apply so the controls feel instant; the backend emits the
     // authoritative session-updated event which reconciles.
     set((state) => ({
       sessions: {
         ...state.sessions,
-        [sessionId]: { ...current, ...patch, backend },
+        [sessionId]: { ...current, ...patch, backend, effort: clamped },
       },
     }))
     try {

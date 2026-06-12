@@ -8,11 +8,19 @@ import type { Provider, ProviderStatus } from "@/types"
 const PROVIDER_DESCRIPTION: Record<Provider, string> = {
   claude: "Runs your Claude model sessions.",
   codex: "Runs your GPT model sessions.",
+  opencode: "Runs open and third-party models through OpenCode.",
+}
+
+/** The interactive command that signs each provider in. */
+const SIGN_IN_ARGS: Record<Provider, string> = {
+  claude: "",
+  codex: " login",
+  opencode: " auth login",
 }
 
 function signInProvider(status: ProviderStatus) {
   const bin = shellBin(status.path, status.id)
-  const command = status.id === "codex" ? `${bin} login` : bin
+  const command = `${bin}${SIGN_IN_ARGS[status.id] ?? ""}`
   void runInLoginTerminal(`Sign in: ${status.name}`, command)
 }
 

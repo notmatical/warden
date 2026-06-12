@@ -327,11 +327,26 @@ async cancelSession(sessionId: string) : Promise<Result<null, IpcError>> {
 }
 },
 /**
- * Approve denied tool patterns for a session and resume the turn.
+ * Approve denied tool patterns for a session and resume the turn. For
+ * OpenCode the turn is still alive, blocked on the ask — approving replies to
+ * it server-side and the turn continues on its own.
  */
 async approveTools(sessionId: string, patterns: string[]) : Promise<Result<null, IpcError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("approve_tools", { sessionId, patterns }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Reject a pending tool ask. Only OpenCode has a live ask to answer — a
+ * Claude denial already ended the turn, so dismissing is purely client-side
+ * and never reaches here.
+ */
+async rejectTools(sessionId: string) : Promise<Result<null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("reject_tools", { sessionId }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -653,8 +668,8 @@ async fetchRepoRef(workingDir: string, kind: string, number: number) : Promise<R
 }
 },
 /**
- * Open `path` in an external app selected by `target`:
- * `"folder"`, `"terminal"`, `"zed"`, or `"vscode"`.
+ * Open `path` in an external app selected by `target`: `"folder"`,
+ * `"terminal"` (the OS default), or an editor id from [`list_open_apps`].
  */
 async openIn(target: string, path: string) : Promise<Result<null, IpcError>> {
     try {
@@ -664,9 +679,34 @@ async openIn(target: string, path: string) : Promise<Result<null, IpcError>> {
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * The editors installed on this machine, in registry order. The folder and
+ * terminal targets are always available and not listed here (the terminal
+ * opens the OS default).
+ */
+async listOpenApps() : Promise<Result<OpenApp[], IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("list_open_apps") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async listProviderStatus() : Promise<Result<ToolStatus[], IpcError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("list_provider_status") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * The models the local OpenCode install can run (connected providers only) —
+ * the picker's OpenCode pane, since availability is per-account.
+ */
+async listOpencodeModels() : Promise<Result<OpencodeModel[], IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("list_opencode_models") };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -1049,10 +1089,10 @@ export type Attachment = { id: string; name: string;
  */
 path: string; isImage: boolean; isDir: boolean }
 /**
- * Which agent backend powers a session. Only Claude is implemented today, but
- * the enum is the seam where future providers (codex, cursor, ...) plug in.
+ * Which agent backend powers a session. This enum is the seam where providers
+ * plug in; each variant has an adapter under `crate::providers`.
  */
-export type Backend = "claude" | "codex"
+export type Backend = "claude" | "codex" | "opencode"
 /**
  * Aggregate CI-check state for a session's pull request, distilled from `gh`'s
  * `statusCheckRollup`. Absent when the PR has no checks.
@@ -1098,7 +1138,7 @@ workingDir: string | null;
 /**
  * Linear issue this session works on; drives writeback on PR open/merge.
  */
-linearIssueId: string | null;
+linearIssueId: string | null; 
 /**
  * Worktree branch name (e.g. `feature/WAR-123` derived from an issue).
  */
@@ -1127,9 +1167,11 @@ sharedSessions: number }
  */
 export type DiffFile = { path: string; added: number; removed: number; binary: boolean; patch: string }
 /**
- * Reasoning effort handed to the agent CLI (`claude --effort`).
+ * Reasoning effort for a session. `low..max` are `claude --effort` tokens;
+ * `Ultracode` is a Claude Code session setting on top (xhigh effort plus
+ * workflow orchestration) — each adapter maps it to what its CLI accepts.
  */
-export type EffortLevel = "low" | "medium" | "high" | "xhigh" | "max"
+export type EffortLevel = "low" | "medium" | "high" | "xhigh" | "max" | "ultracode"
 /**
  * A persisted, ordered event in a session's append-only log. The transcript
  * you render today and the cross-agent thread you render later are both just
@@ -1300,6 +1342,23 @@ export type NodeRunStatus = "pending" | "running" | "done" | "failed" | "skipped
  * The agent asked a question and is waiting for the user's reply.
  */
 "awaitingInput"
+/**
+ * One installed editor, surfaced to the "open in…" menu.
+ */
+export type OpenApp = { id: string; name: string }
+/**
+ * One selectable OpenCode model for the picker.
+ */
+export type OpencodeModel = { 
+/**
+ * Picker model id, prefixed so it routes to the OpenCode backend
+ * (`opencode/<model>` for Zen, `opencode/<provider>/<model>` otherwise).
+ */
+id: string; 
+/**
+ * The `provider/model` identifier as OpenCode prints it.
+ */
+label: string }
 /**
  * Permission posture handed to the agent CLI. Sessions are worktree-isolated,
  * so `BypassPermissions` is the default for autonomous, prompt-free turns.

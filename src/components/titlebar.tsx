@@ -5,7 +5,6 @@ import { GithubButton } from "@/components/github-button"
 import { OpenInButtons } from "@/components/open-in-buttons"
 import { Button } from "@/components/ui/button"
 import { WindowControls } from "@/components/window-controls"
-import { WorkflowsMenu } from "@/components/workflows-menu"
 import { isMac, isTauri } from "@/lib/platform"
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store/app-store"
@@ -53,7 +52,6 @@ export function Titlebar() {
       <div data-tauri-drag-region className="flex-1" />
 
       <div className="flex items-center gap-1 px-2">
-        <WorkflowsMenu />
         <CliUpdates />
         <GithubButton path={openPath} />
         <div className="mx-0.5 h-4 w-px bg-border/60" />

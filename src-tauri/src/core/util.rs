@@ -21,6 +21,16 @@ pub fn codex_home() -> PathBuf {
         .unwrap_or_else(|| home_dir().unwrap_or_default().join(".codex"))
 }
 
+/// OpenCode's data directory. OpenCode uses XDG paths on every platform
+/// (including Windows): `$XDG_DATA_HOME/opencode`, defaulting to
+/// `~/.local/share/opencode`. Stored credentials live in `auth.json` here.
+pub fn opencode_data_dir() -> PathBuf {
+    std::env::var_os("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| home_dir().unwrap_or_default().join(".local").join("share"))
+        .join("opencode")
+}
+
 /// Claude Code's config/state directory. Honours `$CLAUDE_CONFIG_DIR`, defaulting
 /// to `~/.claude`.
 pub fn claude_home() -> PathBuf {
@@ -32,6 +42,21 @@ pub fn claude_home() -> PathBuf {
 /// The current UTC time as an RFC 3339 / ISO 8601 string.
 pub fn now_rfc3339() -> String {
     chrono::Utc::now().to_rfc3339()
+}
+
+/// Compare two paths for "same location", tolerant of separators and (on
+/// Windows) case. Avoids `canonicalize` so it still matches dirs that no
+/// longer exist.
+pub fn same_path(a: &str, b: &str) -> bool {
+    fn norm(p: &str) -> String {
+        let trimmed = p.replace('\\', "/").trim_end_matches('/').to_string();
+        if cfg!(windows) {
+            trimmed.to_lowercase()
+        } else {
+            trimmed
+        }
+    }
+    norm(a) == norm(b)
 }
 
 /// The first `len` characters of a string, used to derive short, human-friendly

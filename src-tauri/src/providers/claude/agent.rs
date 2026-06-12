@@ -7,7 +7,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 
 use crate::cli::{self, Tool};
-use crate::domain::Session;
+use crate::domain::{EffortLevel, Session};
 use crate::error::Result;
 
 /// The `claude` binary to run — warden's managed copy or the system PATH one,
@@ -37,6 +37,29 @@ fn apply_gh_env(cmd: &mut Command) {
     }
 }
 
+/// Append the effort flag and any `--settings` JSON. `Ultracode` is a Claude
+/// Code session setting, not an `--effort` token: it runs as `xhigh` effort
+/// plus `{"ultracode": true}`, merged with fast mode's `{"fastMode": true}`
+/// when both apply.
+fn push_effort_args(args: &mut Vec<String>, effort: EffortLevel, fast: bool) {
+    let ultracode = effort == EffortLevel::Ultracode;
+    let effort_token = if ultracode { "xhigh" } else { effort.as_cli() };
+    args.push("--effort".to_string());
+    args.push(effort_token.to_string());
+
+    let mut settings = serde_json::Map::new();
+    if fast {
+        settings.insert("fastMode".to_string(), serde_json::Value::Bool(true));
+    }
+    if ultracode {
+        settings.insert("ultracode".to_string(), serde_json::Value::Bool(true));
+    }
+    if !settings.is_empty() {
+        args.push("--settings".to_string());
+        args.push(serde_json::Value::Object(settings).to_string());
+    }
+}
+
 /// Assemble the CLI argument vector for a one-shot turn. A session's first turn
 /// opens a new conversation via `--session-id`; later turns resume it via
 /// `--resume`. The prompt is *not* an argument — it's fed over stdin (see
@@ -62,14 +85,8 @@ pub fn build_args(session: &Session, add_dirs: &[String]) -> Vec<String> {
         model,
         "--permission-mode".to_string(),
         session.permission_mode.as_cli().to_string(),
-        "--effort".to_string(),
-        session.effort.as_cli().to_string(),
     ];
-
-    if fast {
-        args.push("--settings".to_string());
-        args.push(r#"{"fastMode":true}"#.to_string());
-    }
+    push_effort_args(&mut args, session.effort, fast);
 
     for dir in add_dirs {
         if dir.is_empty() {
@@ -150,14 +167,8 @@ pub fn session_args(
         model,
         "--permission-mode".to_string(),
         session.permission_mode.as_cli().to_string(),
-        "--effort".to_string(),
-        session.effort.as_cli().to_string(),
     ];
-
-    if fast {
-        args.push("--settings".to_string());
-        args.push(r#"{"fastMode":true}"#.to_string());
-    }
+    push_effort_args(&mut args, session.effort, fast);
 
     for dir in add_dirs {
         if dir.is_empty() {

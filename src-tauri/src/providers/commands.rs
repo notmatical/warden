@@ -5,14 +5,23 @@
 use tauri::{AppHandle, State};
 
 use crate::cli::{self, Source, ToolStatus};
+use crate::domain::Backend;
 use crate::error::{AppError, CommandResult, Result};
-use crate::providers::{self, Provider};
+use crate::providers::{self, opencode};
 use crate::state::AppState;
 
 #[tauri::command]
 #[specta::specta]
 pub async fn list_provider_status() -> CommandResult<Vec<ToolStatus>> {
     providers::status_all().await.map_err(Into::into)
+}
+
+/// The models the local OpenCode install can run (connected providers only) —
+/// the picker's OpenCode pane, since availability is per-account.
+#[tauri::command]
+#[specta::specta]
+pub async fn list_opencode_models() -> CommandResult<Vec<opencode::models::OpencodeModel>> {
+    opencode::models::list().await.map_err(Into::into)
 }
 
 /// Install warden's managed copy of a provider CLI (latest version).
@@ -50,6 +59,6 @@ pub async fn set_provider_source(
     Ok(())
 }
 
-fn parse_provider(id: &str) -> Result<Provider> {
-    Provider::parse(id).ok_or_else(|| AppError::Invalid(format!("unknown provider: {id}")))
+fn parse_provider(id: &str) -> Result<Backend> {
+    Backend::parse(id).ok_or_else(|| AppError::Invalid(format!("unknown provider: {id}")))
 }

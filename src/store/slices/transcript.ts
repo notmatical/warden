@@ -14,6 +14,7 @@ type TranscriptSlice = Pick<
   | "sendMessage"
   | "cancel"
   | "approveTools"
+  | "rejectTools"
   | "approvePlan"
   | "resolveApproval"
   | "runPlanToCode"
@@ -57,6 +58,14 @@ export const createTranscriptSlice: StateCreator<
       await ipc.approveTools(sessionId, patterns)
     } catch (error) {
       reportError("Failed to approve tools", error)
+    }
+  },
+
+  rejectTools: async (sessionId) => {
+    try {
+      await ipc.rejectTools(sessionId)
+    } catch (error) {
+      reportError("Failed to reject tools", error)
     }
   },
 

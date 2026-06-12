@@ -24,16 +24,12 @@ use serde_json::{json, Value};
 use tauri::AppHandle;
 use tokio::sync::Mutex as AsyncMutex;
 
-use crate::domain::{AgentEvent, EffortLevel, PermissionMode, Session, SessionStatus, TokenUsage};
+use crate::domain::{AgentEvent, EffortLevel, PermissionMode, Session, TokenUsage};
 use crate::error::{AppError, Result};
-use crate::events::{emit_delta, emit_event, emit_session};
+use crate::events::emit_delta;
 use crate::providers::jsonrpc::Client;
+use crate::providers::{clip, persist_event as persist};
 use crate::store::Store;
-
-/// Tool-result content larger than this is clipped to keep the event log and
-/// the IPC payload bounded (mirrors the Claude adapter's cap).
-const MAX_TOOL_RESULT_CHARS: usize = 16_000;
-const TRUNCATION_NOTE: &str = "… (truncated)";
 
 /// The shared app-server client. A dead server (crash, kill) is replaced on
 /// the next turn rather than wedging Codex until app restart.
@@ -171,7 +167,7 @@ fn split_fast_model(model: &str) -> (&str, bool) {
 /// Codex accepts so a session carried over from Claude still starts.
 fn codex_effort(effort: EffortLevel) -> &'static str {
     match effort {
-        EffortLevel::Max => "xhigh",
+        EffortLevel::Max | EffortLevel::Ultracode => "xhigh",
         other => other.as_cli(),
     }
 }
@@ -412,21 +408,6 @@ fn handle_notification(
     }
 }
 
-fn persist(app: &AppHandle, store: &Store, session_id: &str, event: AgentEvent) {
-    let is_result = matches!(event, AgentEvent::Result { .. });
-    if let Ok(record) = store.append_event(session_id, &event) {
-        emit_event(app, &record);
-    }
-    // The turn's terminal event settles the session back to idle.
-    if is_result {
-        let _ = store.record_turn(session_id, 0.0);
-        let _ = store.set_session_status(session_id, SessionStatus::Idle);
-        if let Ok(session) = store.get_session(session_id) {
-            emit_session(app, &session);
-        }
-    }
-}
-
 /// Map a completed Codex thread item to warden events. Item `type` is camelCase
 /// in current Codex; snake_case is accepted for forward/backward compatibility.
 fn item_events(item: Option<&Value>) -> Vec<AgentEvent> {
@@ -607,17 +588,4 @@ fn stringify(value: &Value) -> String {
         Value::String(s) => s.clone(),
         other => other.to_string(),
     }
-}
-
-fn clip(mut s: String) -> String {
-    if s.chars().count() > MAX_TOOL_RESULT_CHARS {
-        let cutoff = s
-            .char_indices()
-            .nth(MAX_TOOL_RESULT_CHARS)
-            .map(|(i, _)| i)
-            .unwrap_or(s.len());
-        s.truncate(cutoff);
-        s.push_str(TRUNCATION_NOTE);
-    }
-    s
 }
