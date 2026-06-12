@@ -18,6 +18,8 @@ import type {
   SessionRole,
   SyncOutcome,
 } from "@/types"
+
+import type { ModelOption } from "@/lib/models"
 import type {
   RunStatus,
   Workflow,
@@ -84,6 +86,9 @@ export interface AppState {
   sessions: Record<string, Session>
   /** Install/auth status of each agent CLI provider. */
   providers: ProviderStatus[]
+  /** Picker entries for the models the local OpenCode install can run —
+   *  per-account, so loaded from its CLI rather than the static config. */
+  opencodeModels: ModelOption[]
   /** Install/auth status of the GitHub CLI (loaded lazily by Settings). */
   githubStatus: ProviderStatus | null
   eventsBySession: Record<string, EventRecord[]>

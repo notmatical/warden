@@ -1,5 +1,5 @@
 {
-  "$comment": "Single source of truth for models, shared by the app (src/lib/models.ts) and the backend (src-tauri/src/core/model_config.rs). `models` is the picker list; `fastVariants` maps a model id to its priority-service-tier variant; `defaults` are the per-role session defaults; `fastWorkflows` picks each provider's cheapest model for background one-shots (session naming, PR drafting).",
+  "$comment": "Single source of truth for models, shared by the app (src/lib/models.ts) and the backend (src-tauri/src/core/model_config.rs). `models` is the picker list — OpenCode entries are not listed here because availability is per-account; the picker loads them live via list_opencode_models. `fastVariants` maps a model id to its priority-service-tier variant; `defaults` are the per-role session defaults; `fastWorkflows` picks each provider's cheapest model for background one-shots (session naming, PR drafting) — the OpenCode one is a preference the backend falls back from when the account lacks it.",
   "models": [
     {
       "id": "claude-fable-5[1m]",
@@ -47,40 +47,6 @@
       "id": "gpt-5.1-codex-mini",
       "label": "GPT-5.1 Codex Mini",
       "provider": "OpenAI"
-    },
-
-    { "id": "opencode/kimi-k2.6", "label": "Kimi K2.6", "provider": "OpenCode" },
-    { "id": "opencode/kimi-k2.5", "label": "Kimi K2.5", "provider": "OpenCode" },
-    { "id": "opencode/glm-5.1", "label": "GLM-5.1", "provider": "OpenCode" },
-    {
-      "id": "opencode/minimax-m2.7",
-      "label": "MiniMax M2.7",
-      "provider": "OpenCode"
-    },
-    {
-      "id": "opencode/qwen3.5-plus",
-      "label": "Qwen3.5 Plus",
-      "provider": "OpenCode"
-    },
-    {
-      "id": "opencode/deepseek-v4-pro",
-      "label": "DeepSeek V4 Pro",
-      "provider": "OpenCode"
-    },
-    {
-      "id": "opencode/gemini-3-pro",
-      "label": "Gemini 3 Pro",
-      "provider": "OpenCode"
-    },
-    {
-      "id": "opencode/grok-code",
-      "label": "Grok Code Fast 1",
-      "provider": "OpenCode"
-    },
-    {
-      "id": "opencode/big-pickle",
-      "label": "Big Pickle",
-      "provider": "OpenCode"
     }
   ],
   "fastVariants": {
@@ -94,7 +60,7 @@
     "planner": "claude-sonnet-4-6",
     "coder": "claude-opus-4-8",
     "codexChat": "gpt-5.5",
-    "opencodeChat": "opencode/kimi-k2.6"
+    "opencodeChat": "opencode/big-pickle"
   },
   "fastWorkflows": {
     "claude": "haiku",

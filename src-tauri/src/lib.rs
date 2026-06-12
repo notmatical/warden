@@ -106,6 +106,7 @@ pub fn run() {
         core::external::open_in,
         // providers
         providers::commands::list_provider_status,
+        providers::commands::list_opencode_models,
         providers::commands::install_provider,
         providers::commands::update_provider,
         providers::commands::set_provider_source,

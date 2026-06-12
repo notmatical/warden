@@ -33,10 +33,26 @@ export function backendForModel(id: string): Backend {
     : "claude"
 }
 
-/** Provider display names in first-seen order, for grouping in the picker. */
-export const MODEL_PROVIDERS: string[] = [
-  ...new Set(MODELS.map((m) => m.provider)),
-]
+/** Each backend's provider display name, for picker grouping of models that
+ *  aren't in the static list (dynamic OpenCode entries, resumed sessions on
+ *  retired ids). */
+export const BACKEND_PROVIDER_NAME: Record<Backend, string> = {
+  claude: "Anthropic",
+  codex: "OpenAI",
+  opencode: "OpenCode",
+}
+
+/** Provider rail entries for a picker model list: display names in first-seen
+ *  order, each tagged with the backend its models run on. */
+export function providerEntries(
+  models: ModelOption[]
+): { name: string; backend: Backend }[] {
+  const names = [...new Set(models.map((m) => m.provider))]
+  return names.map((name) => {
+    const id = models.find((m) => m.provider === name)?.id
+    return { name, backend: id ? backendForModel(id) : "claude" }
+  })
+}
 
 const FAST_SUFFIX = "-fast"
 
@@ -102,6 +118,12 @@ export function formatModelName(id: string): string {
   let base = baseModelId(id)
   const known = MODELS.find((m) => m.id === base)
   if (known) return known.label
+
+  // Dynamic OpenCode ids carry a provider path (`opencode/anthropic/<model>`);
+  // the model segment is the readable part.
+  if (base.includes("/")) {
+    base = base.split("/").pop() ?? base
+  }
 
   let suffix = ""
   if (base.includes("[1m]")) {

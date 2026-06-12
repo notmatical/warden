@@ -52,6 +52,17 @@ export function listProviderStatus(): Promise<ProviderStatus[]> {
   return invoke("list_provider_status")
 }
 
+/** A model the local OpenCode install can run, as `id` (picker model id) and
+ *  `label` (the `provider/model` identifier OpenCode prints). */
+export interface OpencodeModel {
+  id: string
+  label: string
+}
+
+export function listOpencodeModels(): Promise<OpencodeModel[]> {
+  return invoke("list_opencode_models")
+}
+
 export function installProvider(id: Provider): Promise<void> {
   return invoke("install_provider", { id })
 }

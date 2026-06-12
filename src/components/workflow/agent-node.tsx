@@ -7,7 +7,7 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
-import { backendForModel, baseModelId, MODELS } from "@/lib/models"
+import { backendForModel, formatModelName } from "@/lib/models"
 import { PROVIDER_ICON } from "@/lib/provider-icons"
 import { cn } from "@/lib/utils"
 import { INTENT_META } from "@/lib/workflow-intents"
@@ -43,8 +43,7 @@ export function AgentNode({ id, data, selected }: NodeProps) {
   const meta = INTENT_META[cfg.intent]
   const Icon = meta.icon
   const ProviderIcon = PROVIDER_ICON[backendForModel(cfg.model)]
-  const model =
-    MODELS.find((m) => m.id === baseModelId(cfg.model))?.label ?? cfg.model
+  const model = formatModelName(cfg.model)
 
   return (
     <ContextMenu>

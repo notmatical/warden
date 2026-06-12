@@ -688,6 +688,18 @@ async listProviderStatus() : Promise<Result<ToolStatus[], IpcError>> {
 }
 },
 /**
+ * The models the local OpenCode install can run (connected providers only) —
+ * the picker's OpenCode pane, since availability is per-account.
+ */
+async listOpencodeModels() : Promise<Result<OpencodeModel[], IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("list_opencode_models") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Install warden's managed copy of a provider CLI (latest version).
  */
 async installProvider(id: string) : Promise<Result<null, IpcError>> {
@@ -1113,7 +1125,7 @@ workingDir: string | null;
 /**
  * Linear issue this session works on; drives writeback on PR open/merge.
  */
-linearIssueId: string | null;
+linearIssueId: string | null; 
 /**
  * Worktree branch name (e.g. `feature/WAR-123` derived from an issue).
  */
@@ -1315,6 +1327,19 @@ export type NodeRunStatus = "pending" | "running" | "done" | "failed" | "skipped
  * The agent asked a question and is waiting for the user's reply.
  */
 "awaitingInput"
+/**
+ * One selectable OpenCode model for the picker.
+ */
+export type OpencodeModel = { 
+/**
+ * Picker model id, prefixed so it routes to the OpenCode backend
+ * (`opencode/<model>` for Zen, `opencode/<provider>/<model>` otherwise).
+ */
+id: string; 
+/**
+ * The `provider/model` identifier as OpenCode prints it.
+ */
+label: string }
 /**
  * Permission posture handed to the agent CLI. Sessions are worktree-isolated,
  * so `BypassPermissions` is the default for autonomous, prompt-free turns.

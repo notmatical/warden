@@ -1,5 +1,5 @@
 import { Check, ChevronsUpDown, Search } from "lucide-react"
-import { useState } from "react"
+import { useMemo, useState } from "react"
 
 import { AnimatedZap } from "@/components/animated-zap"
 import { Shortcut } from "@/components/shortcut"
@@ -19,12 +19,13 @@ import {
 } from "@/components/ui/tooltip"
 import { useControllableOpen } from "@/hooks/use-controllable-open"
 import {
+  BACKEND_PROVIDER_NAME,
   backendForModel,
   baseModelId,
   formatModelName,
   isFastModel,
-  MODEL_PROVIDERS,
   MODELS,
+  providerEntries,
   supportsFast,
   withFast,
 } from "@/lib/models"
@@ -48,16 +49,6 @@ interface ModelMenuProps {
   variant?: "toolbar" | "form"
 }
 
-interface ProviderEntry {
-  name: string
-  backend: Backend
-}
-
-const PROVIDER_ENTRIES: ProviderEntry[] = MODEL_PROVIDERS.map((name) => {
-  const id = MODELS.find((m) => m.provider === name)?.id
-  return { name, backend: id ? backendForModel(id) : "claude" }
-})
-
 export function ModelMenu({
   value,
   onChange,
@@ -70,12 +61,29 @@ export function ModelMenu({
 }: ModelMenuProps) {
   const [open, setOpen] = useControllableOpen(controlledOpen, onOpenChange)
   const providers = useAppStore((s) => s.providers)
+  const opencodeModels = useAppStore((s) => s.opencodeModels)
   const base = baseModelId(value)
   const fast = isFastModel(value)
   const canFast = supportsFast(base)
 
+  // Static models plus the account's live OpenCode catalog. The session's
+  // current model always renders, even when no longer listed (a retired id,
+  // or an OpenCode model the account lost access to).
+  const models = useMemo(() => {
+    const all = [...MODELS, ...opencodeModels]
+    if (!all.some((m) => m.id === base)) {
+      all.push({
+        id: base,
+        label: formatModelName(base),
+        provider: BACKEND_PROVIDER_NAME[backendForModel(base)],
+      })
+    }
+    return all
+  }, [opencodeModels, base])
+  const allEntries = useMemo(() => providerEntries(models), [models])
+
   const activeProvider =
-    MODELS.find((m) => m.id === base)?.provider ?? PROVIDER_ENTRIES[0].name
+    models.find((m) => m.id === base)?.provider ?? allEntries[0].name
 
   // Every provider stays in the rail; the ones you can't pick right now are
   // shown disabled rather than hidden. After the first turn the backend is
@@ -83,7 +91,7 @@ export function ModelMenu({
   // are disabled too. The session's own provider is always enabled (so the
   // menu is never empty).
   const authed = new Set(providers.filter((p) => p.authed).map((p) => p.id))
-  const entries = PROVIDER_ENTRIES.map((e) => {
+  const entries = allEntries.map((e) => {
     const isSessionProvider = e.backend === backend
     const enabled = isSessionProvider || (!started && authed.has(e.backend))
     const reason = enabled
@@ -117,10 +125,14 @@ export function ModelMenu({
   }
 
   const q = query.trim().toLowerCase()
-  const paneModels = MODELS.filter((m) => m.provider === paneName).filter(
-    (m) =>
-      !q || m.label.toLowerCase().includes(q) || m.id.toLowerCase().includes(q)
-  )
+  const paneModels = models
+    .filter((m) => m.provider === paneName)
+    .filter(
+      (m) =>
+        !q ||
+        m.label.toLowerCase().includes(q) ||
+        m.id.toLowerCase().includes(q)
+    )
 
   const ValueIcon = PROVIDER_ICON[backendForModel(value)]
   const trigger =
