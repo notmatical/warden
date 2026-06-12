@@ -323,6 +323,10 @@ pub async fn run_turn(
         // Tool calls persisted live from the stream, so the response pass can
         // skip them. The stream task is torn down before that pass runs.
         let persisted_tools = Arc::new(Mutex::new(HashSet::new()));
+        // A failed turn's HTTP body is a generic "UnknownError"; the real
+        // cause (model not found, provider auth, …) arrives as a
+        // `session.error` stream event, captured here for the error message.
+        let turn_error = Arc::new(Mutex::new(None));
         let sse = tauri::async_runtime::spawn(tail_events(SseContext {
             app: app.clone(),
             store: store.clone(),
@@ -332,6 +336,7 @@ pub async fn run_turn(
             dir: dir.clone(),
             mode: session.permission_mode,
             persisted_tools: persisted_tools.clone(),
+            turn_error: turn_error.clone(),
         }));
 
         let result = server::client()
@@ -352,8 +357,9 @@ pub async fn run_turn(
         if !status.is_success() {
             let body = response.text().await.unwrap_or_default();
             // A resumed id the server no longer knows (wiped storage, foreign
-            // machine): start a fresh conversation and retry once.
-            if resumed {
+            // machine) is a client error: start a fresh conversation and retry
+            // once. Server errors (e.g. model not found) would just re-fail.
+            if resumed && status.is_client_error() {
                 log::warn!("opencode rejected session {oc_id} ({status}); starting a new session");
                 resumed = false;
                 oc_id = create_session(&base_url, &dir, &format!("Warden {}", session.title))
@@ -365,7 +371,12 @@ pub async fn run_turn(
                 continue;
             }
             end_turn(&session.id);
-            let detail = body.chars().take(400).collect::<String>();
+            // Prefer the stream's session.error detail over the opaque body.
+            let detail = turn_error
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .take()
+                .unwrap_or_else(|| body.chars().take(400).collect::<String>());
             return Err(AppError::Agent(format!(
                 "opencode message failed ({status}): {detail}"
             )));
@@ -636,6 +647,51 @@ fn extract_error(body: &Value) -> Option<String> {
         .or_else(|| Some(error.to_string()))
 }
 
+/// A readable message from a `session.error` stream event's error object.
+/// Shapes vary by error: schema'd errors carry `name` + `data.message`;
+/// effect-tagged ones (`_tag`) may be flat — e.g. ProviderModelNotFoundError
+/// carries `providerID`/`modelID`/`suggestions` for a model the account
+/// doesn't have.
+fn session_error_message(error: Option<&Value>) -> Option<String> {
+    let error = error.filter(|e| !e.is_null())?;
+    let data = error.get("data").cloned().unwrap_or(Value::Null);
+    let field = |key: &str| {
+        data.get(key)
+            .or_else(|| error.get(key))
+            .and_then(Value::as_str)
+            .map(str::to_string)
+    };
+
+    let mut parts: Vec<String> = Vec::new();
+    if let Some(name) = error
+        .get("name")
+        .or_else(|| error.get("_tag"))
+        .and_then(Value::as_str)
+    {
+        parts.push(name.to_string());
+    }
+    if let (Some(provider), Some(model)) = (field("providerID"), field("modelID")) {
+        parts.push(format!("model {provider}/{model} is not available"));
+    }
+    if let Some(message) = field("message") {
+        parts.push(message);
+    }
+    if let Some(suggestions) = data
+        .get("suggestions")
+        .or_else(|| error.get("suggestions"))
+        .and_then(Value::as_array)
+    {
+        let list: Vec<&str> = suggestions.iter().filter_map(Value::as_str).collect();
+        if !list.is_empty() {
+            parts.push(format!("available: {}", list.join(", ")));
+        }
+    }
+    if parts.is_empty() {
+        parts.push(error.to_string());
+    }
+    Some(parts.join(" — "))
+}
+
 // ----- live event stream --------------------------------------------------------
 
 /// What we've seen of a streaming message part, keyed by part id.
@@ -659,6 +715,8 @@ struct SseContext {
     dir: String,
     mode: PermissionMode,
     persisted_tools: Arc<Mutex<HashSet<String>>>,
+    /// The latest `session.error` detail, read by the turn's failure path.
+    turn_error: Arc<Mutex<Option<String>>>,
 }
 
 /// Tail the server's SSE stream for one turn: emit transient text deltas,
@@ -774,6 +832,13 @@ fn handle_event(ctx: &SseContext, data: &str, parts: &mut HashMap<String, PartTr
                         },
                     );
                     emit_delta(&ctx.app, &ctx.session_id, delta);
+                }
+            }
+        }
+        "session.error" => {
+            if for_this_session(&props) {
+                if let Some(message) = session_error_message(props.get("error")) {
+                    *ctx.turn_error.lock().unwrap_or_else(|p| p.into_inner()) = Some(message);
                 }
             }
         }
@@ -987,9 +1052,76 @@ fn handle_part_snapshot(ctx: &SseContext, part: &Value, parts: &mut HashMap<Stri
 
 // ----- one-shots ------------------------------------------------------------------
 
+/// Pick a model the local OpenCode install can actually run, via
+/// `GET /provider`: the configured pair when its provider is connected and
+/// lists the model, else the connected provider's default (preferring the
+/// configured provider, then the first connected one). Accounts differ in
+/// which providers are signed in and even which Zen models exist, so a static
+/// choice can't work. Falls back to the configured pair if the probe fails.
+async fn resolve_available_model(
+    base_url: &str,
+    dir: &str,
+    configured: (String, String),
+) -> (String, String) {
+    let providers: Value = match server::client()
+        .get(format!("{base_url}/provider"))
+        .query(&[("directory", dir)])
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await
+        .and_then(|r| r.error_for_status())
+    {
+        Ok(response) => match response.json().await {
+            Ok(body) => body,
+            Err(_) => return configured,
+        },
+        Err(_) => return configured,
+    };
+
+    let connected: Vec<&str> = providers
+        .get("connected")
+        .and_then(Value::as_array)
+        .map(|arr| arr.iter().filter_map(Value::as_str).collect())
+        .unwrap_or_default();
+    let models_of = |pid: &str| {
+        providers
+            .get("all")
+            .and_then(Value::as_array)
+            .and_then(|all| {
+                all.iter()
+                    .find(|p| p.get("id").and_then(Value::as_str) == Some(pid))
+            })
+            .and_then(|p| p.get("models"))
+            .and_then(Value::as_object)
+    };
+
+    let (provider_id, model_id) = configured;
+    if connected.contains(&provider_id.as_str())
+        && models_of(&provider_id).is_some_and(|m| m.contains_key(&model_id))
+    {
+        return (provider_id, model_id);
+    }
+
+    // The provider's declared default, else any model it lists.
+    let default_of = |pid: &str| {
+        providers
+            .get("default")
+            .and_then(|d| d.get(pid))
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .or_else(|| models_of(pid).and_then(|m| m.keys().next().cloned()))
+    };
+    std::iter::once(provider_id.as_str())
+        .chain(connected.iter().copied())
+        .filter(|pid| connected.contains(pid))
+        .find_map(|pid| default_of(pid).map(|m| (pid.to_string(), m)))
+        .unwrap_or((provider_id, model_id))
+}
+
 /// A single cheap model call for background workflows (naming, PR drafting):
-/// a throwaway OpenCode session driven by the provider's fast-workflow model,
-/// run on the read-only `plan` agent. Returns the reply text, or `None` on any
+/// a throwaway OpenCode session run on the read-only `plan` agent, using the
+/// configured fast-workflow model when available (see
+/// [`resolve_available_model`]). Returns the reply text, or `None` on any
 /// failure so callers can fall back gracefully.
 pub async fn run_oneshot(working_dir: &std::path::Path, prompt: &str) -> Option<String> {
     let base_url = match server::ensure().await {
@@ -1008,32 +1140,47 @@ pub async fn run_oneshot(working_dir: &std::path::Path, prompt: &str) -> Option<
         }
     };
 
-    let (provider_id, model_id) = parse_model(crate::model_config::fast_workflow_model(
+    let configured = parse_model(crate::model_config::fast_workflow_model(
         crate::domain::Backend::Opencode,
     ));
+    let (provider_id, model_id) = resolve_available_model(&base_url, &dir, configured).await;
     let payload = json!({
         "agent": "plan",
         "model": { "providerID": provider_id, "modelID": model_id },
         "parts": [{ "type": "text", "text": prompt }],
     });
-    let body: Value = match server::client()
+    let response = match server::client()
         .post(format!("{base_url}/session/{oc_id}/message"))
         .query(&[("directory", dir.as_str())])
         .json(&payload)
         .timeout(std::time::Duration::from_secs(120))
         .send()
         .await
-        .and_then(|r| r.error_for_status())
     {
-        Ok(response) => match response.json().await {
-            Ok(body) => body,
-            Err(e) => {
-                log::warn!("oneshot: opencode response unparseable: {e}");
-                return None;
-            }
-        },
+        Ok(response) => response,
         Err(e) => {
             log::warn!("oneshot: opencode message failed: {e}");
+            return None;
+        }
+    };
+    let status = response.status();
+    if !status.is_success() {
+        let detail: String = response
+            .text()
+            .await
+            .unwrap_or_default()
+            .chars()
+            .take(400)
+            .collect();
+        log::warn!(
+            "oneshot: opencode message failed ({status}) for {provider_id}/{model_id}: {detail}"
+        );
+        return None;
+    }
+    let body: Value = match response.json().await {
+        Ok(body) => body,
+        Err(e) => {
+            log::warn!("oneshot: opencode response unparseable: {e}");
             return None;
         }
     };

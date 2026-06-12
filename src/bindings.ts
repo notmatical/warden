@@ -327,11 +327,26 @@ async cancelSession(sessionId: string) : Promise<Result<null, IpcError>> {
 }
 },
 /**
- * Approve denied tool patterns for a session and resume the turn.
+ * Approve denied tool patterns for a session and resume the turn. For
+ * OpenCode the turn is still alive, blocked on the ask — approving replies to
+ * it server-side and the turn continues on its own.
  */
 async approveTools(sessionId: string, patterns: string[]) : Promise<Result<null, IpcError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("approve_tools", { sessionId, patterns }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Reject a pending tool ask. Only OpenCode has a live ask to answer — a
+ * Claude denial already ended the turn, so dismissing is purely client-side
+ * and never reaches here.
+ */
+async rejectTools(sessionId: string) : Promise<Result<null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("reject_tools", { sessionId }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
