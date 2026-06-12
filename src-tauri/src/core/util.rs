@@ -21,6 +21,16 @@ pub fn codex_home() -> PathBuf {
         .unwrap_or_else(|| home_dir().unwrap_or_default().join(".codex"))
 }
 
+/// OpenCode's data directory. OpenCode uses XDG paths on every platform
+/// (including Windows): `$XDG_DATA_HOME/opencode`, defaulting to
+/// `~/.local/share/opencode`. Stored credentials live in `auth.json` here.
+pub fn opencode_data_dir() -> PathBuf {
+    std::env::var_os("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| home_dir().unwrap_or_default().join(".local").join("share"))
+        .join("opencode")
+}
+
 /// Claude Code's config/state directory. Honours `$CLAUDE_CONFIG_DIR`, defaulting
 /// to `~/.claude`.
 pub fn claude_home() -> PathBuf {

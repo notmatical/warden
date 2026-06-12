@@ -5,8 +5,9 @@
 use tauri::{AppHandle, State};
 
 use crate::cli::{self, Source, ToolStatus};
+use crate::domain::Backend;
 use crate::error::{AppError, CommandResult, Result};
-use crate::providers::{self, Provider};
+use crate::providers;
 use crate::state::AppState;
 
 #[tauri::command]
@@ -50,6 +51,6 @@ pub async fn set_provider_source(
     Ok(())
 }
 
-fn parse_provider(id: &str) -> Result<Provider> {
-    Provider::parse(id).ok_or_else(|| AppError::Invalid(format!("unknown provider: {id}")))
+fn parse_provider(id: &str) -> Result<Backend> {
+    Backend::parse(id).ok_or_else(|| AppError::Invalid(format!("unknown provider: {id}")))
 }

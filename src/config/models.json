@@ -47,6 +47,40 @@
       "id": "gpt-5.1-codex-mini",
       "label": "GPT-5.1 Codex Mini",
       "provider": "OpenAI"
+    },
+
+    { "id": "opencode/kimi-k2.6", "label": "Kimi K2.6", "provider": "OpenCode" },
+    { "id": "opencode/kimi-k2.5", "label": "Kimi K2.5", "provider": "OpenCode" },
+    { "id": "opencode/glm-5.1", "label": "GLM-5.1", "provider": "OpenCode" },
+    {
+      "id": "opencode/minimax-m2.7",
+      "label": "MiniMax M2.7",
+      "provider": "OpenCode"
+    },
+    {
+      "id": "opencode/qwen3.5-plus",
+      "label": "Qwen3.5 Plus",
+      "provider": "OpenCode"
+    },
+    {
+      "id": "opencode/deepseek-v4-pro",
+      "label": "DeepSeek V4 Pro",
+      "provider": "OpenCode"
+    },
+    {
+      "id": "opencode/gemini-3-pro",
+      "label": "Gemini 3 Pro",
+      "provider": "OpenCode"
+    },
+    {
+      "id": "opencode/grok-code",
+      "label": "Grok Code Fast 1",
+      "provider": "OpenCode"
+    },
+    {
+      "id": "opencode/big-pickle",
+      "label": "Big Pickle",
+      "provider": "OpenCode"
     }
   ],
   "fastVariants": {
@@ -59,10 +93,12 @@
     "chat": "claude-opus-4-8",
     "planner": "claude-sonnet-4-6",
     "coder": "claude-opus-4-8",
-    "codexChat": "gpt-5.5"
+    "codexChat": "gpt-5.5",
+    "opencodeChat": "opencode/kimi-k2.6"
   },
   "fastWorkflows": {
     "claude": "haiku",
-    "codex": "gpt-5.1-codex-mini"
+    "codex": "gpt-5.1-codex-mini",
+    "opencode": "opencode/grok-code"
   }
 }

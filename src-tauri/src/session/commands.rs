@@ -19,17 +19,6 @@ use crate::util::uuid;
 /// Default reasoning effort for a new session.
 const DEFAULT_EFFORT: EffortLevel = EffortLevel::High;
 
-/// Infer the backend that runs a given model id. Codex/GPT ids run on Codex;
-/// everything else runs on Claude.
-fn backend_for_model(model: &str) -> Backend {
-    let id = model.to_ascii_lowercase();
-    if id.starts_with("gpt") || id.starts_with("codex") {
-        Backend::Codex
-    } else {
-        Backend::Claude
-    }
-}
-
 #[tauri::command]
 #[specta::specta]
 pub async fn get_events(
@@ -119,7 +108,7 @@ pub async fn create_session(
         .backend
         .as_deref()
         .and_then(Backend::parse)
-        .unwrap_or_else(|| backend_for_model(&model));
+        .unwrap_or_else(|| Backend::for_model(&model));
 
     let session = state.store.create_session(NewSession {
         group_id,
@@ -164,7 +153,7 @@ pub async fn update_session(
     let session = state.store.get_session(&session_id)?;
 
     let model = model.unwrap_or(session.model);
-    let backend = backend_for_model(&model);
+    let backend = Backend::for_model(&model);
     let permission_mode = permission_mode
         .as_deref()
         .and_then(PermissionMode::parse)

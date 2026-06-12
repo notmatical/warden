@@ -3,7 +3,7 @@
 use tauri::ipc::Channel;
 use tauri::State;
 
-use crate::cli::{self, Tool};
+use crate::cli;
 use crate::domain::{Backend, Session};
 use crate::error::{CommandResult, Result};
 use crate::providers::claude::history as claude_history;
@@ -28,11 +28,9 @@ fn launch_recipe(store: &Store, session: &Session) -> Result<(Option<String>, Ve
     }
     // Resolve the tool's effective binary (managed or system) so a native
     // terminal launches the same CLI as headless turns.
-    let tool = match session.backend {
-        Backend::Claude => Tool::Claude,
-        Backend::Codex => Tool::Codex,
-    };
-    let program = cli::resolve(tool).to_string_lossy().into_owned();
+    let program = cli::resolve(session.backend.tool())
+        .to_string_lossy()
+        .into_owned();
     let args = match session.backend {
         // Claude owns its session id. Resume by that exact id only when its
         // conversation file is on disk; otherwise (re)pin the id and start
@@ -56,6 +54,13 @@ fn launch_recipe(store: &Store, session: &Session) -> Result<(Option<String>, Ve
                 // back to Codex's own "most recent for this cwd".
                 None => vec!["resume".to_string(), "--last".to_string()],
             },
+        },
+        // OpenCode: a fresh session the first time; afterwards continue the
+        // most recent conversation in this directory (OpenCode keys its session
+        // store by cwd, and each warden terminal has its own worktree).
+        Backend::Opencode => match session.terminal_started {
+            false => Vec::new(),
+            true => vec!["--continue".to_string()],
         },
     };
     Ok((Some(program), args))
@@ -104,11 +109,11 @@ pub async fn start_terminal(
         rows,
     )?;
 
-    // First launch of a native Codex session: flip to resume mode for next time.
-    // (Claude decides resume-vs-fresh from its on-disk conversation file, so it
-    // doesn't rely on this flag.)
+    // First launch of a native Codex/OpenCode session: flip to resume mode for
+    // next time. (Claude decides resume-vs-fresh from its on-disk conversation
+    // file, so it doesn't rely on this flag.)
     if let Some(session) = session {
-        if matches!(session.backend, Backend::Codex)
+        if matches!(session.backend, Backend::Codex | Backend::Opencode)
             && session.terminal_command.is_some()
             && !session.terminal_started
         {
