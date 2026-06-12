@@ -4,13 +4,13 @@ import {
   ExternalLink,
   FolderGit2,
   GitBranch,
-  GitPullRequest,
   MoreHorizontal,
   Pin,
   PinOff,
   SquareTerminal,
   Tag,
   Trash2,
+  TriangleAlert,
   Wrench,
 } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
@@ -28,6 +28,11 @@ import {
   FilterMenu,
   SwatchStack,
 } from "@/components/common/filter-menu"
+import {
+  CheckCounts,
+  PrStateIcon,
+  PrStatusPill,
+} from "@/components/common/pr-badges"
 import { useConfirm } from "@/components/confirm-dialog"
 import { ClaudeIcon, CodexIcon } from "@/components/icons/brand"
 import { LabelChip, LabelPicker, labelColor } from "@/components/label-picker"
@@ -60,14 +65,14 @@ import { FolderTasksSection } from "@/integrations/linear/components/folder-task
 import { useFolderLinearBinding } from "@/integrations/linear/hooks"
 import * as ipc from "@/lib/ipc"
 import { DEFAULT_CHAT_MODEL } from "@/lib/models"
-import { relativeTime } from "@/lib/time"
+import { formatDate, relativeTime } from "@/lib/time"
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store/app-store"
 import type { Label, Session, SessionKind, SessionStatus } from "@/types"
 
-// Session · Labels · Branch · Status · Last active · actions.
+// Session · Labels · Branch · Pull request · Status · Last active · actions.
 const COLS =
-  "grid grid-cols-[minmax(0,1.5fr)_minmax(0,1.3fr)_minmax(0,1fr)_108px_92px_60px] items-center gap-x-4"
+  "grid grid-cols-[minmax(0,1.5fr)_minmax(0,1.1fr)_minmax(0,1fr)_132px_108px_92px_60px] items-center gap-x-4"
 
 const MENU_ITEM = "gap-2 text-[13px]"
 
@@ -121,6 +126,81 @@ function StatusBadge({ status }: { status: SessionStatus }) {
 function subtitle(session: Session): string {
   if (session.kind === "terminal") return session.terminalCommand ?? "Terminal"
   return session.model
+}
+
+/** Sessions untouched this long are flagged as removal candidates. */
+const STALE_AFTER_MS = 14 * 24 * 60 * 60 * 1000
+
+/** Old news: not pinned, not running, and no activity for two weeks. */
+function isStale(session: Session): boolean {
+  if (session.pinned || session.status === "running") return false
+  const age = Date.now() - Date.parse(session.updatedAt)
+  return Number.isFinite(age) && age > STALE_AFTER_MS
+}
+
+/** A gentle nudge on stale rows: this session has sat untouched long enough
+ *  that it is probably done. Informational only, never auto-archives. */
+function StaleBadge({ updatedAt }: { updatedAt: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          role="img"
+          aria-label="Stale session"
+          className="inline-flex size-5 shrink-0 items-center justify-center rounded-md bg-amber-500/10 ring-1 ring-amber-500/30 ring-inset"
+        >
+          <TriangleAlert className="size-3 text-amber-500" />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>
+        No activity since {formatDate(updatedAt)}. This session may no longer
+        be needed.
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+/** The session's pull request at a glance: state-tinted icon, number, one
+ *  status pill (merged/closed/draft/review), and per-state CI tallies.
+ *  Hover for the full card; click to open the PR on GitHub. */
+function SessionPrCell({ session }: { session: Session }) {
+  if (session.prNumber == null) {
+    return <span className="text-muted-foreground/40 text-xs">—</span>
+  }
+  return (
+    <PrHoverCard sessionId={session.id}>
+      <button
+        type="button"
+        aria-label={`Pull request #${session.prNumber}`}
+        onClick={(e) => {
+          e.stopPropagation()
+          if (session.prUrl) void openUrl(session.prUrl)
+        }}
+        className="-mx-1.5 -my-1 flex w-fit max-w-full flex-col items-start gap-0.5 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-muted/60"
+      >
+        <span className="flex max-w-full items-center gap-1.5 text-xs">
+          <PrStateIcon
+            state={session.prState}
+            isDraft={session.prIsDraft}
+            className="size-3.5 shrink-0"
+          />
+          <span className="font-medium text-foreground tabular-nums">
+            #{session.prNumber}
+          </span>
+          <PrStatusPill
+            state={session.prState}
+            isDraft={session.prIsDraft}
+            reviewDecision={session.prReviewDecision}
+          />
+        </span>
+        {session.prCheckCounts ? (
+          <CheckCounts counts={session.prCheckCounts} />
+        ) : (
+          <CheckDot status={session.prCheckStatus} />
+        )}
+      </button>
+    </PrHoverCard>
+  )
 }
 
 /** A folder's dashboard: its sessions, and — when the repo is bound to a
@@ -284,7 +364,7 @@ export function FolderView({ projectId }: { projectId: string }) {
 
 // PR · Session · Branch · Last active · link.
 const PR_COLS =
-  "grid grid-cols-[110px_minmax(0,1.5fr)_minmax(0,1fr)_92px_36px] items-center gap-x-4"
+  "grid grid-cols-[minmax(180px,auto)_minmax(0,1.5fr)_minmax(0,1fr)_92px_36px] items-center gap-x-4"
 
 /** Sessions with an open pull request, surfaced ahead of the full list.
  *  Click a row to jump to the session; the trailing link opens the PR. */
@@ -323,11 +403,29 @@ function OpenPrsSection({ projectId }: { projectId: string }) {
           >
             <PrHoverCard sessionId={session.id}>
               <span className="flex w-fit items-center gap-1.5 text-xs">
-                <GitPullRequest className="size-3.5 shrink-0 text-emerald-500" />
+                <PrStateIcon
+                  state={session.prState}
+                  isDraft={session.prIsDraft}
+                  className="size-3.5 shrink-0"
+                />
                 <span className="font-medium text-foreground tabular-nums">
                   #{session.prNumber}
                 </span>
-                <CheckDot status={session.prCheckStatus} />
+                <PrStatusPill
+                  state={session.prState}
+                  isDraft={session.prIsDraft}
+                  reviewDecision={session.prReviewDecision}
+                />
+                {session.prCheckCounts || session.prCheckStatus ? (
+                  <>
+                    <span aria-hidden className="h-3 w-px shrink-0 bg-border" />
+                    {session.prCheckCounts ? (
+                      <CheckCounts counts={session.prCheckCounts} />
+                    ) : (
+                      <CheckDot status={session.prCheckStatus} />
+                    )}
+                  </>
+                ) : null}
               </span>
             </PrHoverCard>
 
@@ -344,7 +442,10 @@ function OpenPrsSection({ projectId }: { projectId: string }) {
               <span className="text-muted-foreground/40 text-xs">—</span>
             )}
 
-            <span className="text-muted-foreground text-xs tabular-nums">
+            <span className="flex items-center gap-1.5 text-muted-foreground text-xs tabular-nums">
+              {isStale(session) ? (
+                <StaleBadge updatedAt={session.updatedAt} />
+              ) : null}
               {relativeTime(session.updatedAt)}
             </span>
 
@@ -634,9 +735,14 @@ function SessionsSection({ projectId }: { projectId: string }) {
                       </span>
                     )}
 
+                    <SessionPrCell session={session} />
+
                     <StatusBadge status={session.status} />
 
-                    <span className="text-muted-foreground text-xs tabular-nums">
+                    <span className="flex items-center gap-1.5 text-muted-foreground text-xs tabular-nums">
+                      {isStale(session) ? (
+                        <StaleBadge updatedAt={session.updatedAt} />
+                      ) : null}
                       {relativeTime(session.updatedAt)}
                     </span>
 
