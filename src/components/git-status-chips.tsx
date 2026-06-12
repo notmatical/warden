@@ -4,6 +4,7 @@ import {
   ArrowUp,
   FileDiff,
   GitBranch,
+  GitPullRequest,
   Loader2,
   Plus,
   X,
