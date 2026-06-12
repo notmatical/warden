@@ -62,6 +62,22 @@ export function OpenAIIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+/** OpenCode terminal-prompt mark (pixel chevron + cursor); inherits color via
+ *  `currentColor`. Used for agent sessions running through OpenCode. */
+export function OpenCodeIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M4 4h3v3H4zM7 7h3v3H7zM10 10h3v4h-3zM7 14h3v3H7zM4 17h3v3H4zM14 17h6v3h-6z" />
+    </svg>
+  )
+}
+
 /** Claude product mark in its brand terracotta. Used for native Claude terminal
  *  sessions. */
 export function ClaudeIcon(props: SVGProps<SVGSVGElement>) {

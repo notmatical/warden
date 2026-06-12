@@ -16,7 +16,7 @@ import { type KeyboardEvent, type ReactNode, useEffect, useState } from "react"
 
 import { AgentProvidersIcon } from "@/components/agent-providers-icon"
 import { useConfirm } from "@/components/confirm-dialog"
-import { ClaudeIcon, CodexIcon, GitHubIcon } from "@/components/icons/brand"
+import { GitHubIcon } from "@/components/icons/brand"
 import { ReviewPrDialog } from "@/components/review-pr-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -60,6 +60,7 @@ import {
 } from "@/components/ui/tooltip"
 import { UpdateBanner } from "@/components/update-banner"
 import { DEFAULT_CHAT_MODEL } from "@/lib/models"
+import { NATIVE_PROVIDER_ICON, PROVIDER_ORDER } from "@/lib/provider-icons"
 import { cn } from "@/lib/utils"
 import {
   folderTabId,
@@ -68,6 +69,7 @@ import {
   WORKFLOWS_TAB_ID,
 } from "@/lib/viewport"
 import { useAppStore } from "@/store/app-store"
+import { NATIVE_TITLE } from "@/store/shared"
 import type { Group, Project, SessionKind } from "@/types"
 
 // Keep shadcn's left connector line + indent, but drop the right margin/padding
@@ -116,11 +118,9 @@ function RootRow({ groupId, project }: { groupId: string; project: Project }) {
   const removeRoot = useAppStore((s) => s.removeRoot)
   const openTab = useAppStore((s) => s.openTab)
   const active = useAppStore((s) => s.activeTabId === folderTabId(project.id))
-  const claudeAuthed = useAppStore((s) =>
-    s.providers.some((p) => p.id === "claude" && p.authed)
-  )
-  const codexAuthed = useAppStore((s) =>
-    s.providers.some((p) => p.id === "codex" && p.authed)
+  const providers = useAppStore((s) => s.providers)
+  const nativeProviders = PROVIDER_ORDER.filter((id) =>
+    providers.some((p) => p.id === id && p.authed)
   )
 
   const [reviewOpen, setReviewOpen] = useState(false)
@@ -191,23 +191,19 @@ function RootRow({ groupId, project }: { groupId: string; project: Project }) {
             <SquareTerminal />
             Terminal session
           </DropdownMenuItem>
-          {claudeAuthed || codexAuthed ? <DropdownMenuSeparator /> : null}
-          {claudeAuthed ? (
-            <DropdownMenuItem
-              onSelect={() => void createNativeSession(project.id, "claude")}
-            >
-              <ClaudeIcon />
-              Native Claude
-            </DropdownMenuItem>
-          ) : null}
-          {codexAuthed ? (
-            <DropdownMenuItem
-              onSelect={() => void createNativeSession(project.id, "codex")}
-            >
-              <CodexIcon />
-              Native Codex
-            </DropdownMenuItem>
-          ) : null}
+          {nativeProviders.length > 0 ? <DropdownMenuSeparator /> : null}
+          {nativeProviders.map((id) => {
+            const Icon = NATIVE_PROVIDER_ICON[id]
+            return (
+              <DropdownMenuItem
+                key={id}
+                onSelect={() => void createNativeSession(project.id, id)}
+              >
+                <Icon />
+                Native {NATIVE_TITLE[id]}
+              </DropdownMenuItem>
+            )
+          })}
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => setReviewOpen(true)}>
             <GitHubIcon />

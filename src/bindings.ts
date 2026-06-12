@@ -1049,10 +1049,10 @@ export type Attachment = { id: string; name: string;
  */
 path: string; isImage: boolean; isDir: boolean }
 /**
- * Which agent backend powers a session. Only Claude is implemented today, but
- * the enum is the seam where future providers (codex, cursor, ...) plug in.
+ * Which agent backend powers a session. This enum is the seam where providers
+ * plug in; each variant has an adapter under `crate::providers`.
  */
-export type Backend = "claude" | "codex"
+export type Backend = "claude" | "codex" | "opencode"
 /**
  * Aggregate CI-check state for a session's pull request, distilled from `gh`'s
  * `statusCheckRollup`. Absent when the PR has no checks.

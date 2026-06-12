@@ -52,10 +52,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
+import { backendForModel } from "@/lib/models"
 import { cn } from "@/lib/utils"
 import { GATE_META, INTENT_META, INTENT_ORDER } from "@/lib/workflow-intents"
 import { useAppStore } from "@/store/app-store"
-import type { Backend } from "@/types"
 import type {
   AgentTaskConfig,
   Intent,
@@ -113,11 +113,6 @@ const RUN_PILL: Record<string, { label: string; dot: string; pill: string }> = {
     dot: "bg-muted-foreground/40",
     pill: "bg-muted/50 text-muted-foreground ring-border",
   },
-}
-
-function backendOf(model: string): Backend {
-  const id = model.toLowerCase()
-  return id.startsWith("gpt") || id.startsWith("codex") ? "codex" : "claude"
 }
 
 const DEFAULT_MODEL = "claude-opus-4-8"
@@ -716,7 +711,7 @@ function AgentConfig({
         <ModelMenu
           value={config.model}
           onChange={(model) => patchConfig({ model })}
-          backend={backendOf(config.model)}
+          backend={backendForModel(config.model)}
           started={false}
         />
         <EffortMenu

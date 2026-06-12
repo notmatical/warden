@@ -29,7 +29,6 @@ import {
   SwatchStack,
 } from "@/components/common/filter-menu"
 import { useConfirm } from "@/components/confirm-dialog"
-import { ClaudeIcon, CodexIcon } from "@/components/icons/brand"
 import { LabelChip, LabelPicker, labelColor } from "@/components/label-picker"
 import { PrHoverCard } from "@/components/pr-hover-card"
 import { SessionFavicon } from "@/components/session-favicon"
@@ -60,9 +59,11 @@ import { FolderTasksSection } from "@/integrations/linear/components/folder-task
 import { useFolderLinearBinding } from "@/integrations/linear/hooks"
 import * as ipc from "@/lib/ipc"
 import { DEFAULT_CHAT_MODEL } from "@/lib/models"
+import { NATIVE_PROVIDER_ICON, PROVIDER_ORDER } from "@/lib/provider-icons"
 import { relativeTime } from "@/lib/time"
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store/app-store"
+import { NATIVE_TITLE } from "@/store/shared"
 import type { Label, Session, SessionKind, SessionStatus } from "@/types"
 
 // Session · Labels · Branch · Status · Last active · actions.
@@ -148,11 +149,9 @@ export function FolderView({ projectId }: { projectId: string }) {
   )
   const createSession = useAppStore((s) => s.createSession)
   const createNativeSession = useAppStore((s) => s.createNativeSession)
-  const claudeAuthed = useAppStore((s) =>
-    s.providers.some((p) => p.id === "claude" && p.authed)
-  )
-  const codexAuthed = useAppStore((s) =>
-    s.providers.some((p) => p.id === "codex" && p.authed)
+  const providers = useAppStore((s) => s.providers)
+  const nativeProviders = PROVIDER_ORDER.filter((id) =>
+    providers.some((p) => p.id === id && p.authed)
   )
   const linear = useFolderLinearBinding(projectId)
   const [setupOpen, setSetupOpen] = useState(false)
@@ -238,23 +237,19 @@ export function FolderView({ projectId }: { projectId: string }) {
                 <SquareTerminal />
                 Terminal session
               </DropdownMenuItem>
-              {claudeAuthed || codexAuthed ? <DropdownMenuSeparator /> : null}
-              {claudeAuthed ? (
-                <DropdownMenuItem
-                  onSelect={() => void createNativeSession(projectId, "claude")}
-                >
-                  <ClaudeIcon />
-                  Native Claude
-                </DropdownMenuItem>
-              ) : null}
-              {codexAuthed ? (
-                <DropdownMenuItem
-                  onSelect={() => void createNativeSession(projectId, "codex")}
-                >
-                  <CodexIcon />
-                  Native Codex
-                </DropdownMenuItem>
-              ) : null}
+              {nativeProviders.length > 0 ? <DropdownMenuSeparator /> : null}
+              {nativeProviders.map((id) => {
+                const Icon = NATIVE_PROVIDER_ICON[id]
+                return (
+                  <DropdownMenuItem
+                    key={id}
+                    onSelect={() => void createNativeSession(projectId, id)}
+                  >
+                    <Icon />
+                    Native {NATIVE_TITLE[id]}
+                  </DropdownMenuItem>
+                )
+              })}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

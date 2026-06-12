@@ -21,11 +21,13 @@ export const MODELS: ModelOption[] = modelConfig.models
 
 /**
  * The agent backend that runs a model id, mirroring the backend's own rule
- * (`gpt`/`codex` prefixes → Codex; everything else → Claude). Keep this in
- * sync with `backend_for_model` in src-tauri/src/commands/session.rs.
+ * (`opencode/...` ids → OpenCode; `gpt`/`codex` prefixes → Codex; everything
+ * else → Claude). Keep this in sync with `Backend::for_model` in
+ * src-tauri/src/domain/session.rs.
  */
 export function backendForModel(id: string): Backend {
   const lower = baseModelId(id).toLowerCase()
+  if (lower.startsWith("opencode")) return "opencode"
   return lower.startsWith("gpt") || lower.startsWith("codex")
     ? "codex"
     : "claude"
@@ -71,6 +73,16 @@ export const DEFAULT_PLANNER_MODEL = modelConfig.defaults.planner
 export const DEFAULT_CODER_MODEL = modelConfig.defaults.coder
 /** Default model shown for Codex sessions (Codex's current default). */
 export const DEFAULT_CODEX_MODEL = modelConfig.defaults.codexChat
+/** Default model shown for OpenCode sessions. */
+export const DEFAULT_OPENCODE_MODEL = modelConfig.defaults.opencodeChat
+
+/** Each backend's default chat model — what a new session of that provider
+ *  starts on. */
+export const DEFAULT_MODEL_BY_BACKEND: Record<Backend, string> = {
+  claude: DEFAULT_CHAT_MODEL,
+  codex: DEFAULT_CODEX_MODEL,
+  opencode: DEFAULT_OPENCODE_MODEL,
+}
 
 const MODEL_ALIASES: Record<string, string> = {
   opus: "Opus",
