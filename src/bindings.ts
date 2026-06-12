@@ -1259,7 +1259,12 @@ export type Label = { id: string; projectId: string; name: string;
 color: string; createdAt: string }
 export type LinearBinding = { teamId: string; projectId: string | null }
 export type LinearComment = { id: string; body: string; createdAt: string; user: LinearUserRef | null }
-export type LinearIssue = { id: string; identifier: string; title: string; description: string | null; priority: number; url: string; updatedAt: string; state: LinearState; assignee: LinearUserRef | null; team: LinearTeamRef; project: LinearProjectRef | null; labels: string[] }
+export type LinearIssue = { id: string; identifier: string; title: string; description: string | null; priority: number; url: string;
+/**
+ * Linear's workspace-configured git branch name for the issue.
+ * Defaulted so payloads cached before this field existed still parse.
+ */
+branchName: string; updatedAt: string; state: LinearState; assignee: LinearUserRef | null; team: LinearTeamRef; project: LinearProjectRef | null; labels: string[] }
 export type LinearProjectRef = { id: string; name: string }
 export type LinearState = { id: string; name: string; color: string; 
 /**
