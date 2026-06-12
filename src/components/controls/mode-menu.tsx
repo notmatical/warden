@@ -53,8 +53,8 @@ const MODE_META: Record<ExecutionMode, ModeMeta> = {
     dot: "bg-emerald-500",
   },
   bypassPermissions: {
-    trigger: "Bypass",
-    label: "Bypass permissions",
+    trigger: "Build",
+    label: "Build Mode",
     description: "No prompts",
     icon: ShieldOff,
     dot: "bg-red-500",
