@@ -15,6 +15,9 @@ pub use session::{
     Backend, CheckStatus, EffortLevel, PermissionMode, Session, SessionKind, SessionRole,
     SessionStatus, SetupStatus,
 };
+#[cfg(test)]
+pub use workflow::WorkflowEdge;
 pub use workflow::{
-    NodeKind, NodeRunStatus, RunStatus, Workflow, WorkflowGraph, WorkflowNodeRun, WorkflowRun,
+    AgentTaskConfig, NodeKind, NodeRunStatus, RunStatus, Workflow, WorkflowGraph, WorkflowNode,
+    WorkflowNodeRun, WorkflowRun,
 };
