@@ -49,7 +49,11 @@ const TERMINAL: Target = {
   label: "Terminal",
   icon: SquareTerminal,
 }
-const FOLDER: Target = { id: "folder", label: "File explorer", icon: FolderOpen }
+const FOLDER: Target = {
+  id: "folder",
+  label: "File explorer",
+  icon: FolderOpen,
+}
 
 /** Editors installed on this machine. Probed once for the initial paint and
  *  re-probed each time the menu opens (cheap PATH lookups), so an editor
@@ -73,16 +77,16 @@ function readLastId(): string | null {
 }
 
 /** Open the active directory in an external app. The icon runs your last-used
- *  target in one click; the chevron lists the editors installed on this
- *  machine, the terminal and file manager, and copy-path. */
+ *  target in one click; the chevron lists the editors and terminals installed
+ *  on this machine, the file manager, and copy-path. */
 export function OpenInButtons({ path }: { path: string | null | undefined }) {
-  const [editors, setEditors] = useState<OpenApp[]>([])
+  const [apps, setApps] = useState<OpenApp[]>([])
   const [lastId, setLastId] = useState<string | null>(null)
 
   useEffect(() => {
     let live = true
-    void detectedApps().then((apps) => {
-      if (live) setEditors(apps)
+    void detectedApps().then((detected) => {
+      if (live) setApps(detected)
     })
     return () => {
       live = false
@@ -93,12 +97,24 @@ export function OpenInButtons({ path }: { path: string | null | undefined }) {
     return null
   }
 
-  const editorTargets: Target[] = editors.map((app) => ({
-    id: app.id,
-    label: app.name,
-    iconUrl: APP_ICON_URL[app.id],
-  }))
-  const targets: Target[] = [...editorTargets, TERMINAL, FOLDER]
+  const editorTargets: Target[] = apps
+    .filter((app) => app.kind === "editor")
+    .map((app) => ({
+      id: app.id,
+      label: app.name,
+      iconUrl: APP_ICON_URL[app.id],
+    }))
+  const terminalTargets: Target[] = apps
+    .filter((app) => app.kind === "terminal")
+    .map((app) => ({
+      id: app.id,
+      label: app.name,
+      icon: SquareTerminal,
+      iconUrl: APP_ICON_URL[app.id],
+    }))
+  // The generic Terminal row only stands in when no terminal was detected.
+  const terminalRows = terminalTargets.length > 0 ? terminalTargets : [TERMINAL]
+  const targets: Target[] = [...editorTargets, ...terminalRows, FOLDER]
   // Last-used target if it's still available; else the first detected editor,
   // else the file manager.
   const last =
@@ -142,7 +158,7 @@ export function OpenInButtons({ path }: { path: string | null | undefined }) {
       </Tooltip>
       <DropdownMenu
         onOpenChange={(open) => {
-          if (open) void detectedApps(true).then(setEditors)
+          if (open) void detectedApps(true).then(setApps)
         }}
       >
         <DropdownMenuTrigger asChild>
@@ -163,10 +179,13 @@ export function OpenInButtons({ path }: { path: string | null | undefined }) {
             </DropdownMenuItem>
           ))}
           {editorTargets.length > 0 ? <DropdownMenuSeparator /> : null}
-          <DropdownMenuItem onSelect={() => void run(TERMINAL)}>
-            <SquareTerminal />
-            Terminal
-          </DropdownMenuItem>
+          {terminalRows.map((target) => (
+            <DropdownMenuItem key={target.id} onSelect={() => void run(target)}>
+              <TargetIcon target={target} />
+              {target.label}
+            </DropdownMenuItem>
+          ))}
+          {terminalTargets.length > 0 ? <DropdownMenuSeparator /> : null}
           <DropdownMenuItem onSelect={() => void run(FOLDER)}>
             <FolderOpen />
             File explorer

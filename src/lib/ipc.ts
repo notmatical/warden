@@ -461,17 +461,19 @@ export function dismissSetupError(sessionId: string): Promise<void> {
   return invoke("dismiss_setup_error", { sessionId })
 }
 
-/** `"folder"`, `"terminal"`, or an installed editor id from `listOpenApps`. */
+/** `"folder"`, `"terminal"`, or an installed app id from `listOpenApps`. */
 export type OpenTarget = string
 
 export function openIn(target: OpenTarget, path: string): Promise<void> {
   return invoke("open_in", { target, path })
 }
 
-/** An editor installed on this machine, offered by the "open in…" menu. */
+/** An editor or terminal installed on this machine, offered by the
+ *  "open in…" menu. */
 export interface OpenApp {
   id: string
   name: string
+  kind: "editor" | "terminal"
 }
 
 export function listOpenApps(): Promise<OpenApp[]> {

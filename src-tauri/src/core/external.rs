@@ -1,7 +1,7 @@
 //! Commands for opening a directory in external apps (editor, terminal, file
-//! manager) — the titlebar's "open in…" menu. Editors come from a known-app
-//! registry probed against this machine, so the menu only offers what's
-//! actually installed.
+//! manager) — the titlebar's "open in…" menu. Editors and terminals come from
+//! a known-app registry probed against this machine, so the menu only offers
+//! what's actually installed.
 
 use std::path::Path;
 use std::process::Command;
@@ -13,10 +13,10 @@ use tauri_plugin_opener::OpenerExt;
 
 use crate::error::{AppError, CommandResult, Result};
 
-/// An editor warden knows how to detect and launch. `bin` is the CLI on PATH
-/// (all platforms); `mac_app` is the application-bundle name used on macOS,
-/// where editor CLIs are often not installed.
-struct EditorDef {
+/// An app warden knows how to detect and launch. `bin` is the CLI on PATH
+/// (all platforms; empty when the app has no CLI); `mac_app` is the
+/// application-bundle name used on macOS, where CLIs are often not installed.
+struct AppDef {
     id: &'static str,
     name: &'static str,
     bin: &'static str,
@@ -24,86 +24,86 @@ struct EditorDef {
     mac_app: &'static str,
 }
 
-const EDITORS: &[EditorDef] = &[
-    EditorDef {
+const EDITORS: &[AppDef] = &[
+    AppDef {
         id: "vscode",
         name: "VS Code",
         bin: "code",
         mac_app: "Visual Studio Code",
     },
-    EditorDef {
+    AppDef {
         id: "vscode-insiders",
         name: "VS Code Insiders",
         bin: "code-insiders",
         mac_app: "Visual Studio Code - Insiders",
     },
-    EditorDef {
+    AppDef {
         id: "cursor",
         name: "Cursor",
         bin: "cursor",
         mac_app: "Cursor",
     },
-    EditorDef {
+    AppDef {
         id: "zed",
         name: "Zed",
         bin: "zed",
         mac_app: "Zed",
     },
-    EditorDef {
+    AppDef {
         id: "sublime",
         name: "Sublime Text",
         bin: "subl",
         mac_app: "Sublime Text",
     },
-    EditorDef {
+    AppDef {
         id: "idea",
         name: "IntelliJ IDEA",
         bin: "idea",
         mac_app: "IntelliJ IDEA",
     },
-    EditorDef {
+    AppDef {
         id: "webstorm",
         name: "WebStorm",
         bin: "webstorm",
         mac_app: "WebStorm",
     },
-    EditorDef {
+    AppDef {
         id: "pycharm",
         name: "PyCharm",
         bin: "pycharm",
         mac_app: "PyCharm",
     },
-    EditorDef {
+    AppDef {
         id: "rider",
         name: "Rider",
         bin: "rider",
         mac_app: "Rider",
     },
-    EditorDef {
+    AppDef {
         id: "goland",
         name: "GoLand",
         bin: "goland",
         mac_app: "GoLand",
     },
-    EditorDef {
+    AppDef {
         id: "clion",
         name: "CLion",
         bin: "clion",
         mac_app: "CLion",
     },
-    EditorDef {
+    AppDef {
         id: "rustrover",
         name: "RustRover",
         bin: "rustrover",
         mac_app: "RustRover",
     },
-    EditorDef {
+    AppDef {
         id: "fleet",
         name: "Fleet",
         bin: "fleet",
         mac_app: "Fleet",
     },
-    EditorDef {
+    AppDef {
         id: "antigravity",
         name: "Antigravity",
         bin: "antigravity",
@@ -111,18 +111,67 @@ const EDITORS: &[EditorDef] = &[
     },
 ];
 
-fn editor(id: &str) -> Option<&'static EditorDef> {
-    EDITORS.iter().find(|e| e.id == id)
+// iTerm ships no CLI, so it is macOS-only via its bundle name.
+const TERMINALS: &[AppDef] = &[
+    AppDef {
+        id: "wt",
+        name: "Windows Terminal",
+        bin: "wt",
+        mac_app: "",
+    },
+    AppDef {
+        id: "warp",
+        name: "Warp",
+        bin: "warp",
+        mac_app: "Warp",
+    },
+    AppDef {
+        id: "ghostty",
+        name: "Ghostty",
+        bin: "ghostty",
+        mac_app: "Ghostty",
+    },
+    AppDef {
+        id: "wezterm",
+        name: "WezTerm",
+        bin: "wezterm",
+        mac_app: "WezTerm",
+    },
+    AppDef {
+        id: "alacritty",
+        name: "Alacritty",
+        bin: "alacritty",
+        mac_app: "Alacritty",
+    },
+    AppDef {
+        id: "kitty",
+        name: "Kitty",
+        bin: "kitty",
+        mac_app: "kitty",
+    },
+    AppDef {
+        id: "iterm",
+        name: "iTerm",
+        bin: "",
+        mac_app: "iTerm",
+    },
+];
+
+fn find_app(registry: &'static [AppDef], id: &str) -> Option<&'static AppDef> {
+    registry.iter().find(|a| a.id == id)
 }
 
-/// Whether an editor is installed here: its CLI resolves on PATH, or (macOS)
+/// Whether an app is installed here: its CLI resolves on PATH, or (macOS)
 /// its application bundle exists.
-fn editor_installed(def: &EditorDef) -> bool {
-    if which::which(def.bin).is_ok() {
+fn app_installed(def: &AppDef) -> bool {
+    if !def.bin.is_empty() && which::which(def.bin).is_ok() {
         return true;
     }
     #[cfg(target_os = "macos")]
     {
+        if def.mac_app.is_empty() {
+            return false;
+        }
         let bundle = format!("{}.app", def.mac_app);
         if Path::new("/Applications").join(&bundle).exists() {
             return true;
@@ -134,36 +183,51 @@ fn editor_installed(def: &EditorDef) -> bool {
     false
 }
 
-/// One installed editor, surfaced to the "open in…" menu.
+/// Which group of the "open in…" menu an app belongs to.
+#[derive(Debug, Clone, Copy, Serialize, Type)]
+#[serde(rename_all = "lowercase")]
+pub enum OpenAppKind {
+    Editor,
+    Terminal,
+}
+
+/// One installed app, surfaced to the "open in…" menu.
 #[derive(Debug, Clone, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct OpenApp {
     pub id: String,
     pub name: String,
+    pub kind: OpenAppKind,
 }
 
-/// The editors installed on this machine, in registry order. Folder and
-/// terminal targets are always available and not listed here.
+/// The editors and terminals installed on this machine, in registry order.
+/// Folder and generic-terminal targets are always available and not listed
+/// here.
 #[tauri::command]
 #[specta::specta]
 pub async fn list_open_apps() -> CommandResult<Vec<OpenApp>> {
     let apps = tauri::async_runtime::spawn_blocking(|| {
-        EDITORS
-            .iter()
-            .filter(|def| editor_installed(def))
-            .map(|def| OpenApp {
-                id: def.id.to_string(),
-                name: def.name.to_string(),
-            })
+        let detect = |registry: &'static [AppDef], kind: OpenAppKind| {
+            registry
+                .iter()
+                .filter(|def| app_installed(def))
+                .map(move |def| OpenApp {
+                    id: def.id.to_string(),
+                    name: def.name.to_string(),
+                    kind,
+                })
+        };
+        detect(EDITORS, OpenAppKind::Editor)
+            .chain(detect(TERMINALS, OpenAppKind::Terminal))
             .collect::<Vec<_>>()
     })
     .await
-    .map_err(|e| AppError::Agent(format!("editor probe failed: {e}")))?;
+    .map_err(|e| AppError::Agent(format!("app probe failed: {e}")))?;
     Ok(apps)
 }
 
 /// Open `path` in an external app selected by `target`: `"folder"`,
-/// `"terminal"`, or an editor id from [`list_open_apps`].
+/// `"terminal"`, or an editor/terminal id from [`list_open_apps`].
 #[tauri::command]
 #[specta::specta]
 pub async fn open_in(app: AppHandle, target: String, path: String) -> CommandResult<()> {
@@ -177,16 +241,21 @@ pub async fn open_in(app: AppHandle, target: String, path: String) -> CommandRes
             .open_path(path, None::<&str>)
             .map_err(|e| AppError::Agent(format!("failed to open folder: {e}")).into()),
         "terminal" => open_terminal(&path).map_err(Into::into),
-        other => match editor(other) {
-            Some(def) => open_editor(def, &path).map_err(Into::into),
-            None => Err(AppError::Invalid(format!("unknown open target: {other}")).into()),
-        },
+        other => {
+            if let Some(def) = find_app(EDITORS, other) {
+                open_editor(def, &path).map_err(Into::into)
+            } else if let Some(def) = find_app(TERMINALS, other) {
+                open_terminal_app(def, &path).map_err(Into::into)
+            } else {
+                Err(AppError::Invalid(format!("unknown open target: {other}")).into())
+            }
+        }
     }
 }
 
 /// Launch an editor: its CLI resolved on PATH (handles Windows shims), or the
 /// macOS application bundle when no CLI is installed.
-fn open_editor(def: &EditorDef, path: &str) -> Result<()> {
+fn open_editor(def: &AppDef, path: &str) -> Result<()> {
     if let Ok(exe) = which::which(def.bin) {
         Command::new(exe)
             .arg(path)
@@ -206,6 +275,48 @@ fn open_editor(def: &EditorDef, path: &str) -> Result<()> {
     Err(AppError::NotFound(format!(
         "`{}` was not found on PATH",
         def.bin
+    )))
+}
+
+/// Launch a specific terminal at `path`: each emulator takes its workdir
+/// differently, and the flagless ones (Warp, Ghostty) inherit `current_dir`.
+fn open_terminal_app(def: &AppDef, path: &str) -> Result<()> {
+    if !def.bin.is_empty() {
+        if let Ok(exe) = which::which(def.bin) {
+            let mut cmd = Command::new(exe);
+            match def.id {
+                "wt" => {
+                    cmd.args(["-d", path]);
+                }
+                "wezterm" => {
+                    cmd.args(["start", "--cwd", path]);
+                }
+                "alacritty" => {
+                    cmd.args(["--working-directory", path]);
+                }
+                "kitty" => {
+                    cmd.args(["--directory", path]);
+                }
+                _ => {}
+            }
+            cmd.current_dir(path)
+                .spawn()
+                .map_err(|e| AppError::Agent(format!("failed to launch {}: {e}", def.name)))?;
+            return Ok(());
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .args(["-a", def.mac_app, path])
+            .spawn()
+            .map_err(|e| AppError::Agent(format!("failed to launch {}: {e}", def.name)))?;
+        return Ok(());
+    }
+    #[cfg(not(target_os = "macos"))]
+    Err(AppError::NotFound(format!(
+        "{} was not found on this machine",
+        def.name
     )))
 }
 

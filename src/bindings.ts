@@ -668,12 +668,25 @@ async fetchRepoRef(workingDir: string, kind: string, number: number) : Promise<R
 }
 },
 /**
- * Open `path` in an external app selected by `target`:
- * `"folder"`, `"terminal"`, `"zed"`, or `"vscode"`.
+ * Open `path` in an external app selected by `target`: `"folder"`,
+ * `"terminal"`, or an editor/terminal id from [`list_open_apps`].
  */
 async openIn(target: string, path: string) : Promise<Result<null, IpcError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("open_in", { target, path }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * The editors and terminals installed on this machine, in registry order.
+ * Folder and generic-terminal targets are always available and not listed
+ * here.
+ */
+async listOpenApps() : Promise<Result<OpenApp[], IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("list_open_apps") };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -1154,9 +1167,11 @@ sharedSessions: number }
  */
 export type DiffFile = { path: string; added: number; removed: number; binary: boolean; patch: string }
 /**
- * Reasoning effort handed to the agent CLI (`claude --effort`).
+ * Reasoning effort for a session. `low..max` are `claude --effort` tokens;
+ * `Ultracode` is a Claude Code session setting on top (xhigh effort plus
+ * workflow orchestration) — each adapter maps it to what its CLI accepts.
  */
-export type EffortLevel = "low" | "medium" | "high" | "xhigh" | "max"
+export type EffortLevel = "low" | "medium" | "high" | "xhigh" | "max" | "ultracode"
 /**
  * A persisted, ordered event in a session's append-only log. The transcript
  * you render today and the cross-agent thread you render later are both just
@@ -1327,6 +1342,14 @@ export type NodeRunStatus = "pending" | "running" | "done" | "failed" | "skipped
  * The agent asked a question and is waiting for the user's reply.
  */
 "awaitingInput"
+/**
+ * One installed app, surfaced to the "open in…" menu.
+ */
+export type OpenApp = { id: string; name: string; kind: OpenAppKind }
+/**
+ * Which group of the "open in…" menu an app belongs to.
+ */
+export type OpenAppKind = "editor" | "terminal"
 /**
  * One selectable OpenCode model for the picker.
  */
