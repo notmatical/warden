@@ -37,4 +37,7 @@ export const APP_ICON_URL: Record<string, string> = {
   warp,
   ghostty,
   powershell,
+  // Windows Terminal hosts PowerShell by default; the PowerShell mark reads
+  // better than a generic glyph (and the two are never shown together).
+  wt: powershell,
 }
