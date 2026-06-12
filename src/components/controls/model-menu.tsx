@@ -11,6 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import {
   Tooltip,
@@ -49,6 +50,9 @@ interface ModelMenuProps {
   variant?: "toolbar" | "form"
 }
 
+/** Varied row widths so the loading pane reads as a list, not a block. */
+const SKELETON_WIDTHS = ["72%", "58%", "80%", "64%", "70%", "52%"]
+
 export function ModelMenu({
   value,
   onChange,
@@ -62,6 +66,7 @@ export function ModelMenu({
   const [open, setOpen] = useControllableOpen(controlledOpen, onOpenChange)
   const providers = useAppStore((s) => s.providers)
   const opencodeModels = useAppStore((s) => s.opencodeModels)
+  const opencodeLoading = useAppStore((s) => s.opencodeModelsLoading)
   const base = baseModelId(value)
   const fast = isFastModel(value)
   const canFast = supportsFast(base)
@@ -80,7 +85,15 @@ export function ModelMenu({
     }
     return all
   }, [opencodeModels, base])
-  const allEntries = useMemo(() => providerEntries(models), [models])
+  // While the OpenCode catalog is still loading there are no entries to
+  // derive a rail item from — pin one so the pane exists and can skeleton.
+  const allEntries = useMemo(() => {
+    const entries = providerEntries(models)
+    if (opencodeLoading && !entries.some((e) => e.backend === "opencode")) {
+      entries.push({ name: "OpenCode", backend: "opencode" })
+    }
+    return entries
+  }, [models, opencodeLoading])
 
   const activeProvider =
     models.find((m) => m.id === base)?.provider ?? allEntries[0].name
@@ -133,6 +146,12 @@ export function ModelMenu({
         m.label.toLowerCase().includes(q) ||
         m.id.toLowerCase().includes(q)
     )
+  // The OpenCode pane fills from a CLI listing that takes a few seconds on
+  // first load — skeleton it rather than claiming "no models".
+  const paneLoading =
+    opencodeLoading &&
+    paneModels.length === 0 &&
+    entries.find((e) => e.name === paneName)?.backend === "opencode"
 
   const ValueIcon = PROVIDER_ICON[backendForModel(value)]
   const trigger =
@@ -239,7 +258,15 @@ export function ModelMenu({
           {/* Fixed height (not max-height) so the popover doesn't resize when
 					    switching providers or filtering. */}
           <div className="h-60 min-w-0 flex-1 overflow-y-auto p-1">
-            {paneModels.length === 0 ? (
+            {paneLoading ? (
+              <div aria-busy="true" className="flex flex-col">
+                {SKELETON_WIDTHS.map((width) => (
+                  <div key={width} className="flex items-center px-2 py-2">
+                    <Skeleton className="h-4 rounded" style={{ width }} />
+                  </div>
+                ))}
+              </div>
+            ) : paneModels.length === 0 ? (
               <p className="px-2 py-6 text-center text-sm text-muted-foreground">
                 No models found
               </p>

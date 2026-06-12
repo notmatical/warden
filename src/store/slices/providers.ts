@@ -9,6 +9,7 @@ type ProvidersSlice = Pick<
   AppState,
   | "providers"
   | "opencodeModels"
+  | "opencodeModelsLoading"
   | "githubStatus"
   | "loadProviders"
   | "installProvider"
@@ -36,6 +37,7 @@ export const createProvidersSlice: StateCreator<
 > = (set, get) => ({
   providers: [],
   opencodeModels: [],
+  opencodeModelsLoading: false,
   githubStatus: null,
 
   loadProviders: async () => {
@@ -50,6 +52,9 @@ export const createProvidersSlice: StateCreator<
       const stale = Date.now() - opencodeModelsFetchedAt > OPENCODE_MODELS_TTL_MS
       if (opencode?.installed && (stale || get().opencodeModels.length === 0)) {
         opencodeModelsFetchedAt = Date.now()
+        // The listing shells out to the CLI (seconds); the picker shows a
+        // skeleton while this is true and no models are known yet.
+        set({ opencodeModelsLoading: true })
         void ipc
           .listOpencodeModels()
           .then((models) =>
@@ -63,6 +68,7 @@ export const createProvidersSlice: StateCreator<
           .catch(() => {
             // CLI hiccups just leave the previous (possibly empty) list.
           })
+          .finally(() => set({ opencodeModelsLoading: false }))
       }
     } catch (error) {
       reportError("Failed to load providers", error)

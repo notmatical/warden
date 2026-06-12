@@ -89,6 +89,8 @@ export interface AppState {
   /** Picker entries for the models the local OpenCode install can run —
    *  per-account, so loaded from its CLI rather than the static config. */
   opencodeModels: ModelOption[]
+  /** True while the OpenCode model listing CLI is running. */
+  opencodeModelsLoading: boolean
   /** Install/auth status of the GitHub CLI (loaded lazily by Settings). */
   githubStatus: ProviderStatus | null
   eventsBySession: Record<string, EventRecord[]>
