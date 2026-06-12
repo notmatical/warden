@@ -10,6 +10,7 @@ import {
   SquareTerminal,
   Tag,
   Trash2,
+  TriangleAlert,
   Wrench,
 } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
@@ -64,7 +65,7 @@ import { FolderTasksSection } from "@/integrations/linear/components/folder-task
 import { useFolderLinearBinding } from "@/integrations/linear/hooks"
 import * as ipc from "@/lib/ipc"
 import { DEFAULT_CHAT_MODEL } from "@/lib/models"
-import { relativeTime } from "@/lib/time"
+import { formatDate, relativeTime } from "@/lib/time"
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store/app-store"
 import type { Label, Session, SessionKind, SessionStatus } from "@/types"
@@ -125,6 +126,38 @@ function StatusBadge({ status }: { status: SessionStatus }) {
 function subtitle(session: Session): string {
   if (session.kind === "terminal") return session.terminalCommand ?? "Terminal"
   return session.model
+}
+
+/** Sessions untouched this long are flagged as removal candidates. */
+const STALE_AFTER_MS = 14 * 24 * 60 * 60 * 1000
+
+/** Old news: not pinned, not running, and no activity for two weeks. */
+function isStale(session: Session): boolean {
+  if (session.pinned || session.status === "running") return false
+  const age = Date.now() - Date.parse(session.updatedAt)
+  return Number.isFinite(age) && age > STALE_AFTER_MS
+}
+
+/** A gentle nudge on stale rows: this session has sat untouched long enough
+ *  that it is probably done. Informational only, never auto-archives. */
+function StaleBadge({ updatedAt }: { updatedAt: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          role="img"
+          aria-label="Stale session"
+          className="inline-flex size-5 shrink-0 items-center justify-center rounded-md bg-amber-500/10 ring-1 ring-amber-500/30 ring-inset"
+        >
+          <TriangleAlert className="size-3 text-amber-500" />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>
+        No activity since {formatDate(updatedAt)}. This session may no longer
+        be needed.
+      </TooltipContent>
+    </Tooltip>
+  )
 }
 
 /** The session's pull request at a glance: state-tinted icon, number, one
@@ -404,7 +437,10 @@ function OpenPrsSection({ projectId }: { projectId: string }) {
               <span className="text-muted-foreground/40 text-xs">—</span>
             )}
 
-            <span className="text-muted-foreground text-xs tabular-nums">
+            <span className="flex items-center gap-1.5 text-muted-foreground text-xs tabular-nums">
+              {isStale(session) ? (
+                <StaleBadge updatedAt={session.updatedAt} />
+              ) : null}
               {relativeTime(session.updatedAt)}
             </span>
 
@@ -698,7 +734,10 @@ function SessionsSection({ projectId }: { projectId: string }) {
 
                     <StatusBadge status={session.status} />
 
-                    <span className="text-muted-foreground text-xs tabular-nums">
+                    <span className="flex items-center gap-1.5 text-muted-foreground text-xs tabular-nums">
+                      {isStale(session) ? (
+                        <StaleBadge updatedAt={session.updatedAt} />
+                      ) : null}
                       {relativeTime(session.updatedAt)}
                     </span>
 
