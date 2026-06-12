@@ -288,7 +288,7 @@ export function ModelMenu({
                     </span>
                     <Check
                       className={cn(
-                        "size-4 shrink-0",
+                        "size-4 shrink-0 text-primary",
                         selected ? "opacity-100" : "opacity-0"
                       )}
                     />
