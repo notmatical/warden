@@ -554,6 +554,10 @@ export function approveTools(
   return invoke("approve_tools", { sessionId, patterns })
 }
 
+export function rejectTools(sessionId: string): Promise<void> {
+  return invoke("reject_tools", { sessionId })
+}
+
 export function approvePlan(sessionId: string): Promise<void> {
   return invoke("approve_plan", { sessionId })
 }

@@ -442,6 +442,22 @@ pub async fn send_message(
 ) -> CommandResult<()> {
     let session = state.store.get_session(&session_id)?;
 
+    // An OpenCode turn blocked on a question consumes the next message as the
+    // answer (Claude's question flow ends the turn, so its reply is just the
+    // next turn's prompt — this is the OpenCode equivalent).
+    if session.backend == Backend::Opencode
+        && crate::providers::opencode::agent::has_pending_question(&session_id)
+    {
+        return crate::providers::opencode::agent::answer_question(
+            &app,
+            &state.store,
+            &session_id,
+            &text,
+        )
+        .await
+        .map_err(Into::into);
+    }
+
     // A brand-new chat session gets a clean title generated from its first
     // message, in the background, unless the user has already named it. Title
     // off the user's own words, before attachment references are appended.
@@ -504,7 +520,9 @@ pub async fn cancel_session(
     Ok(())
 }
 
-/// Approve denied tool patterns for a session and resume the turn.
+/// Approve denied tool patterns for a session and resume the turn. For
+/// OpenCode the turn is still alive, blocked on the ask — approving replies to
+/// it server-side and the turn continues on its own.
 #[tauri::command]
 #[specta::specta]
 pub async fn approve_tools(
@@ -513,13 +531,30 @@ pub async fn approve_tools(
     session_id: String,
     patterns: Vec<String>,
 ) -> CommandResult<()> {
-    state.store.add_allowed_tools(&session_id, &patterns)?;
     let session = state.store.get_session(&session_id)?;
+    if session.backend == Backend::Opencode {
+        crate::providers::opencode::agent::approve_pending_permission(&session_id).await;
+        return Ok(());
+    }
+    state.store.add_allowed_tools(&session_id, &patterns)?;
     state
         .manager
         .resume(app, state.store.clone(), session)
         .await
         .map_err(Into::into)
+}
+
+/// Reject a pending tool ask. Only OpenCode has a live ask to answer — a
+/// Claude denial already ended the turn, so dismissing is purely client-side
+/// and never reaches here.
+#[tauri::command]
+#[specta::specta]
+pub async fn reject_tools(state: State<'_, AppState>, session_id: String) -> CommandResult<()> {
+    let session = state.store.get_session(&session_id)?;
+    if session.backend == Backend::Opencode {
+        crate::providers::opencode::agent::reject_pending_permission(&session_id).await;
+    }
+    Ok(())
 }
 
 /// Approve the agent's plan: leave `plan` mode for `acceptEdits` and resume so

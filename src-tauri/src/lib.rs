@@ -68,6 +68,7 @@ pub fn run() {
         session::commands::attach_to_session,
         session::commands::cancel_session,
         session::commands::approve_tools,
+        session::commands::reject_tools,
         session::commands::approve_plan,
         session::commands::list_context_sources,
         session::commands::add_context_source,

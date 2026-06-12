@@ -225,6 +225,7 @@ export interface AppState {
   ) => Promise<void>
   cancel: (sessionId: string) => Promise<void>
   approveTools: (sessionId: string, patterns: string[]) => Promise<void>
+  rejectTools: (sessionId: string) => Promise<void>
   approvePlan: (sessionId: string) => Promise<void>
   resolveApproval: (sessionId: string, eventId: string) => void
   runPlanToCode: (opts: RunPlanToCodeOptions) => Promise<void>

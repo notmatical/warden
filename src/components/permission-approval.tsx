@@ -7,8 +7,10 @@ import { useAppStore } from "@/store/app-store"
 import type { ToolDenial } from "@/types"
 
 /** Compact approval bar shown above the composer when a turn stopped on denied
- *  tool calls. Approving allowlists the patterns and resumes; denying just
- *  dismisses (the turn already ended). Commands are collapsed by default. */
+ *  tool calls. Approving allowlists the patterns and resumes; denying
+ *  dismisses and tells the agent no (for Claude the turn already ended, so
+ *  that's client-side only; an OpenCode turn is still waiting on the answer).
+ *  Commands are collapsed by default. */
 export function PermissionApproval({
   sessionId,
   eventId,
@@ -19,6 +21,7 @@ export function PermissionApproval({
   denials: ToolDenial[]
 }) {
   const approveTools = useAppStore((s) => s.approveTools)
+  const rejectTools = useAppStore((s) => s.rejectTools)
   const resolveApproval = useAppStore((s) => s.resolveApproval)
   const [expanded, setExpanded] = useState(false)
 
@@ -29,7 +32,10 @@ export function PermissionApproval({
       denials.map((d) => d.pattern)
     )
   }
-  const deny = () => resolveApproval(sessionId, eventId)
+  const deny = () => {
+    resolveApproval(sessionId, eventId)
+    void rejectTools(sessionId)
+  }
 
   const extra = denials.length - 1
 

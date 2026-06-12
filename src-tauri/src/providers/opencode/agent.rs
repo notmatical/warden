@@ -17,9 +17,9 @@ use std::sync::{Arc, LazyLock, Mutex};
 use serde_json::{json, Value};
 use tauri::AppHandle;
 
-use crate::domain::{AgentEvent, EffortLevel, PermissionMode, Session, TokenUsage};
+use crate::domain::{AgentEvent, EffortLevel, PermissionMode, Session, TokenUsage, ToolDenial};
 use crate::error::{AppError, Result};
-use crate::events::emit_delta;
+use crate::events::{emit_delta, emit_event};
 use crate::providers::{clip, persist_event as persist};
 use crate::store::Store;
 
@@ -39,6 +39,35 @@ static TURNS: LazyLock<Mutex<HashMap<String, TurnHandle>>> =
 
 fn turns() -> std::sync::MutexGuard<'static, HashMap<String, TurnHandle>> {
     TURNS.lock().unwrap_or_else(|p| p.into_inner())
+}
+
+/// A live ask from the server: the in-flight turn is blocked until it gets an
+/// HTTP reply (unlike Claude, whose denied turn simply ends).
+#[derive(Clone)]
+enum PendingAsk {
+    Permission {
+        request_id: String,
+    },
+    /// `question_count` sizes the reply's answers array.
+    Question {
+        request_id: String,
+        question_count: usize,
+    },
+}
+
+/// Pending permission/question asks by warden session id, oldest first.
+static ASKS: LazyLock<Mutex<HashMap<String, Vec<PendingAsk>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+fn asks() -> std::sync::MutexGuard<'static, HashMap<String, Vec<PendingAsk>>> {
+    ASKS.lock().unwrap_or_else(|p| p.into_inner())
+}
+
+/// Drop a turn's registries when it settles (replied asks are long gone; an
+/// aborted turn's asks die with it server-side).
+fn end_turn(session_id: &str) {
+    turns().remove(session_id);
+    asks().remove(session_id);
 }
 
 /// Abort a session's in-flight OpenCode turn (`POST /session/{id}/abort`).
@@ -65,6 +94,122 @@ pub fn interrupt(session_id: &str) -> bool {
 /// Kill the shared OpenCode server (app shutdown). Idempotent.
 pub fn kill_all() {
     server::kill_all();
+}
+
+// ----- pending asks (permissions + questions) ---------------------------------
+
+/// Whether the session's in-flight turn is blocked on an unanswered question.
+pub fn has_pending_question(session_id: &str) -> bool {
+    asks().get(session_id).is_some_and(|list| {
+        list.iter()
+            .any(|a| matches!(a, PendingAsk::Question { .. }))
+    })
+}
+
+fn take_ask(session_id: &str, want_question: bool) -> Option<PendingAsk> {
+    let mut guard = asks();
+    let list = guard.get_mut(session_id)?;
+    let index = list
+        .iter()
+        .position(|a| matches!(a, PendingAsk::Question { .. }) == want_question)?;
+    Some(list.remove(index))
+}
+
+fn drop_ask_by_request(request_id: &str) {
+    for list in asks().values_mut() {
+        list.retain(|a| {
+            let id = match a {
+                PendingAsk::Permission { request_id } => request_id,
+                PendingAsk::Question { request_id, .. } => request_id,
+            };
+            id != request_id
+        });
+    }
+}
+
+/// Approve the session's pending permission ask (`always`, matching Claude's
+/// allowlist semantics). Returns whether one was pending; the blocked turn
+/// then continues on its own.
+pub async fn approve_pending_permission(session_id: &str) -> bool {
+    respond_to_pending_permission(session_id, "always").await
+}
+
+/// Reject the session's pending permission ask so the blocked turn continues
+/// (the model is told the call was refused). Returns whether one was pending.
+pub async fn reject_pending_permission(session_id: &str) -> bool {
+    respond_to_pending_permission(session_id, "reject").await
+}
+
+async fn respond_to_pending_permission(session_id: &str, reply: &str) -> bool {
+    let Some(turn) = turns().get(session_id).cloned() else {
+        return false;
+    };
+    let Some(PendingAsk::Permission { request_id }) = take_ask(session_id, false) else {
+        return false;
+    };
+    if let Err(e) = reply_permission(&turn, &request_id, reply).await {
+        log::warn!("opencode permission reply failed: {e}");
+    }
+    true
+}
+
+/// Answer the session's pending question with the user's reply text. The full
+/// text goes in as the first question's (custom) answer — the model reads
+/// prose, and the composer reply already covers every sub-question.
+pub async fn answer_question(
+    app: &AppHandle,
+    store: &Store,
+    session_id: &str,
+    text: &str,
+) -> Result<()> {
+    let turn = turns()
+        .get(session_id)
+        .cloned()
+        .ok_or_else(|| AppError::Agent("no opencode turn in flight".to_string()))?;
+    let Some(PendingAsk::Question {
+        request_id,
+        question_count,
+    }) = take_ask(session_id, true)
+    else {
+        return Err(AppError::Agent("no pending opencode question".to_string()));
+    };
+
+    // Mirror Claude's flow: the reply shows in the transcript as the next user
+    // message, and the agent continues from it.
+    if let Ok(record) = store.append_event(
+        session_id,
+        &AgentEvent::UserMessage {
+            text: text.to_string(),
+        },
+    ) {
+        emit_event(app, &record);
+    }
+
+    let mut answers: Vec<Vec<String>> = vec![Vec::new(); question_count.max(1)];
+    answers[0] = vec![text.to_string()];
+    server::client()
+        .post(format!("{}/question/{request_id}/reply", turn.base_url))
+        .query(&[("directory", turn.directory.as_str())])
+        .json(&json!({ "answers": answers }))
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await
+        .and_then(|r| r.error_for_status())
+        .map_err(|e| AppError::Agent(format!("opencode question reply failed: {e}")))?;
+    Ok(())
+}
+
+async fn reply_permission(turn: &TurnHandle, request_id: &str, reply: &str) -> Result<()> {
+    server::client()
+        .post(format!("{}/permission/{request_id}/reply", turn.base_url))
+        .query(&[("directory", turn.directory.as_str())])
+        .json(&json!({ "reply": reply }))
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await
+        .and_then(|r| r.error_for_status())
+        .map_err(|e| AppError::Agent(format!("opencode permission reply failed: {e}")))?;
+    Ok(())
 }
 
 // ----- request building -------------------------------------------------------
@@ -178,15 +323,16 @@ pub async fn run_turn(
         // Tool calls persisted live from the stream, so the response pass can
         // skip them. The stream task is torn down before that pass runs.
         let persisted_tools = Arc::new(Mutex::new(HashSet::new()));
-        let sse = tauri::async_runtime::spawn(tail_events(
-            app.clone(),
-            store.clone(),
-            session.id.clone(),
-            base_url.clone(),
-            oc_id.clone(),
-            dir.clone(),
-            persisted_tools.clone(),
-        ));
+        let sse = tauri::async_runtime::spawn(tail_events(SseContext {
+            app: app.clone(),
+            store: store.clone(),
+            session_id: session.id.clone(),
+            base_url: base_url.clone(),
+            oc_session_id: oc_id.clone(),
+            dir: dir.clone(),
+            mode: session.permission_mode,
+            persisted_tools: persisted_tools.clone(),
+        }));
 
         let result = server::client()
             .post(format!("{base_url}/session/{oc_id}/message"))
@@ -199,7 +345,7 @@ pub async fn run_turn(
         let _ = sse.await;
 
         let response = result.map_err(|e| {
-            turns().remove(&session.id);
+            end_turn(&session.id);
             AppError::Agent(format!("opencode message failed: {e}"))
         })?;
         let status = response.status();
@@ -213,24 +359,24 @@ pub async fn run_turn(
                 oc_id = create_session(&base_url, &dir, &format!("Warden {}", session.title))
                     .await
                     .inspect_err(|_| {
-                        turns().remove(&session.id);
+                        end_turn(&session.id);
                     })?;
                 store.set_agent_session_id(&session.id, &oc_id)?;
                 continue;
             }
-            turns().remove(&session.id);
+            end_turn(&session.id);
             let detail = body.chars().take(400).collect::<String>();
             return Err(AppError::Agent(format!(
                 "opencode message failed ({status}): {detail}"
             )));
         }
         let body: Value = response.json().await.map_err(|e| {
-            turns().remove(&session.id);
+            end_turn(&session.id);
             AppError::Agent(format!("opencode message response unparseable: {e}"))
         })?;
         break (body, persisted_tools);
     };
-    turns().remove(&session.id);
+    end_turn(&session.id);
 
     let (body, persisted_tools) = outcome;
     // Upstream failures (provider auth, balance, context overflow) come back as
@@ -365,6 +511,11 @@ fn tool_events(part: &Value) -> Option<(String, AgentEvent, Option<AgentEvent>)>
         .and_then(Value::as_str)?
         .to_string();
     let raw_name = part.get("tool").and_then(Value::as_str).unwrap_or("tool");
+    // Question tool calls are rendered from their `question.asked` event (an
+    // interactive widget), not as a plain tool row.
+    if raw_name == "question" {
+        return None;
+    }
     let state = part.get("state").cloned().unwrap_or_default();
     let mut input = state.get("input").cloned().unwrap_or_else(|| json!({}));
     let name = normalize_tool(raw_name, &mut input);
@@ -498,22 +649,28 @@ enum PartTrack {
     Reasoning,
 }
 
-/// Tail the server's SSE stream for one turn: emit transient text deltas and
-/// persist tool calls as they complete. Aborted by the caller when the message
-/// POST returns; errors here only degrade live UX (the POST response is the
-/// source of truth), so the task gives up rather than reconnecting.
-async fn tail_events(
+/// Everything the per-turn stream task needs to translate events.
+struct SseContext {
     app: AppHandle,
     store: Store,
     session_id: String,
     base_url: String,
     oc_session_id: String,
     dir: String,
+    mode: PermissionMode,
     persisted_tools: Arc<Mutex<HashSet<String>>>,
-) {
+}
+
+/// Tail the server's SSE stream for one turn: emit transient text deltas,
+/// persist tool calls as they complete, and surface permission/question asks
+/// (which block the turn server-side until replied). Aborted by the caller
+/// when the message POST returns; errors here only degrade live UX for
+/// text/tools — asks have no fallback, but a turn that hits one without a
+/// stream also can't finish, so the failed-stream error surfaces either way.
+async fn tail_events(ctx: SseContext) {
     let response = match server::client()
-        .get(format!("{base_url}/event"))
-        .query(&[("directory", dir.as_str())])
+        .get(format!("{}/event", ctx.base_url))
+        .query(&[("directory", ctx.dir.as_str())])
         .header("Accept", "text/event-stream")
         .send()
         .await
@@ -553,15 +710,7 @@ async fn tail_events(
                 }
                 data.push_str(payload.trim_start());
             } else if line.is_empty() && !data.is_empty() {
-                handle_event(
-                    &app,
-                    &store,
-                    &session_id,
-                    &oc_session_id,
-                    &data,
-                    &mut parts,
-                    &persisted_tools,
-                );
+                handle_event(&ctx, &data, &mut parts);
                 data.clear();
             }
         }
@@ -569,15 +718,7 @@ async fn tail_events(
 }
 
 /// Process one SSE event for this turn's OpenCode session.
-fn handle_event(
-    app: &AppHandle,
-    store: &Store,
-    session_id: &str,
-    oc_session_id: &str,
-    data: &str,
-    parts: &mut HashMap<String, PartTrack>,
-    persisted_tools: &Arc<Mutex<HashSet<String>>>,
-) {
+fn handle_event(ctx: &SseContext, data: &str, parts: &mut HashMap<String, PartTrack>) {
     let Ok(event) = serde_json::from_str::<Value>(data) else {
         return;
     };
@@ -587,19 +728,21 @@ fn handle_event(
         .and_then(Value::as_str)
         .unwrap_or_default();
     let props = payload.get("properties").cloned().unwrap_or_default();
+    let for_this_session =
+        |v: &Value| v.get("sessionID").and_then(Value::as_str) == Some(ctx.oc_session_id.as_str());
 
     match event_type {
         "message.part" | "message.part.added" | "message.part.updated" => {
             let Some(part) = props.get("part") else {
                 return;
             };
-            if part.get("sessionID").and_then(Value::as_str) != Some(oc_session_id) {
+            if !for_this_session(part) {
                 return;
             }
-            handle_part_snapshot(app, store, session_id, part, parts, persisted_tools);
+            handle_part_snapshot(ctx, part, parts);
         }
         "message.part.delta" => {
-            if props.get("sessionID").and_then(Value::as_str) != Some(oc_session_id) {
+            if !for_this_session(&props) {
                 return;
             }
             let part_id = props
@@ -620,7 +763,7 @@ fn handle_event(
             match parts.get_mut(part_id) {
                 Some(PartTrack::Text { emitted }) => {
                     *emitted += delta.len();
-                    emit_delta(app, session_id, delta);
+                    emit_delta(&ctx.app, &ctx.session_id, delta);
                 }
                 Some(PartTrack::Reasoning) => {}
                 None => {
@@ -630,24 +773,161 @@ fn handle_event(
                             emitted: delta.len(),
                         },
                     );
-                    emit_delta(app, session_id, delta);
+                    emit_delta(&ctx.app, &ctx.session_id, delta);
                 }
+            }
+        }
+        "permission.asked" => {
+            if for_this_session(&props) {
+                handle_permission_asked(ctx, &props);
+            }
+        }
+        "question.asked" => {
+            if for_this_session(&props) {
+                handle_question_asked(ctx, &props);
+            }
+        }
+        // An ask answered elsewhere (e.g. the OpenCode TUI on the same server)
+        // is no longer pending here.
+        "permission.replied" | "question.replied" | "question.rejected" => {
+            if let Some(id) = props
+                .get("requestID")
+                .or_else(|| props.get("id"))
+                .and_then(Value::as_str)
+            {
+                drop_ask_by_request(id);
             }
         }
         _ => {}
     }
 }
 
+/// Surface a blocking permission ask. Bypass approves outright (matching the
+/// other backends' autonomous posture), `acceptEdits` auto-approves edits;
+/// anything else lands in the composer's approval bar as a
+/// [`AgentEvent::PermissionRequest`].
+fn handle_permission_asked(ctx: &SseContext, props: &Value) {
+    let Some(request_id) = props.get("id").and_then(Value::as_str) else {
+        return;
+    };
+    let permission = props
+        .get("permission")
+        .and_then(Value::as_str)
+        .unwrap_or("tool");
+
+    let auto_approve = match ctx.mode {
+        PermissionMode::BypassPermissions => true,
+        PermissionMode::AcceptEdits => permission == "edit",
+        _ => false,
+    };
+    if auto_approve {
+        let turn = TurnHandle {
+            base_url: ctx.base_url.clone(),
+            oc_session_id: ctx.oc_session_id.clone(),
+            directory: ctx.dir.clone(),
+        };
+        let request_id = request_id.to_string();
+        tauri::async_runtime::spawn(async move {
+            if let Err(e) = reply_permission(&turn, &request_id, "always").await {
+                log::warn!("opencode permission auto-approve failed: {e}");
+            }
+        });
+        return;
+    }
+
+    let patterns = props
+        .get("patterns")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let metadata = props.get("metadata").cloned().unwrap_or(Value::Null);
+    let tool_name = normalize_tool(permission, &mut Value::Null);
+    let denials: Vec<ToolDenial> = if patterns.is_empty() {
+        vec![ToolDenial {
+            tool_name: tool_name.clone(),
+            pattern: tool_name,
+            input: metadata,
+        }]
+    } else {
+        patterns
+            .into_iter()
+            .map(|pattern| ToolDenial {
+                tool_name: tool_name.clone(),
+                pattern,
+                input: metadata.clone(),
+            })
+            .collect()
+    };
+
+    asks()
+        .entry(ctx.session_id.clone())
+        .or_default()
+        .push(PendingAsk::Permission {
+            request_id: request_id.to_string(),
+        });
+    persist(
+        &ctx.app,
+        &ctx.store,
+        &ctx.session_id,
+        AgentEvent::PermissionRequest { denials },
+    );
+}
+
+/// Surface a blocking question ask as an interactive AskUserQuestion widget —
+/// the same rendering Claude's question tool gets. The reply routes back
+/// through [`answer_question`] (the composer and the widget both land there).
+fn handle_question_asked(ctx: &SseContext, props: &Value) {
+    let Some(request_id) = props.get("id").and_then(Value::as_str) else {
+        return;
+    };
+    let questions: Vec<Value> = props
+        .get("questions")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .map(|q| {
+                    json!({
+                        "question": q.get("question").cloned().unwrap_or_default(),
+                        "header": q.get("header").cloned().unwrap_or_default(),
+                        "options": q.get("options").cloned().unwrap_or(json!([])),
+                        "multiSelect": q.get("multiple").cloned().unwrap_or(json!(false)),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    if questions.is_empty() {
+        return;
+    }
+
+    asks()
+        .entry(ctx.session_id.clone())
+        .or_default()
+        .push(PendingAsk::Question {
+            request_id: request_id.to_string(),
+            question_count: questions.len(),
+        });
+    persist(
+        &ctx.app,
+        &ctx.store,
+        &ctx.session_id,
+        AgentEvent::ToolUse {
+            id: request_id.to_string(),
+            name: "AskUserQuestion".to_string(),
+            input: json!({ "questions": questions }),
+            parent_tool_use_id: None,
+        },
+    );
+}
+
 /// Process a full part snapshot: stream unseen text as deltas, and persist a
 /// tool call once it reaches a terminal state.
-fn handle_part_snapshot(
-    app: &AppHandle,
-    store: &Store,
-    session_id: &str,
-    part: &Value,
-    parts: &mut HashMap<String, PartTrack>,
-    persisted_tools: &Arc<Mutex<HashSet<String>>>,
-) {
+fn handle_part_snapshot(ctx: &SseContext, part: &Value, parts: &mut HashMap<String, PartTrack>) {
     let part_id = part.get("id").and_then(Value::as_str).unwrap_or_default();
     match part.get("type").and_then(Value::as_str).unwrap_or_default() {
         "text" => {
@@ -655,7 +935,7 @@ fn handle_part_snapshot(
             match parts.get_mut(part_id) {
                 Some(PartTrack::Text { emitted }) => {
                     if text.len() > *emitted && text.is_char_boundary(*emitted) {
-                        emit_delta(app, session_id, &text[*emitted..]);
+                        emit_delta(&ctx.app, &ctx.session_id, &text[*emitted..]);
                     }
                     *emitted = (*emitted).max(text.len());
                 }
@@ -688,14 +968,17 @@ fn handle_part_snapshot(
                 return;
             };
             {
-                let mut seen = persisted_tools.lock().unwrap_or_else(|p| p.into_inner());
+                let mut seen = ctx
+                    .persisted_tools
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner());
                 if !seen.insert(id) {
                     return;
                 }
             }
-            persist(app, store, session_id, tool_use);
+            persist(&ctx.app, &ctx.store, &ctx.session_id, tool_use);
             if let Some(result) = tool_result {
-                persist(app, store, session_id, result);
+                persist(&ctx.app, &ctx.store, &ctx.session_id, result);
             }
         }
         _ => {}
