@@ -244,7 +244,7 @@ export function FolderView({ projectId }: { projectId: string }) {
   return (
     <div className="h-full overflow-y-auto">
       <div className="flex flex-col gap-6 p-6">
-        <div className="flex shrink-0 items-center gap-3">
+        <div className="flex shrink-0 items-center gap-2">
           <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted/60 ring-1 ring-border/50">
             <FolderGit2 className="size-5 text-muted-foreground" />
           </div>
