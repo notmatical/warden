@@ -115,12 +115,17 @@ export const createSessionsSlice: StateCreator<
     // A model change re-homes the session to that model's backend (gpt → codex);
     // reflect it optimistically so the provider icon/menu update instantly.
     const backend = patch.model ? backendForModel(patch.model) : current.backend
+    // Ultracode is Claude-only; landing on another backend falls back to the
+    // next highest tier (the Rust command applies the same rule).
+    const effort = patch.effort ?? current.effort
+    const clamped =
+      backend !== "claude" && effort === "ultracode" ? "max" : effort
     // Optimistically apply so the controls feel instant; the backend emits the
     // authoritative session-updated event which reconciles.
     set((state) => ({
       sessions: {
         ...state.sessions,
-        [sessionId]: { ...current, ...patch, backend },
+        [sessionId]: { ...current, ...patch, backend, effort: clamped },
       },
     }))
     try {

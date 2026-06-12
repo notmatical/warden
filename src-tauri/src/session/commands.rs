@@ -19,6 +19,17 @@ use crate::util::uuid;
 /// Default reasoning effort for a new session.
 const DEFAULT_EFFORT: EffortLevel = EffortLevel::High;
 
+/// Ultracode is a Claude Code session setting; a session landing on another
+/// backend (model switch, explicit choice) falls back to the next highest
+/// tier instead of carrying a label its menu doesn't offer.
+fn clamp_effort(backend: Backend, effort: EffortLevel) -> EffortLevel {
+    if backend != Backend::Claude && effort == EffortLevel::Ultracode {
+        EffortLevel::Max
+    } else {
+        effort
+    }
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn get_events(
@@ -111,6 +122,7 @@ pub async fn create_session(
         .as_deref()
         .and_then(Backend::parse)
         .unwrap_or_else(|| Backend::for_model(&model));
+    let effort = clamp_effort(backend, effort);
 
     let session = state.store.create_session(NewSession {
         group_id,
@@ -164,6 +176,7 @@ pub async fn update_session(
         .as_deref()
         .and_then(EffortLevel::parse)
         .unwrap_or(session.effort);
+    let effort = clamp_effort(backend, effort);
 
     state
         .store
