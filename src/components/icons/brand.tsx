@@ -62,18 +62,20 @@ export function OpenAIIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
-/** OpenCode terminal-prompt mark (pixel chevron + cursor); inherits color via
- *  `currentColor`. Used for agent sessions running through OpenCode. */
+/** OpenCode logo mark; inherits color via `currentColor` (the inner block of
+ *  the two-tone original renders at reduced opacity so the mark stays readable
+ *  in one color). Used for sessions running through OpenCode. */
 export function OpenCodeIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg
-      viewBox="0 0 24 24"
+      viewBox="0 0 240 300"
       fill="currentColor"
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
       {...props}
     >
-      <path d="M4 4h3v3H4zM7 7h3v3H7zM10 10h3v4h-3zM7 14h3v3H7zM4 17h3v3H4zM14 17h6v3h-6z" />
+      <path d="M180 60H60V240H180V60ZM240 300H0V0H240V300Z" />
+      <path opacity=".45" d="M180 240H60V120H180V240Z" />
     </svg>
   )
 }

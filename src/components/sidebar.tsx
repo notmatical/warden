@@ -15,6 +15,7 @@ import {
 import { type KeyboardEvent, type ReactNode, useEffect, useState } from "react"
 
 import { AgentProvidersIcon } from "@/components/agent-providers-icon"
+import { NativeCliSub } from "@/components/common/native-cli-sub"
 import { useConfirm } from "@/components/confirm-dialog"
 import { GitHubIcon } from "@/components/icons/brand"
 import { ReviewPrDialog } from "@/components/review-pr-dialog"
@@ -60,7 +61,6 @@ import {
 } from "@/components/ui/tooltip"
 import { UpdateBanner } from "@/components/update-banner"
 import { DEFAULT_CHAT_MODEL } from "@/lib/models"
-import { NATIVE_PROVIDER_ICON, PROVIDER_ORDER } from "@/lib/provider-icons"
 import { cn } from "@/lib/utils"
 import {
   folderTabId,
@@ -69,7 +69,6 @@ import {
   WORKFLOWS_TAB_ID,
 } from "@/lib/viewport"
 import { useAppStore } from "@/store/app-store"
-import { NATIVE_TITLE } from "@/store/shared"
 import type { Group, Project, SessionKind } from "@/types"
 
 // Keep shadcn's left connector line + indent, but drop the right margin/padding
@@ -114,14 +113,9 @@ function RowAction({
 
 function RootRow({ groupId, project }: { groupId: string; project: Project }) {
   const createSession = useAppStore((s) => s.createSession)
-  const createNativeSession = useAppStore((s) => s.createNativeSession)
   const removeRoot = useAppStore((s) => s.removeRoot)
   const openTab = useAppStore((s) => s.openTab)
   const active = useAppStore((s) => s.activeTabId === folderTabId(project.id))
-  const providers = useAppStore((s) => s.providers)
-  const nativeProviders = PROVIDER_ORDER.filter((id) =>
-    providers.some((p) => p.id === id && p.authed)
-  )
 
   const [reviewOpen, setReviewOpen] = useState(false)
 
@@ -191,19 +185,7 @@ function RootRow({ groupId, project }: { groupId: string; project: Project }) {
             <SquareTerminal />
             Terminal session
           </DropdownMenuItem>
-          {nativeProviders.length > 0 ? <DropdownMenuSeparator /> : null}
-          {nativeProviders.map((id) => {
-            const Icon = NATIVE_PROVIDER_ICON[id]
-            return (
-              <DropdownMenuItem
-                key={id}
-                onSelect={() => void createNativeSession(project.id, id)}
-              >
-                <Icon />
-                Native {NATIVE_TITLE[id]}
-              </DropdownMenuItem>
-            )
-          })}
+          <NativeCliSub projectId={project.id} />
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => setReviewOpen(true)}>
             <GitHubIcon />
