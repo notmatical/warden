@@ -32,7 +32,12 @@ import type {
   SyncOutcome,
 } from "@/types"
 import type { DiffFile, FileVersions, GitCommit } from "@/types/git-diff"
-import type { Workflow, WorkflowGraph, WorkflowRunView } from "@/types/workflow"
+import type {
+  Workflow,
+  WorkflowGraph,
+  WorkflowRun,
+  WorkflowRunView,
+} from "@/types/workflow"
 
 export function listProjects(): Promise<Project[]> {
   return invoke("list_projects")
@@ -528,12 +533,25 @@ export function getLatestWorkflowRun(
   return invoke("get_latest_workflow_run", { workflowId })
 }
 
+/** A workflow's past runs, newest first (run history). */
+export function listWorkflowRuns(
+  workflowId: string,
+  limit?: number
+): Promise<WorkflowRun[]> {
+  return invoke("list_workflow_runs", { workflowId, limit: limit ?? null })
+}
+
 /** Resume a run paused at a gate: approve to continue, reject to cancel. */
 export function resumeWorkflow(
   runId: string,
   approve: boolean
 ): Promise<WorkflowRunView> {
   return invoke("resume_workflow", { runId, approve })
+}
+
+/** Retry a failed or canceled run: unfinished nodes re-run, done ones stay. */
+export function retryWorkflowRun(runId: string): Promise<WorkflowRunView> {
+  return invoke("retry_workflow_run", { runId })
 }
 
 /** Cancel a workflow's latest run (stops the executor + live session). */
