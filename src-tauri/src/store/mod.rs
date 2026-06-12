@@ -1013,6 +1013,8 @@ impl Store {
 
     /// Record (or refresh) the pull request bound to a session's branch, with its
     /// review/draft state, CI-check rollup + tallies, and the poll time.
+    /// Deliberately does *not* touch `updated_at` — background polling isn't
+    /// activity, and "last active" staleness keys off that column.
     pub fn set_session_pr(&self, id: &str, pr: &PrInfo) -> Result<()> {
         let checked_at = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -1028,7 +1030,7 @@ impl Store {
             "UPDATE sessions
              SET pr_number = ?2, pr_url = ?3, pr_state = ?4, pr_check_status = ?5,
                  pr_checked_at = ?6, pr_is_draft = ?7, pr_review_decision = ?8,
-                 pr_check_counts = ?9, updated_at = ?10
+                 pr_check_counts = ?9
              WHERE id = ?1",
             (
                 id,
@@ -1040,7 +1042,6 @@ impl Store {
                 pr.is_draft as i64,
                 &pr.review_decision,
                 check_counts,
-                now_rfc3339(),
             ),
         )?;
         Ok(())
