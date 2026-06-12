@@ -16,6 +16,9 @@ pub async fn run(backend: Backend, working_dir: &Path, prompt: &str) -> Option<S
     match backend {
         Backend::Claude => run_claude(working_dir, prompt).await,
         Backend::Codex => run_codex(working_dir, prompt).await,
+        Backend::Opencode => {
+            crate::providers::opencode::agent::run_oneshot(working_dir, prompt).await
+        }
     }
 }
 

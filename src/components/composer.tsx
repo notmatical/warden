@@ -302,6 +302,7 @@ export function Composer({ sessionId }: { sessionId: string }) {
           <EffortMenu
             value={session.effort}
             onChange={(effort) => void updateSession(sessionId, { effort })}
+            backend={session.backend}
             {...menuProps("effort")}
           />
 

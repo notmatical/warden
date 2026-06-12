@@ -21,20 +21,38 @@ export const MODELS: ModelOption[] = modelConfig.models
 
 /**
  * The agent backend that runs a model id, mirroring the backend's own rule
- * (`gpt`/`codex` prefixes → Codex; everything else → Claude). Keep this in
- * sync with `backend_for_model` in src-tauri/src/commands/session.rs.
+ * (`opencode/...` ids → OpenCode; `gpt`/`codex` prefixes → Codex; everything
+ * else → Claude). Keep this in sync with `Backend::for_model` in
+ * src-tauri/src/domain/session.rs.
  */
 export function backendForModel(id: string): Backend {
   const lower = baseModelId(id).toLowerCase()
+  if (lower.startsWith("opencode")) return "opencode"
   return lower.startsWith("gpt") || lower.startsWith("codex")
     ? "codex"
     : "claude"
 }
 
-/** Provider display names in first-seen order, for grouping in the picker. */
-export const MODEL_PROVIDERS: string[] = [
-  ...new Set(MODELS.map((m) => m.provider)),
-]
+/** Each backend's provider display name, for picker grouping of models that
+ *  aren't in the static list (dynamic OpenCode entries, resumed sessions on
+ *  retired ids). */
+export const BACKEND_PROVIDER_NAME: Record<Backend, string> = {
+  claude: "Anthropic",
+  codex: "OpenAI",
+  opencode: "OpenCode",
+}
+
+/** Provider rail entries for a picker model list: display names in first-seen
+ *  order, each tagged with the backend its models run on. */
+export function providerEntries(
+  models: ModelOption[]
+): { name: string; backend: Backend }[] {
+  const names = [...new Set(models.map((m) => m.provider))]
+  return names.map((name) => {
+    const id = models.find((m) => m.provider === name)?.id
+    return { name, backend: id ? backendForModel(id) : "claude" }
+  })
+}
 
 const FAST_SUFFIX = "-fast"
 
@@ -71,6 +89,16 @@ export const DEFAULT_PLANNER_MODEL = modelConfig.defaults.planner
 export const DEFAULT_CODER_MODEL = modelConfig.defaults.coder
 /** Default model shown for Codex sessions (Codex's current default). */
 export const DEFAULT_CODEX_MODEL = modelConfig.defaults.codexChat
+/** Default model shown for OpenCode sessions. */
+export const DEFAULT_OPENCODE_MODEL = modelConfig.defaults.opencodeChat
+
+/** Each backend's default chat model — what a new session of that provider
+ *  starts on. */
+export const DEFAULT_MODEL_BY_BACKEND: Record<Backend, string> = {
+  claude: DEFAULT_CHAT_MODEL,
+  codex: DEFAULT_CODEX_MODEL,
+  opencode: DEFAULT_OPENCODE_MODEL,
+}
 
 const MODEL_ALIASES: Record<string, string> = {
   opus: "Opus",
@@ -90,6 +118,12 @@ export function formatModelName(id: string): string {
   let base = baseModelId(id)
   const known = MODELS.find((m) => m.id === base)
   if (known) return known.label
+
+  // Dynamic OpenCode ids carry a provider path (`opencode/anthropic/<model>`);
+  // the model segment is the readable part.
+  if (base.includes("/")) {
+    base = base.split("/").pop() ?? base
+  }
 
   let suffix = ""
   if (base.includes("[1m]")) {
@@ -121,7 +155,17 @@ export const EFFORT_OPTIONS: EffortOption[] = [
   { value: "high", label: "High" },
   { value: "xhigh", label: "xHigh" },
   { value: "max", label: "Max" },
+  // A Claude Code session setting on top of xhigh effort (the agent also
+  // orchestrates dynamic workflows). Other backends clamp it to their top tier.
+  { value: "ultracode", label: "Ultracode" },
 ]
+
+/** The effort tiers a backend actually offers — Ultracode is Claude-only. */
+export function effortOptionsFor(backend?: Backend): EffortOption[] {
+  return backend === "claude" || backend === undefined
+    ? EFFORT_OPTIONS
+    : EFFORT_OPTIONS.filter((o) => o.value !== "ultracode")
+}
 
 export function effortLabel(value: EffortLevel): string {
   return EFFORT_OPTIONS.find((o) => o.value === value)?.label ?? value

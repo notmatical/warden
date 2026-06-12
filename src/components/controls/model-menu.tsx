@@ -1,5 +1,5 @@
 import { Check, ChevronsUpDown, Search } from "lucide-react"
-import { useState } from "react"
+import { useMemo, useState } from "react"
 
 import { AnimatedZap } from "@/components/animated-zap"
 import { Shortcut } from "@/components/shortcut"
@@ -11,6 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import {
   Tooltip,
@@ -19,16 +20,17 @@ import {
 } from "@/components/ui/tooltip"
 import { useControllableOpen } from "@/hooks/use-controllable-open"
 import {
+  BACKEND_PROVIDER_NAME,
   backendForModel,
   baseModelId,
   formatModelName,
   isFastModel,
-  MODEL_PROVIDERS,
   MODELS,
+  providerEntries,
   supportsFast,
   withFast,
 } from "@/lib/models"
-import { PROVIDER_ICON } from "@/lib/provider-icons"
+import { PRODUCT_ICON } from "@/lib/provider-icons"
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store/app-store"
 import type { Backend } from "@/types"
@@ -48,15 +50,8 @@ interface ModelMenuProps {
   variant?: "toolbar" | "form"
 }
 
-interface ProviderEntry {
-  name: string
-  backend: Backend
-}
-
-const PROVIDER_ENTRIES: ProviderEntry[] = MODEL_PROVIDERS.map((name) => {
-  const id = MODELS.find((m) => m.provider === name)?.id
-  return { name, backend: id ? backendForModel(id) : "claude" }
-})
+/** Varied row widths so the loading pane reads as a list, not a block. */
+const SKELETON_WIDTHS = ["72%", "58%", "80%", "64%", "70%", "52%"]
 
 export function ModelMenu({
   value,
@@ -70,12 +65,38 @@ export function ModelMenu({
 }: ModelMenuProps) {
   const [open, setOpen] = useControllableOpen(controlledOpen, onOpenChange)
   const providers = useAppStore((s) => s.providers)
+  const opencodeModels = useAppStore((s) => s.opencodeModels)
+  const opencodeLoading = useAppStore((s) => s.opencodeModelsLoading)
   const base = baseModelId(value)
   const fast = isFastModel(value)
   const canFast = supportsFast(base)
 
+  // Static models plus the account's live OpenCode catalog. The session's
+  // current model always renders, even when no longer listed (a retired id,
+  // or an OpenCode model the account lost access to).
+  const models = useMemo(() => {
+    const all = [...MODELS, ...opencodeModels]
+    if (!all.some((m) => m.id === base)) {
+      all.push({
+        id: base,
+        label: formatModelName(base),
+        provider: BACKEND_PROVIDER_NAME[backendForModel(base)],
+      })
+    }
+    return all
+  }, [opencodeModels, base])
+  // While the OpenCode catalog is still loading there are no entries to
+  // derive a rail item from — pin one so the pane exists and can skeleton.
+  const allEntries = useMemo(() => {
+    const entries = providerEntries(models)
+    if (opencodeLoading && !entries.some((e) => e.backend === "opencode")) {
+      entries.push({ name: "OpenCode", backend: "opencode" })
+    }
+    return entries
+  }, [models, opencodeLoading])
+
   const activeProvider =
-    MODELS.find((m) => m.id === base)?.provider ?? PROVIDER_ENTRIES[0].name
+    models.find((m) => m.id === base)?.provider ?? allEntries[0].name
 
   // Every provider stays in the rail; the ones you can't pick right now are
   // shown disabled rather than hidden. After the first turn the backend is
@@ -83,7 +104,7 @@ export function ModelMenu({
   // are disabled too. The session's own provider is always enabled (so the
   // menu is never empty).
   const authed = new Set(providers.filter((p) => p.authed).map((p) => p.id))
-  const entries = PROVIDER_ENTRIES.map((e) => {
+  const entries = allEntries.map((e) => {
     const isSessionProvider = e.backend === backend
     const enabled = isSessionProvider || (!started && authed.has(e.backend))
     const reason = enabled
@@ -117,12 +138,22 @@ export function ModelMenu({
   }
 
   const q = query.trim().toLowerCase()
-  const paneModels = MODELS.filter((m) => m.provider === paneName).filter(
-    (m) =>
-      !q || m.label.toLowerCase().includes(q) || m.id.toLowerCase().includes(q)
-  )
+  const paneModels = models
+    .filter((m) => m.provider === paneName)
+    .filter(
+      (m) =>
+        !q ||
+        m.label.toLowerCase().includes(q) ||
+        m.id.toLowerCase().includes(q)
+    )
+  // The OpenCode pane fills from a CLI listing that takes a few seconds on
+  // first load — skeleton it rather than claiming "no models".
+  const paneLoading =
+    opencodeLoading &&
+    paneModels.length === 0 &&
+    entries.find((e) => e.name === paneName)?.backend === "opencode"
 
-  const ValueIcon = PROVIDER_ICON[backendForModel(value)]
+  const ValueIcon = PRODUCT_ICON[backendForModel(value)]
   const trigger =
     variant === "form" ? (
       <DropdownMenuTrigger asChild>
@@ -132,7 +163,7 @@ export function ModelMenu({
           className="h-9 w-full justify-between gap-2 border-input bg-transparent px-3 font-normal hover:bg-input/30 dark:bg-input/30 dark:hover:bg-input/50"
         >
           <span className="flex min-w-0 items-center gap-2">
-            <ValueIcon className="size-3.5 shrink-0 text-muted-foreground" />
+            <ValueIcon className="size-3.5 shrink-0" />
             <span className="truncate text-sm">{formatModelName(value)}</span>
             {fast && <AnimatedZap active className="size-3" />}
           </span>
@@ -149,6 +180,7 @@ export function ModelMenu({
               disabled={disabled}
               className="h-7 gap-1.5 px-2 text-xs font-medium text-muted-foreground hover:text-foreground"
             >
+              <ValueIcon className="size-3.5 shrink-0" />
               {formatModelName(value)}
               {fast && <AnimatedZap active className="size-3" />}
               <ChevronsUpDown className="size-3 opacity-50" />
@@ -192,7 +224,7 @@ export function ModelMenu({
           {showRail ? (
             <div className="flex w-12 shrink-0 flex-col gap-1 border-r border-border/50 p-1.5">
               {entries.map((entry) => {
-                const Icon = PROVIDER_ICON[entry.backend]
+                const Icon = PRODUCT_ICON[entry.backend]
                 const selected = entry.name === paneName
                 return (
                   <button
@@ -208,13 +240,15 @@ export function ModelMenu({
                     onClick={() => {
                       if (entry.enabled) selectPane(entry.name)
                     }}
+                    // Product marks render in their brand colors, so state is
+                    // carried by the backing and opacity, not icon tinting.
                     className={cn(
                       "flex aspect-square items-center justify-center rounded-md transition-colors",
                       !entry.enabled
-                        ? "cursor-not-allowed text-muted-foreground/25"
+                        ? "cursor-not-allowed opacity-30"
                         : selected
-                          ? "bg-accent text-accent-foreground"
-                          : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                          ? "bg-accent"
+                          : "hover:bg-accent/50"
                     )}
                   >
                     <Icon className="size-4" />
@@ -227,7 +261,15 @@ export function ModelMenu({
           {/* Fixed height (not max-height) so the popover doesn't resize when
 					    switching providers or filtering. */}
           <div className="h-60 min-w-0 flex-1 overflow-y-auto p-1">
-            {paneModels.length === 0 ? (
+            {paneLoading ? (
+              <div aria-busy="true" className="flex flex-col">
+                {SKELETON_WIDTHS.map((width) => (
+                  <div key={width} className="flex items-center px-2 py-2">
+                    <Skeleton className="h-4 rounded" style={{ width }} />
+                  </div>
+                ))}
+              </div>
+            ) : paneModels.length === 0 ? (
               <p className="px-2 py-6 text-center text-sm text-muted-foreground">
                 No models found
               </p>
@@ -246,7 +288,7 @@ export function ModelMenu({
                     </span>
                     <Check
                       className={cn(
-                        "size-4 shrink-0",
+                        "size-4 shrink-0 text-primary",
                         selected ? "opacity-100" : "opacity-0"
                       )}
                     />

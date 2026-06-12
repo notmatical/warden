@@ -1,7 +1,7 @@
 //! Managed command-line tools warden can install into its app data and run, or
-//! defer to the system PATH copy. The agent providers (Claude, Codex) and the
-//! GitHub CLI are all [`Tool`]s; this module is the tool-agnostic machinery
-//! (paths, source preference, download, install, status) they share.
+//! defer to the system PATH copy. The agent providers (Claude, Codex, OpenCode)
+//! and the GitHub CLI are all [`Tool`]s; this module is the tool-agnostic
+//! machinery (paths, source preference, download, install, status) they share.
 
 pub mod archive;
 pub mod install;
@@ -24,17 +24,19 @@ pub use source::{set_source, source, Source};
 pub enum Tool {
     Claude,
     Codex,
+    Opencode,
     Gh,
 }
 
 impl Tool {
-    pub const ALL: [Tool; 3] = [Tool::Claude, Tool::Codex, Tool::Gh];
+    pub const ALL: [Tool; 4] = [Tool::Claude, Tool::Codex, Tool::Opencode, Tool::Gh];
 
     /// Stable id used on the IPC boundary and for settings keys.
     pub fn id(self) -> &'static str {
         match self {
             Tool::Claude => "claude",
             Tool::Codex => "codex",
+            Tool::Opencode => "opencode",
             Tool::Gh => "gh",
         }
     }
@@ -44,6 +46,7 @@ impl Tool {
         match self {
             Tool::Claude => "Claude",
             Tool::Codex => "Codex",
+            Tool::Opencode => "OpenCode",
             Tool::Gh => "GitHub CLI",
         }
     }
@@ -53,6 +56,7 @@ impl Tool {
         match self {
             Tool::Claude => "claude",
             Tool::Codex => "codex",
+            Tool::Opencode => "opencode",
             Tool::Gh => "gh",
         }
     }
@@ -62,6 +66,7 @@ impl Tool {
         match self {
             Tool::Claude => "claude-cli",
             Tool::Codex => "codex-cli",
+            Tool::Opencode => "opencode-cli",
             Tool::Gh => "gh-cli",
         }
     }

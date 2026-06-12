@@ -20,6 +20,7 @@ struct ModelConfig {
 struct FastWorkflows {
     claude: String,
     codex: String,
+    opencode: String,
 }
 
 fn config() -> &'static ModelConfig {
@@ -33,5 +34,6 @@ pub fn fast_workflow_model(backend: Backend) -> &'static str {
     match backend {
         Backend::Claude => &config().fast_workflows.claude,
         Backend::Codex => &config().fast_workflows.codex,
+        Backend::Opencode => &config().fast_workflows.opencode,
     }
 }

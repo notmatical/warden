@@ -1,20 +1,24 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
-/// Which agent backend powers a session. Only Claude is implemented today, but
-/// the enum is the seam where future providers (codex, cursor, ...) plug in.
+/// Which agent backend powers a session. This enum is the seam where providers
+/// plug in; each variant has an adapter under `crate::providers`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum Backend {
     Claude,
     Codex,
+    Opencode,
 }
 
 impl Backend {
+    pub const ALL: [Backend; 3] = [Backend::Claude, Backend::Codex, Backend::Opencode];
+
     pub fn as_str(self) -> &'static str {
         match self {
             Backend::Claude => "claude",
             Backend::Codex => "codex",
+            Backend::Opencode => "opencode",
         }
     }
 
@@ -22,15 +26,19 @@ impl Backend {
         match s {
             "claude" => Some(Backend::Claude),
             "codex" => Some(Backend::Codex),
+            "opencode" => Some(Backend::Opencode),
             _ => None,
         }
     }
 
-    /// The backend that runs a given model id: Codex for `gpt*`/`codex*`,
-    /// Claude otherwise.
+    /// The backend that runs a given model id: OpenCode for `opencode/...` ids,
+    /// Codex for `gpt*`/`codex*`, Claude otherwise. Mirrored by
+    /// `backendForModel` in src/lib/models.ts.
     pub fn for_model(model: &str) -> Self {
         let id = model.to_ascii_lowercase();
-        if id.starts_with("gpt") || id.starts_with("codex") {
+        if id.starts_with("opencode") {
+            Backend::Opencode
+        } else if id.starts_with("gpt") || id.starts_with("codex") {
             Backend::Codex
         } else {
             Backend::Claude
@@ -75,7 +83,9 @@ impl PermissionMode {
     }
 }
 
-/// Reasoning effort handed to the agent CLI (`claude --effort`).
+/// Reasoning effort for a session. `low..max` are `claude --effort` tokens;
+/// `Ultracode` is a Claude Code session setting on top (xhigh effort plus
+/// workflow orchestration) — each adapter maps it to what its CLI accepts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum EffortLevel {
@@ -84,10 +94,12 @@ pub enum EffortLevel {
     High,
     Xhigh,
     Max,
+    Ultracode,
 }
 
 impl EffortLevel {
-    /// The exact token expected by `claude --effort`.
+    /// The token expected by `claude --effort` (`Ultracode` is not one — the
+    /// Claude adapter maps it to `xhigh` + the `ultracode` setting).
     pub fn as_cli(self) -> &'static str {
         match self {
             EffortLevel::Low => "low",
@@ -95,6 +107,7 @@ impl EffortLevel {
             EffortLevel::High => "high",
             EffortLevel::Xhigh => "xhigh",
             EffortLevel::Max => "max",
+            EffortLevel::Ultracode => "ultracode",
         }
     }
 
@@ -109,6 +122,7 @@ impl EffortLevel {
             "high" => Some(EffortLevel::High),
             "xhigh" => Some(EffortLevel::Xhigh),
             "max" => Some(EffortLevel::Max),
+            "ultracode" => Some(EffortLevel::Ultracode),
             _ => None,
         }
     }
