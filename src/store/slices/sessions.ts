@@ -66,6 +66,7 @@ export const createSessionsSlice: StateCreator<
         nativeCommand: opts.nativeCommand,
         workingDir: opts.workingDir,
         linearIssueId: opts.linearIssueId,
+        branchHint: opts.branchHint,
       })
       set((state) => ({
         sessions: { ...state.sessions, [session.id]: session },

@@ -54,14 +54,11 @@ async fn poll_once(app: &AppHandle) {
             continue;
         };
         let changed = session.pr_state.as_deref() != Some(info.state.as_str())
-            || session.pr_check_status != info.check_status;
-        let _ = store.set_session_pr(
-            &session.id,
-            info.number,
-            &info.url,
-            &info.state,
-            info.check_status,
-        );
+            || session.pr_check_status != info.check_status
+            || session.pr_check_counts != info.check_counts
+            || session.pr_is_draft != info.is_draft
+            || session.pr_review_decision != info.review_decision;
+        let _ = store.set_session_pr(&session.id, &info);
 
         // A PR that just merged retires its session: stop any in-flight work,
         // tear down the worktree + branch, and mark the session read-only —
