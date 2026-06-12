@@ -41,6 +41,15 @@ pub fn head_sha(repo: &Path) -> Result<String> {
     Ok(run(repo, &["rev-parse", "HEAD"])?.trim().to_string())
 }
 
+/// Whether a local branch with this name already exists.
+pub fn branch_exists(repo: &Path, branch: &str) -> bool {
+    run(
+        repo,
+        &["rev-parse", "--verify", &format!("refs/heads/{branch}")],
+    )
+    .is_ok()
+}
+
 /// Create a new worktree at `dest` on a fresh `branch` rooted at `base`.
 pub fn create_worktree(repo: &Path, dest: &Path, branch: &str, base: &str) -> Result<()> {
     // Drop stale registrations (worktree folders removed outside warden) so a
