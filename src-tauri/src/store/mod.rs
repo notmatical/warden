@@ -628,6 +628,30 @@ impl Store {
         Ok(serde_json::from_str(&json)?)
     }
 
+    /// A workflow's runs, newest first (run history).
+    pub fn list_workflow_runs(&self, workflow_id: &str, limit: u32) -> Result<Vec<WorkflowRun>> {
+        let conn = self.lock();
+        let mut stmt = conn.prepare(
+            "SELECT id, workflow_id, project_id, group_id, status, error, created_at, updated_at
+             FROM workflow_runs WHERE workflow_id = ?1
+             ORDER BY created_at DESC LIMIT ?2",
+        )?;
+        let rows = stmt.query_map((workflow_id, limit), |r| {
+            let status: String = r.get(4)?;
+            Ok(WorkflowRun {
+                id: r.get(0)?,
+                workflow_id: r.get(1)?,
+                project_id: r.get(2)?,
+                group_id: r.get(3)?,
+                status: RunStatus::parse(&status).unwrap_or(RunStatus::Failed),
+                error: r.get(5)?,
+                created_at: r.get(6)?,
+                updated_at: r.get(7)?,
+            })
+        })?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
     /// The most recent run of a workflow, if any (for restoring run state when
     /// the editor reopens).
     pub fn latest_workflow_run(&self, workflow_id: &str) -> Result<Option<WorkflowRun>> {
@@ -648,6 +672,27 @@ impl Store {
             Some(id) => Ok(Some(self.get_workflow_run(&id)?)),
             None => Ok(None),
         }
+    }
+
+    /// Settle runs a previous app process left behind: their executor task died
+    /// with it, so a `pending`/`running` run would otherwise stay live-looking
+    /// forever. Paused runs are untouched — gates resume across restarts.
+    pub fn fail_interrupted_workflow_runs(&self) -> Result<()> {
+        let conn = self.lock();
+        conn.execute(
+            "UPDATE workflow_node_runs
+             SET status = 'failed', error = 'interrupted by app restart'
+             WHERE status IN ('running', 'awaitingInput')
+               AND run_id IN (SELECT id FROM workflow_runs WHERE status IN ('pending', 'running'))",
+            [],
+        )?;
+        conn.execute(
+            "UPDATE workflow_runs
+             SET status = 'failed', error = 'interrupted by app restart', updated_at = ?1
+             WHERE status IN ('pending', 'running')",
+            [now_rfc3339()],
+        )?;
+        Ok(())
     }
 
     pub fn upsert_node_run(&self, run: &WorkflowNodeRun) -> Result<()> {
