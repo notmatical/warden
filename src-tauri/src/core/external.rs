@@ -155,6 +155,15 @@ const TERMINALS: &[AppDef] = &[
         bin: "",
         mac_app: "iTerm",
     },
+    // A console shell, not an emulator, but a useful "open here" target. The
+    // `powershell` binary is always on PATH on Windows and absent elsewhere,
+    // so this entry self-gates to Windows.
+    AppDef {
+        id: "powershell",
+        name: "PowerShell",
+        bin: "powershell",
+        mac_app: "",
+    },
 ];
 
 fn find_app(registry: &'static [AppDef], id: &str) -> Option<&'static AppDef> {
@@ -281,6 +290,17 @@ fn open_editor(def: &AppDef, path: &str) -> Result<()> {
 /// Launch a specific terminal at `path`: each emulator takes its workdir
 /// differently, and the flagless ones (Warp, Ghostty) inherit `current_dir`.
 fn open_terminal_app(def: &AppDef, path: &str) -> Result<()> {
+    // PowerShell is a console shell: open a fresh window already in the
+    // directory (the same recipe as the generic Windows fallback).
+    #[cfg(windows)]
+    if def.id == "powershell" {
+        Command::new("cmd")
+            .args(["/C", "start", "powershell"])
+            .current_dir(path)
+            .spawn()
+            .map_err(|e| AppError::Agent(format!("failed to launch {}: {e}", def.name)))?;
+        return Ok(());
+    }
     if !def.bin.is_empty() {
         if let Ok(exe) = which::which(def.bin) {
             let mut cmd = Command::new(exe);
