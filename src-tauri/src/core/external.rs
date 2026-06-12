@@ -111,61 +111,6 @@ const EDITORS: &[AppDef] = &[
     },
 ];
 
-// iTerm ships no CLI, so it is macOS-only via its bundle name.
-const TERMINALS: &[AppDef] = &[
-    AppDef {
-        id: "wt",
-        name: "Windows Terminal",
-        bin: "wt",
-        mac_app: "",
-    },
-    AppDef {
-        id: "warp",
-        name: "Warp",
-        bin: "warp",
-        mac_app: "Warp",
-    },
-    AppDef {
-        id: "ghostty",
-        name: "Ghostty",
-        bin: "ghostty",
-        mac_app: "Ghostty",
-    },
-    AppDef {
-        id: "wezterm",
-        name: "WezTerm",
-        bin: "wezterm",
-        mac_app: "WezTerm",
-    },
-    AppDef {
-        id: "alacritty",
-        name: "Alacritty",
-        bin: "alacritty",
-        mac_app: "Alacritty",
-    },
-    AppDef {
-        id: "kitty",
-        name: "Kitty",
-        bin: "kitty",
-        mac_app: "kitty",
-    },
-    AppDef {
-        id: "iterm",
-        name: "iTerm",
-        bin: "",
-        mac_app: "iTerm",
-    },
-    // A console shell, not an emulator, but a useful "open here" target. The
-    // `powershell` binary is always on PATH on Windows and absent elsewhere,
-    // so this entry self-gates to Windows.
-    AppDef {
-        id: "powershell",
-        name: "PowerShell",
-        bin: "powershell",
-        mac_app: "",
-    },
-];
-
 fn find_app(registry: &'static [AppDef], id: &str) -> Option<&'static AppDef> {
     registry.iter().find(|a| a.id == id)
 }
@@ -192,49 +137,29 @@ fn app_installed(def: &AppDef) -> bool {
     false
 }
 
-/// Which group of the "open in…" menu an app belongs to.
-#[derive(Debug, Clone, Copy, Serialize, Type)]
-#[serde(rename_all = "lowercase")]
-pub enum OpenAppKind {
-    Editor,
-    Terminal,
-}
-
-/// One installed app, surfaced to the "open in…" menu.
+/// One installed editor, surfaced to the "open in…" menu.
 #[derive(Debug, Clone, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct OpenApp {
     pub id: String,
     pub name: String,
-    pub kind: OpenAppKind,
 }
 
-/// The editors and terminals installed on this machine, in registry order.
-/// Folder and generic-terminal targets are always available and not listed
-/// here.
+/// The editors installed on this machine, in registry order. The folder and
+/// terminal targets are always available and not listed here (the terminal
+/// opens the OS default).
 #[tauri::command]
 #[specta::specta]
 pub async fn list_open_apps() -> CommandResult<Vec<OpenApp>> {
     let apps = tauri::async_runtime::spawn_blocking(|| {
-        let detect = |registry: &'static [AppDef], kind: OpenAppKind| {
-            registry
-                .iter()
-                .filter(|def| app_installed(def))
-                .map(move |def| OpenApp {
-                    id: def.id.to_string(),
-                    name: def.name.to_string(),
-                    kind,
-                })
-        };
-        let mut apps: Vec<OpenApp> = detect(EDITORS, OpenAppKind::Editor)
-            .chain(detect(TERMINALS, OpenAppKind::Terminal))
-            .collect();
-        // Windows Terminal hosts PowerShell by default, so the standalone
-        // PowerShell entry is redundant when it's installed — drop it.
-        if apps.iter().any(|a| a.id == "wt") {
-            apps.retain(|a| a.id != "powershell");
-        }
-        apps
+        EDITORS
+            .iter()
+            .filter(|def| app_installed(def))
+            .map(|def| OpenApp {
+                id: def.id.to_string(),
+                name: def.name.to_string(),
+            })
+            .collect::<Vec<_>>()
     })
     .await
     .map_err(|e| AppError::Agent(format!("app probe failed: {e}")))?;
@@ -242,7 +167,7 @@ pub async fn list_open_apps() -> CommandResult<Vec<OpenApp>> {
 }
 
 /// Open `path` in an external app selected by `target`: `"folder"`,
-/// `"terminal"`, or an editor/terminal id from [`list_open_apps`].
+/// `"terminal"` (the OS default), or an editor id from [`list_open_apps`].
 #[tauri::command]
 #[specta::specta]
 pub async fn open_in(app: AppHandle, target: String, path: String) -> CommandResult<()> {
@@ -256,15 +181,10 @@ pub async fn open_in(app: AppHandle, target: String, path: String) -> CommandRes
             .open_path(path, None::<&str>)
             .map_err(|e| AppError::Agent(format!("failed to open folder: {e}")).into()),
         "terminal" => open_terminal(&path).map_err(Into::into),
-        other => {
-            if let Some(def) = find_app(EDITORS, other) {
-                open_editor(def, &path).map_err(Into::into)
-            } else if let Some(def) = find_app(TERMINALS, other) {
-                open_terminal_app(def, &path).map_err(Into::into)
-            } else {
-                Err(AppError::Invalid(format!("unknown open target: {other}")).into())
-            }
-        }
+        other => match find_app(EDITORS, other) {
+            Some(def) => open_editor(def, &path).map_err(Into::into),
+            None => Err(AppError::Invalid(format!("unknown open target: {other}")).into()),
+        },
     }
 }
 
@@ -290,59 +210,6 @@ fn open_editor(def: &AppDef, path: &str) -> Result<()> {
     Err(AppError::NotFound(format!(
         "`{}` was not found on PATH",
         def.bin
-    )))
-}
-
-/// Launch a specific terminal at `path`: each emulator takes its workdir
-/// differently, and the flagless ones (Warp, Ghostty) inherit `current_dir`.
-fn open_terminal_app(def: &AppDef, path: &str) -> Result<()> {
-    // PowerShell is a console shell: open a fresh window already in the
-    // directory (the same recipe as the generic Windows fallback).
-    #[cfg(windows)]
-    if def.id == "powershell" {
-        Command::new("cmd")
-            .args(["/C", "start", "powershell"])
-            .current_dir(path)
-            .spawn()
-            .map_err(|e| AppError::Agent(format!("failed to launch {}: {e}", def.name)))?;
-        return Ok(());
-    }
-    if !def.bin.is_empty() {
-        if let Ok(exe) = which::which(def.bin) {
-            let mut cmd = Command::new(exe);
-            match def.id {
-                "wt" => {
-                    cmd.args(["-d", path]);
-                }
-                "wezterm" => {
-                    cmd.args(["start", "--cwd", path]);
-                }
-                "alacritty" => {
-                    cmd.args(["--working-directory", path]);
-                }
-                "kitty" => {
-                    cmd.args(["--directory", path]);
-                }
-                _ => {}
-            }
-            cmd.current_dir(path)
-                .spawn()
-                .map_err(|e| AppError::Agent(format!("failed to launch {}: {e}", def.name)))?;
-            return Ok(());
-        }
-    }
-    #[cfg(target_os = "macos")]
-    {
-        Command::new("open")
-            .args(["-a", def.mac_app, path])
-            .spawn()
-            .map_err(|e| AppError::Agent(format!("failed to launch {}: {e}", def.name)))?;
-        return Ok(());
-    }
-    #[cfg(not(target_os = "macos"))]
-    Err(AppError::NotFound(format!(
-        "{} was not found on this machine",
-        def.name
     )))
 }
 

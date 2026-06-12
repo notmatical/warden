@@ -669,7 +669,7 @@ async fetchRepoRef(workingDir: string, kind: string, number: number) : Promise<R
 },
 /**
  * Open `path` in an external app selected by `target`: `"folder"`,
- * `"terminal"`, or an editor/terminal id from [`list_open_apps`].
+ * `"terminal"` (the OS default), or an editor id from [`list_open_apps`].
  */
 async openIn(target: string, path: string) : Promise<Result<null, IpcError>> {
     try {
@@ -680,9 +680,9 @@ async openIn(target: string, path: string) : Promise<Result<null, IpcError>> {
 }
 },
 /**
- * The editors and terminals installed on this machine, in registry order.
- * Folder and generic-terminal targets are always available and not listed
- * here.
+ * The editors installed on this machine, in registry order. The folder and
+ * terminal targets are always available and not listed here (the terminal
+ * opens the OS default).
  */
 async listOpenApps() : Promise<Result<OpenApp[], IpcError>> {
     try {
@@ -1343,13 +1343,9 @@ export type NodeRunStatus = "pending" | "running" | "done" | "failed" | "skipped
  */
 "awaitingInput"
 /**
- * One installed app, surfaced to the "open in…" menu.
+ * One installed editor, surfaced to the "open in…" menu.
  */
-export type OpenApp = { id: string; name: string; kind: OpenAppKind }
-/**
- * Which group of the "open in…" menu an app belongs to.
- */
-export type OpenAppKind = "editor" | "terminal"
+export type OpenApp = { id: string; name: string }
 /**
  * One selectable OpenCode model for the picker.
  */

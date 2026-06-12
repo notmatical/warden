@@ -140,24 +140,12 @@ export function OpenInButtons({ path }: { path: string | null | undefined }) {
     return null
   }
 
-  const editorTargets: Target[] = apps
-    .filter((app) => app.kind === "editor")
-    .map((app) => ({
-      id: app.id,
-      label: app.name,
-      iconUrl: APP_ICON_URL[app.id],
-    }))
-  const terminalTargets: Target[] = apps
-    .filter((app) => app.kind === "terminal")
-    .map((app) => ({
-      id: app.id,
-      label: app.name,
-      icon: SquareTerminal,
-      iconUrl: APP_ICON_URL[app.id],
-    }))
-  // The generic Terminal row only stands in when no terminal was detected.
-  const terminalRows = terminalTargets.length > 0 ? terminalTargets : [TERMINAL]
-  const targets: Target[] = [...editorTargets, ...terminalRows, FOLDER]
+  const editorTargets: Target[] = apps.map((app) => ({
+    id: app.id,
+    label: app.name,
+    iconUrl: APP_ICON_URL[app.id],
+  }))
+  const targets: Target[] = [...editorTargets, TERMINAL, FOLDER]
   // Last-used target if it's still available; else the first detected editor,
   // else the file manager.
   const last =
@@ -222,13 +210,10 @@ export function OpenInButtons({ path }: { path: string | null | undefined }) {
             onRun={(t) => void run(t)}
           />
           {editorTargets.length > 0 ? <DropdownMenuSeparator /> : null}
-          <OpenInGroup
-            targets={terminalRows}
-            label="Terminal"
-            icon={SquareTerminal}
-            onRun={(t) => void run(t)}
-          />
-          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => void run(TERMINAL)}>
+            <SquareTerminal />
+            Terminal
+          </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => void run(FOLDER)}>
             <FolderOpen />
             File explorer

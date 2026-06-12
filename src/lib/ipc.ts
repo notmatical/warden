@@ -468,12 +468,10 @@ export function openIn(target: OpenTarget, path: string): Promise<void> {
   return invoke("open_in", { target, path })
 }
 
-/** An editor or terminal installed on this machine, offered by the
- *  "open in…" menu. */
+/** An editor installed on this machine, offered by the "open in…" menu. */
 export interface OpenApp {
   id: string
   name: string
-  kind: "editor" | "terminal"
 }
 
 export function listOpenApps(): Promise<OpenApp[]> {
