@@ -3,6 +3,7 @@ import type { KeyCombo } from "@/lib/keybindings"
 /** Stable identity for an app action. Keys bind to these, not to handlers, so a
  *  settings UI can remap them and a command palette can invoke them. */
 export type CommandId =
+  | "palette.toggle"
   | "sidebar.toggle"
   | "session.cancel"
   | "session.cycleMode"
@@ -17,6 +18,12 @@ export interface CommandDef {
 }
 
 export const COMMANDS: Record<CommandId, CommandDef> = {
+  "palette.toggle": {
+    title: "Open command palette",
+    category: "View",
+    defaultCombo: { key: "k", mod: true },
+    allowInInput: true,
+  },
   "sidebar.toggle": {
     title: "Toggle sidebar",
     category: "View",

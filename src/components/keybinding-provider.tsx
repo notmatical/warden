@@ -19,6 +19,9 @@ export function runCommand(id: CommandId): void {
   const session = activeTabId ? store.sessions[activeTabId] : undefined
 
   switch (id) {
+    case "palette.toggle":
+      emitUiCommand("palette.toggle", null)
+      break
     case "sidebar.toggle":
       store.setSidebarCollapsed(!store.sidebarCollapsed)
       break
