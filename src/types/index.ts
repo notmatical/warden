@@ -1,4 +1,4 @@
-export type Backend = "claude" | "codex"
+export type Backend = "claude" | "codex" | "opencode"
 
 /** An agent CLI provider; one-to-one with the session backends. */
 export type Provider = Backend
@@ -37,7 +37,13 @@ export type PermissionMode =
   | "plan"
   | "default"
 
-export type EffortLevel = "low" | "medium" | "high" | "xhigh" | "max"
+export type EffortLevel =
+  | "low"
+  | "medium"
+  | "high"
+  | "xhigh"
+  | "max"
+  | "ultracode"
 
 export type SessionStatus = "idle" | "running" | "error"
 

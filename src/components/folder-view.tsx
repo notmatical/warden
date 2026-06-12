@@ -33,8 +33,8 @@ import {
   PrStateIcon,
   PrStatusPill,
 } from "@/components/common/pr-badges"
+import { NativeCliSub } from "@/components/common/native-cli-sub"
 import { useConfirm } from "@/components/confirm-dialog"
-import { ClaudeIcon, CodexIcon } from "@/components/icons/brand"
 import { LabelChip, LabelPicker, labelColor } from "@/components/label-picker"
 import { PrHoverCard } from "@/components/pr-hover-card"
 import { SessionFavicon } from "@/components/session-favicon"
@@ -227,13 +227,6 @@ export function FolderView({ projectId }: { projectId: string }) {
       ).length
   )
   const createSession = useAppStore((s) => s.createSession)
-  const createNativeSession = useAppStore((s) => s.createNativeSession)
-  const claudeAuthed = useAppStore((s) =>
-    s.providers.some((p) => p.id === "claude" && p.authed)
-  )
-  const codexAuthed = useAppStore((s) =>
-    s.providers.some((p) => p.id === "codex" && p.authed)
-  )
   const linear = useFolderLinearBinding(projectId)
   const [setupOpen, setSetupOpen] = useState(false)
 
@@ -251,7 +244,7 @@ export function FolderView({ projectId }: { projectId: string }) {
   return (
     <div className="h-full overflow-y-auto">
       <div className="flex flex-col gap-6 p-6">
-        <div className="flex shrink-0 items-center gap-3">
+        <div className="flex shrink-0 items-center gap-2">
           <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted/60 ring-1 ring-border/50">
             <FolderGit2 className="size-5 text-muted-foreground" />
           </div>
@@ -282,11 +275,11 @@ export function FolderView({ projectId }: { projectId: string }) {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
-                    variant="ghost"
-                    size="icon-sm"
+                    variant="secondary"
+                    size="icon"
                     aria-label="Worktree commands"
                     onClick={() => setSetupOpen(true)}
-                    className="shrink-0 text-muted-foreground"
+                    className="shrink-0"
                   >
                     <Wrench className="size-4" />
                   </Button>
@@ -304,7 +297,7 @@ export function FolderView({ projectId }: { projectId: string }) {
           ) : null}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="sm" className="shrink-0 gap-1.5">
+              <Button className="shrink-0 gap-1.5">
                 New session
                 <ChevronDown className="size-3.5 opacity-70" />
               </Button>
@@ -318,23 +311,7 @@ export function FolderView({ projectId }: { projectId: string }) {
                 <SquareTerminal />
                 Terminal session
               </DropdownMenuItem>
-              {claudeAuthed || codexAuthed ? <DropdownMenuSeparator /> : null}
-              {claudeAuthed ? (
-                <DropdownMenuItem
-                  onSelect={() => void createNativeSession(projectId, "claude")}
-                >
-                  <ClaudeIcon />
-                  Native Claude
-                </DropdownMenuItem>
-              ) : null}
-              {codexAuthed ? (
-                <DropdownMenuItem
-                  onSelect={() => void createNativeSession(projectId, "codex")}
-                >
-                  <CodexIcon />
-                  Native Codex
-                </DropdownMenuItem>
-              ) : null}
+              <NativeCliSub projectId={projectId} />
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

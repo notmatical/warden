@@ -30,11 +30,13 @@ export function showRef(
 export const NATIVE_CLI: Record<Provider, string> = {
   claude: "claude",
   codex: "codex",
+  opencode: "opencode",
 }
 
 export const NATIVE_TITLE: Record<Provider, string> = {
   claude: "Claude",
   codex: "Codex",
+  opencode: "OpenCode",
 }
 
 export const SIDEBAR_KEY = "warden:sidebar-collapsed"

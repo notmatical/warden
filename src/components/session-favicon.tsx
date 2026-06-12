@@ -1,21 +1,15 @@
 import { SquareTerminal } from "lucide-react"
-import {
-  AnthropicIcon,
-  ClaudeIcon,
-  CodexIcon,
-  OpenAIIcon,
-} from "@/components/icons/brand"
 import { BrailleSpinner } from "@/components/ui/braille-spinner"
+import { PRODUCT_ICON, PROVIDER_ICON } from "@/lib/provider-icons"
 import { cn } from "@/lib/utils"
 import type { Backend, SessionKind, SessionStatus } from "@/types"
 
 /**
  * The per-session glyph shared by the tab strip, sidebar, and drag preview.
- * Native CLI terminals (a `terminalCommand` is set) show the product logo
- * (Claude/Codex); plain shell terminals show a generic terminal glyph; agent
- * sessions show the model's provider mark (Anthropic/OpenAI). When a status is
- * given, a running session swaps the glyph for a spinner and an error tints it
- * red.
+ * Native CLI terminals (a `terminalCommand` is set) show the product logo;
+ * plain shell terminals show a generic terminal glyph; agent sessions show the
+ * model's provider mark. When a status is given, a running session swaps the
+ * glyph for a spinner and an error tints it red.
  */
 export function SessionFavicon({
   kind,
@@ -50,13 +44,7 @@ export function SessionFavicon({
   }
 
   const Brand =
-    kind === "terminal"
-      ? backend === "codex"
-        ? CodexIcon
-        : ClaudeIcon
-      : backend === "codex"
-        ? OpenAIIcon
-        : AnthropicIcon
+    kind === "terminal" ? PRODUCT_ICON[backend] : PROVIDER_ICON[backend]
   // The colored terminal logos render full-strength; the monochrome provider
   // marks stay subtle (and tint red on error).
   const colored = kind === "terminal"

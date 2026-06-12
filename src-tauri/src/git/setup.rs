@@ -155,7 +155,18 @@ pub fn spawn_session_setup(app: &AppHandle, store: &Store, session: &Session, re
 
     set_status(&app, &store, &session_id, Some(SetupStatus::Running), None);
     tauri::async_runtime::spawn(async move {
-        match run_script(&script, &worktree, &repo, SETUP_TIMEOUT).await {
+        let result = run_script(&script, &worktree, &repo, SETUP_TIMEOUT).await;
+        // The session may have moved on while setup ran (isolation toggled, a
+        // new worktree provisioned): a result for a worktree the session no
+        // longer runs in must not stomp its current setup state.
+        let stale = !store
+            .get_session(&session_id)
+            .is_ok_and(|s| s.is_isolated && Path::new(&s.working_dir) == worktree.as_path());
+        if stale {
+            log::info!("discarding setup result for replaced worktree {worktree:?}");
+            return;
+        }
+        match result {
             Ok(()) => set_status(&app, &store, &session_id, Some(SetupStatus::Done), None),
             Err(reason) => set_status(
                 &app,

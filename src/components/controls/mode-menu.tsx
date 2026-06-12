@@ -34,7 +34,6 @@ interface ModeMeta {
   description: string
   icon: typeof ClipboardList
   dot: string
-  danger?: boolean
 }
 
 const MODE_META: Record<ExecutionMode, ModeMeta> = {
@@ -53,12 +52,11 @@ const MODE_META: Record<ExecutionMode, ModeMeta> = {
     dot: "bg-emerald-500",
   },
   bypassPermissions: {
-    trigger: "Bypass",
-    label: "Bypass permissions",
+    trigger: "Build",
+    label: "Build Mode",
     description: "No prompts",
     icon: ShieldOff,
-    dot: "bg-red-500",
-    danger: true,
+    dot: "bg-primary",
   },
 }
 
@@ -148,7 +146,6 @@ export function ModeMenu({
           return (
             <DropdownMenuItem
               key={mode}
-              variant={meta.danger ? "destructive" : "default"}
               onSelect={() => onChange(mode)}
               className="gap-2.5 py-2"
             >
@@ -158,12 +155,7 @@ export function ModeMenu({
                   selected ? "opacity-100" : "opacity-0"
                 )}
               />
-              <Icon
-                className={cn(
-                  "size-4",
-                  !meta.danger && "text-muted-foreground"
-                )}
-              />
+              <Icon className="size-4 text-muted-foreground" />
               <div className="flex min-w-0 flex-col">
                 <span className="text-sm leading-tight">{meta.label}</span>
                 <span className="text-xs text-muted-foreground">

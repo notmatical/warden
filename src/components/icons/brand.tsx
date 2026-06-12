@@ -62,6 +62,24 @@ export function OpenAIIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+/** OpenCode logo mark; inherits color via `currentColor` (the inner block of
+ *  the two-tone original renders at reduced opacity so the mark stays readable
+ *  in one color). Used for sessions running through OpenCode. */
+export function OpenCodeIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 240 300"
+      fill="currentColor"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M180 60H60V240H180V60ZM240 300H0V0H240V300Z" />
+      <path opacity=".45" d="M180 240H60V120H180V240Z" />
+    </svg>
+  )
+}
+
 /** Claude product mark in its brand terracotta. Used for native Claude terminal
  *  sessions. */
 export function ClaudeIcon(props: SVGProps<SVGSVGElement>) {

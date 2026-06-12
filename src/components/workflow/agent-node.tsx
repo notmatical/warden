@@ -7,23 +7,17 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
-import { baseModelId, MODELS } from "@/lib/models"
+import { backendForModel, formatModelName } from "@/lib/models"
 import { PROVIDER_ICON } from "@/lib/provider-icons"
 import { cn } from "@/lib/utils"
 import { INTENT_META } from "@/lib/workflow-intents"
 import { useAppStore } from "@/store/app-store"
-import type { Backend } from "@/types"
 import type { AgentTaskConfig, NodeRunStatus } from "@/types/workflow"
 
 export interface AgentNodeData {
   label: string
   config: AgentTaskConfig
   [key: string]: unknown
-}
-
-function backendOf(model: string): Backend {
-  const id = model.toLowerCase()
-  return id.startsWith("gpt") || id.startsWith("codex") ? "codex" : "claude"
 }
 
 const STATUS_DOT: Record<NodeRunStatus, string> = {
@@ -48,9 +42,8 @@ export function AgentNode({ id, data, selected }: NodeProps) {
   const cfg = node.config
   const meta = INTENT_META[cfg.intent]
   const Icon = meta.icon
-  const ProviderIcon = PROVIDER_ICON[backendOf(cfg.model)]
-  const model =
-    MODELS.find((m) => m.id === baseModelId(cfg.model))?.label ?? cfg.model
+  const ProviderIcon = PROVIDER_ICON[backendForModel(cfg.model)]
+  const model = formatModelName(cfg.model)
 
   return (
     <ContextMenu>

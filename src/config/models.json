@@ -1,5 +1,5 @@
 {
-  "$comment": "Single source of truth for models, shared by the app (src/lib/models.ts) and the backend (src-tauri/src/core/model_config.rs). `models` is the picker list; `fastVariants` maps a model id to its priority-service-tier variant; `defaults` are the per-role session defaults; `fastWorkflows` picks each provider's cheapest model for background one-shots (session naming, PR drafting).",
+  "$comment": "Single source of truth for models, shared by the app (src/lib/models.ts) and the backend (src-tauri/src/core/model_config.rs). `models` is the picker list — OpenCode entries are not listed here because availability is per-account; the picker loads them live via list_opencode_models. `fastVariants` maps a model id to its priority-service-tier variant; `defaults` are the per-role session defaults; `fastWorkflows` picks each provider's cheapest model for background one-shots (session naming, PR drafting) — the OpenCode one is a preference the backend falls back from when the account lacks it.",
   "models": [
     {
       "id": "claude-fable-5[1m]",
@@ -59,10 +59,12 @@
     "chat": "claude-opus-4-8",
     "planner": "claude-sonnet-4-6",
     "coder": "claude-opus-4-8",
-    "codexChat": "gpt-5.5"
+    "codexChat": "gpt-5.5",
+    "opencodeChat": "opencode/big-pickle"
   },
   "fastWorkflows": {
     "claude": "haiku",
-    "codex": "gpt-5.1-codex-mini"
+    "codex": "gpt-5.1-codex-mini",
+    "opencode": "opencode/grok-code"
   }
 }
