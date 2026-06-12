@@ -1098,7 +1098,11 @@ workingDir: string | null;
 /**
  * Linear issue this session works on; drives writeback on PR open/merge.
  */
-linearIssueId: string | null }
+linearIssueId: string | null;
+/**
+ * Worktree branch name (e.g. `feature/WAR-123` derived from an issue).
+ */
+branchHint: string | null }
 /**
  * What deleting a session would destroy, so the UI can ask before — instead of
  * force-deleting work. All zeros when nothing is at risk: checkout sessions

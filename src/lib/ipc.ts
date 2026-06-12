@@ -272,6 +272,8 @@ export interface CreateSessionInput {
   workingDir?: string
   /** Linear issue this session works on; drives writeback on PR open/merge. */
   linearIssueId?: string
+  /** Worktree branch name (e.g. "feature/WAR-123" derived from an issue). */
+  branchHint?: string
 }
 
 /** Report window focus; backend pollers tier their cadence off it. */
@@ -295,6 +297,7 @@ export function createSession(input: CreateSessionInput): Promise<Session> {
       nativeCommand: input.nativeCommand ?? null,
       workingDir: input.workingDir ?? null,
       linearIssueId: input.linearIssueId ?? null,
+      branchHint: input.branchHint ?? null,
     },
   })
 }
