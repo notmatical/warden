@@ -99,13 +99,7 @@ pub async fn open_pull_request(
     crate::git::push_branch(worktree)?;
     let info = pr::create_pr(worktree, &base, &title, &body, draft.unwrap_or(false))?;
 
-    state.store.set_session_pr(
-        &session_id,
-        info.number,
-        &info.url,
-        &info.state,
-        info.check_status,
-    )?;
+    state.store.set_session_pr(&session_id, &info)?;
     if let Ok(updated) = state.store.get_session(&session_id) {
         emit_session(&app, &updated);
     }
@@ -127,13 +121,7 @@ pub async fn refresh_pr_status(
     let session = state.store.get_session(&session_id)?;
     let info = pr::status(Path::new(&session.working_dir))?;
     if let Some(ref info) = info {
-        state.store.set_session_pr(
-            &session_id,
-            info.number,
-            &info.url,
-            &info.state,
-            info.check_status,
-        )?;
+        state.store.set_session_pr(&session_id, info)?;
         if let Ok(updated) = state.store.get_session(&session_id) {
             emit_session(&app, &updated);
         }
@@ -269,13 +257,7 @@ pub async fn checkout_pr(
 
     // Light up the PR chip + merge controls for the reviewed PR.
     if let Ok(Some(info)) = pr::status(Path::new(&working_dir)) {
-        let _ = state.store.set_session_pr(
-            &session.id,
-            info.number,
-            &info.url,
-            &info.state,
-            info.check_status,
-        );
+        let _ = state.store.set_session_pr(&session.id, &info);
     }
     let session = state.store.get_session(&session.id)?;
     emit_session(&app, &session);

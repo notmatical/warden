@@ -159,6 +159,11 @@ export interface Session {
   /** Aggregate CI-check state for the PR, refreshed by background polling. */
   prCheckStatus: CheckStatus | null
   prCheckedAt: number | null
+  prIsDraft: boolean
+  /** "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" when reviews apply. */
+  prReviewDecision: string | null
+  /** Per-state CI check tallies, null when the PR has no checks. */
+  prCheckCounts: PrCheckCounts | null
   /** Pinned sessions sort to the top of the folder's session list. */
   pinned: boolean
   createdAt: string
@@ -183,6 +188,14 @@ export interface ProjectLabels {
 
 /** Aggregate CI-check state for a PR. */
 export type CheckStatus = "success" | "failure" | "pending"
+
+/** Per-state tallies of a PR's CI checks. */
+export interface PrCheckCounts {
+  passed: number
+  failed: number
+  pending: number
+  skipped: number
+}
 
 /** How a worktree is brought up to date with its base or upstream. */
 export type MergeMode = "squash" | "merge" | "rebase"
@@ -223,6 +236,11 @@ export interface PrInfo {
   /** GitHub PR state: "OPEN" | "MERGED" | "CLOSED". */
   state: string
   title: string
+  isDraft: boolean
+  /** "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" when reviews apply. */
+  reviewDecision: string | null
+  checkStatus: CheckStatus | null
+  checkCounts: PrCheckCounts | null
 }
 
 /** One CI check's outcome on a PR. */
