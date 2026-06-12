@@ -20,8 +20,9 @@ export const PROVIDER_ICON: Record<
   opencode: OpenCodeIcon,
 }
 
-/** The product mark for a provider's native CLI terminal sessions. */
-export const NATIVE_PROVIDER_ICON: Record<
+/** A provider's product mark, shown where the agent itself is surfaced
+ *  (native CLI terminals, session favicons, model picker value, agent icon). */
+export const PRODUCT_ICON: Record<
   Provider,
   ComponentType<SVGProps<SVGSVGElement>>
 > = {

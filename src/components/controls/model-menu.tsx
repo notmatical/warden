@@ -30,7 +30,7 @@ import {
   supportsFast,
   withFast,
 } from "@/lib/models"
-import { PROVIDER_ICON } from "@/lib/provider-icons"
+import { PRODUCT_ICON, PROVIDER_ICON } from "@/lib/provider-icons"
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store/app-store"
 import type { Backend } from "@/types"
@@ -153,7 +153,7 @@ export function ModelMenu({
     paneModels.length === 0 &&
     entries.find((e) => e.name === paneName)?.backend === "opencode"
 
-  const ValueIcon = PROVIDER_ICON[backendForModel(value)]
+  const ValueIcon = PRODUCT_ICON[backendForModel(value)]
   const trigger =
     variant === "form" ? (
       <DropdownMenuTrigger asChild>
@@ -180,6 +180,7 @@ export function ModelMenu({
               disabled={disabled}
               className="h-7 gap-1.5 px-2 text-xs font-medium text-muted-foreground hover:text-foreground"
             >
+              <ValueIcon className="size-3.5 shrink-0" />
               {formatModelName(value)}
               {fast && <AnimatedZap active className="size-3" />}
               <ChevronsUpDown className="size-3 opacity-50" />

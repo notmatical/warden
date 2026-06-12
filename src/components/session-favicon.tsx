@@ -1,6 +1,6 @@
 import { SquareTerminal } from "lucide-react"
 import { BrailleSpinner } from "@/components/ui/braille-spinner"
-import { NATIVE_PROVIDER_ICON, PROVIDER_ICON } from "@/lib/provider-icons"
+import { PRODUCT_ICON, PROVIDER_ICON } from "@/lib/provider-icons"
 import { cn } from "@/lib/utils"
 import type { Backend, SessionKind, SessionStatus } from "@/types"
 
@@ -44,7 +44,7 @@ export function SessionFavicon({
   }
 
   const Brand =
-    kind === "terminal" ? NATIVE_PROVIDER_ICON[backend] : PROVIDER_ICON[backend]
+    kind === "terminal" ? PRODUCT_ICON[backend] : PROVIDER_ICON[backend]
   // The colored terminal logos render full-strength; the monochrome provider
   // marks stay subtle (and tint red on error).
   const colored = kind === "terminal"

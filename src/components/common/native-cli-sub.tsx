@@ -7,7 +7,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from "@/components/ui/dropdown-menu"
-import { NATIVE_PROVIDER_ICON, PROVIDER_ORDER } from "@/lib/provider-icons"
+import { PRODUCT_ICON, PROVIDER_ORDER } from "@/lib/provider-icons"
 import { useAppStore } from "@/store/app-store"
 import { NATIVE_TITLE } from "@/store/shared"
 
@@ -32,7 +32,7 @@ export function NativeCliSub({ projectId }: { projectId: string }) {
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent>
           {native.map((id) => {
-            const Icon = NATIVE_PROVIDER_ICON[id]
+            const Icon = PRODUCT_ICON[id]
             return (
               <DropdownMenuItem
                 key={id}
