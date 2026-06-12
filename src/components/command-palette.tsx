@@ -31,14 +31,8 @@ import {
 } from "react"
 
 import { AgentProvidersIcon } from "@/components/agent-providers-icon"
-import {
-  ClaudeIcon,
-  CodexIcon,
-  GitHubIcon,
-  LinearIcon,
-} from "@/components/icons/brand"
+import { ClaudeIcon, CodexIcon } from "@/components/icons/brand"
 import { runCommand } from "@/components/keybinding-provider"
-import { ReviewPrDialog } from "@/components/review-pr-dialog"
 import { StatusDot } from "@/components/status-dot"
 import { useTheme } from "@/components/theme-provider"
 import {
@@ -51,13 +45,11 @@ import {
   CommandList,
   CommandShortcut,
 } from "@/components/ui/command"
+import { Kbd } from "@/components/ui/kbd"
 import { StatusIcon } from "@/integrations/linear/components/issue-icons"
+import { IssuePeekPanel } from "@/integrations/linear/components/issue-peek-panel"
 import { SendToAgentDialog } from "@/integrations/linear/components/send-to-agent-dialog"
-import {
-  linearCachedIssues,
-  linearIssueComments,
-  linearStatus,
-} from "@/integrations/linear/ipc"
+import { linearCachedIssues, linearStatus } from "@/integrations/linear/ipc"
 import type { LinearComment, LinearIssue } from "@/integrations/linear/types"
 import {
   COMMAND_IDS,
@@ -78,12 +70,7 @@ import {
 import { useAppStore } from "@/store/app-store"
 import type { Project, Session } from "@/types"
 
-type FolderIntent =
-  | "agent"
-  | "terminal"
-  | "native-claude"
-  | "native-codex"
-  | "review-pr"
+type FolderIntent = "agent" | "terminal" | "native-claude" | "native-codex"
 
 type Page =
   | { id: "root" }
@@ -96,7 +83,6 @@ const INTENT_TITLE: Record<FolderIntent, string> = {
   terminal: "New terminal",
   "native-claude": "Native Claude",
   "native-codex": "Native Codex",
-  "review-pr": "Review a PR",
 }
 
 const THEME_OPTIONS = [
@@ -172,9 +158,9 @@ function IssueItem({
 }
 
 /** The global Cmd+K palette: jump to sessions and folders, start new agent or
- *  terminal sessions, send Linear issues to an agent, and run keybound
- *  commands. Sub-pages (folder picker, Linear search, theme) push onto the
- *  root; Backspace on an empty query or Escape pops back. */
+ *  terminal sessions, peek Linear issues, and run keybound commands.
+ *  Sub-pages (folder picker, Linear search, theme) push onto the root;
+ *  Backspace on an empty query or Escape pops back. */
 export function CommandPalette() {
   const [open, setOpen] = useState(false)
   const [page, setPage] = useState<Page>({ id: "root" })
@@ -183,10 +169,13 @@ export function CommandPalette() {
   const [linearReady, setLinearReady] = useState(false)
   const [issues, setIssues] = useState<LinearIssue[]>([])
 
-  // Follow-up dialogs that outlive the palette itself.
-  const [issueTarget, setIssueTarget] = useState<LinearIssue | null>(null)
-  const [issueComments, setIssueComments] = useState<LinearComment[]>([])
-  const [reviewProjectId, setReviewProjectId] = useState<string | null>(null)
+  // Follow-up surfaces that outlive the palette itself: the issue peek, and
+  // the send-to-agent dialog it can hand off to.
+  const [peekIssue, setPeekIssue] = useState<LinearIssue | null>(null)
+  const [send, setSend] = useState<{
+    issue: LinearIssue
+    comments: LinearComment[]
+  } | null>(null)
 
   const selectedValue = useRef("")
   const pageRef = useRef(page)
@@ -327,21 +316,13 @@ export function CommandPalette() {
       case "native-codex":
         void store.createNativeSession(projectId, "codex")
         break
-      case "review-pr":
-        setReviewProjectId(projectId)
-        break
     }
   }
 
-  // Hand the issue to the send-to-agent dialog; comments arrive best-effort
-  // (the prompt is built on send, so they're included if loaded by then).
+  // Peek first: Enter previews the issue; "Send to Agent" lives in the panel.
   const pickIssue = (issue: LinearIssue) => {
     dismiss()
-    setIssueComments([])
-    setIssueTarget(issue)
-    void linearIssueComments(issue.id)
-      .then(setIssueComments)
-      .catch(() => {})
+    setPeekIssue(issue)
   }
 
   // Mod+Enter on a highlighted Linear issue opens it in the browser instead.
@@ -383,13 +364,23 @@ export function CommandPalette() {
 
   const modEnter = isMac ? "⌘ ⏎" : "Ctrl ⏎"
   const hint =
-    page.id === "linear"
-      ? `⏎ sends the issue to an agent · ${modEnter} opens it in Linear`
-      : page.id === "folders"
-        ? "The session starts in the folder you choose"
-        : page.id === "theme"
-          ? "Applies immediately"
-          : "↑↓ navigate · ⏎ select · ⌫ back"
+    page.id === "linear" ? (
+      <>
+        <Kbd>⏎</Kbd> preview the issue
+        <span className="px-1">·</span>
+        <Kbd>{modEnter}</Kbd> open in Linear
+      </>
+    ) : page.id === "folders" ? (
+      "The session starts in the folder you choose"
+    ) : page.id === "theme" ? (
+      "Applies immediately"
+    ) : (
+      <>
+        <Kbd>↑↓</Kbd> navigate
+        <span className="px-1">·</span>
+        <Kbd>⏎</Kbd> select
+      </>
+    )
 
   const paletteCommands = COMMAND_IDS.filter(
     (id) => id !== "palette.toggle" && id !== "session.cancel"
@@ -534,16 +525,6 @@ export function CommandPalette() {
                       Native Codex…
                     </CommandItem>
                   ) : null}
-                  <CommandItem
-                    value="start:review-pr"
-                    keywords={["pull request", "review", "checkout", "pr"]}
-                    onSelect={() =>
-                      goTo({ id: "folders", intent: "review-pr" })
-                    }
-                  >
-                    <GitHubIcon />
-                    Review a PR…
-                  </CommandItem>
                 </CommandGroup>
 
                 {linearReady && sortedIssues.length > 0 ? (
@@ -684,18 +665,6 @@ export function CommandPalette() {
 
             {page.id === "linear" ? (
               <CommandGroup heading="Issues">
-                {linearReady && sortedIssues.length === 0 ? (
-                  <CommandItem
-                    value="linear:connect"
-                    onSelect={() => {
-                      useAppStore.getState().openSettings("integrations")
-                      dismiss()
-                    }}
-                  >
-                    <LinearIcon />
-                    No cached issues yet. Open Linear settings
-                  </CommandItem>
-                ) : null}
                 {sortedIssues.map((issue) => (
                   <IssueItem
                     key={issue.id}
@@ -726,31 +695,37 @@ export function CommandPalette() {
             ) : null}
           </CommandList>
           <div className="flex items-center justify-between gap-3 border-t border-border/50 px-3 py-1.5 text-[11px] text-muted-foreground">
-            <span className="truncate">{hint}</span>
-            <span className="shrink-0">
-              {comboLabel(resolveCombo("palette.toggle"))}
-            </span>
+            <span className="flex min-w-0 items-center truncate">{hint}</span>
+            {page.id === "root" ? (
+              <Kbd className="shrink-0">
+                {comboLabel(resolveCombo("palette.toggle"))}
+              </Kbd>
+            ) : (
+              <span className="flex shrink-0 items-center gap-1">
+                <Kbd>Esc</Kbd> back
+              </span>
+            )}
           </div>
         </Command>
       </CommandDialog>
 
-      <SendToAgentDialog
-        issue={issueTarget}
-        comments={issueComments}
-        open={issueTarget !== null}
+      <IssuePeekPanel
+        open={peekIssue !== null}
+        issue={peekIssue}
         onOpenChange={(o) => {
-          if (!o) setIssueTarget(null)
+          if (!o) setPeekIssue(null)
         }}
+        onSendToAgent={(issue, comments) => setSend({ issue, comments })}
       />
-      {reviewProjectId ? (
-        <ReviewPrDialog
-          projectId={reviewProjectId}
-          open
-          onOpenChange={(o) => {
-            if (!o) setReviewProjectId(null)
-          }}
-        />
-      ) : null}
+      <SendToAgentDialog
+        issue={send?.issue ?? null}
+        comments={send?.comments ?? []}
+        open={send !== null}
+        onOpenChange={(o) => {
+          if (!o) setSend(null)
+        }}
+        onSent={() => setPeekIssue(null)}
+      />
     </>
   )
 }
