@@ -6,7 +6,6 @@ import {
   CircleX,
   FileDiff,
   FolderGit2,
-  Keyboard,
   ListTodo,
   MessageSquare,
   Monitor,
@@ -32,7 +31,6 @@ import {
 
 import { AgentProvidersIcon } from "@/components/agent-providers-icon"
 import { ClaudeIcon, CodexIcon } from "@/components/icons/brand"
-import { runCommand } from "@/components/keybinding-provider"
 import { StatusDot } from "@/components/status-dot"
 import { useTheme } from "@/components/theme-provider"
 import {
@@ -51,12 +49,7 @@ import { IssuePeekPanel } from "@/integrations/linear/components/issue-peek-pane
 import { SendToAgentDialog } from "@/integrations/linear/components/send-to-agent-dialog"
 import { linearCachedIssues, linearStatus } from "@/integrations/linear/ipc"
 import type { LinearComment, LinearIssue } from "@/integrations/linear/types"
-import {
-  COMMAND_IDS,
-  COMMANDS,
-  resolveCombo,
-  subscribeUiCommand,
-} from "@/lib/commands"
+import { resolveCombo, subscribeUiCommand } from "@/lib/commands"
 import { comboLabel } from "@/lib/keybindings"
 import { DEFAULT_CHAT_MODEL } from "@/lib/models"
 import { isMac } from "@/lib/platform"
@@ -382,10 +375,6 @@ export function CommandPalette() {
       </>
     )
 
-  const paletteCommands = COMMAND_IDS.filter(
-    (id) => id !== "palette.toggle" && id !== "session.cancel"
-  )
-
   return (
     <>
       <CommandDialog open={open} onOpenChange={setOpen} className="sm:max-w-xl">
@@ -618,26 +607,6 @@ export function CommandPalette() {
                     <Palette />
                     Change theme…
                   </CommandItem>
-                </CommandGroup>
-
-                <CommandGroup heading="Commands">
-                  {paletteCommands.map((id) => (
-                    <CommandItem
-                      key={id}
-                      value={`command:${id}`}
-                      keywords={[COMMANDS[id].title, COMMANDS[id].category]}
-                      onSelect={() => {
-                        dismiss()
-                        runCommand(id)
-                      }}
-                    >
-                      <Keyboard />
-                      {COMMANDS[id].title}
-                      <CommandShortcut className="tracking-normal">
-                        {comboLabel(resolveCombo(id))}
-                      </CommandShortcut>
-                    </CommandItem>
-                  ))}
                 </CommandGroup>
               </>
             ) : null}
