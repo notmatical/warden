@@ -37,7 +37,13 @@ export type PermissionMode =
   | "plan"
   | "default"
 
-export type EffortLevel = "low" | "medium" | "high" | "xhigh" | "max"
+export type EffortLevel =
+  | "low"
+  | "medium"
+  | "high"
+  | "xhigh"
+  | "max"
+  | "ultracode"
 
 export type SessionStatus = "idle" | "running" | "error"
 

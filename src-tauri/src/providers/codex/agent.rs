@@ -167,7 +167,7 @@ fn split_fast_model(model: &str) -> (&str, bool) {
 /// Codex accepts so a session carried over from Claude still starts.
 fn codex_effort(effort: EffortLevel) -> &'static str {
     match effort {
-        EffortLevel::Max => "xhigh",
+        EffortLevel::Max | EffortLevel::Ultracode => "xhigh",
         other => other.as_cli(),
     }
 }

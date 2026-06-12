@@ -83,7 +83,9 @@ impl PermissionMode {
     }
 }
 
-/// Reasoning effort handed to the agent CLI (`claude --effort`).
+/// Reasoning effort for a session. `low..max` are `claude --effort` tokens;
+/// `Ultracode` is a Claude Code session setting on top (xhigh effort plus
+/// workflow orchestration) — each adapter maps it to what its CLI accepts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum EffortLevel {
@@ -92,10 +94,12 @@ pub enum EffortLevel {
     High,
     Xhigh,
     Max,
+    Ultracode,
 }
 
 impl EffortLevel {
-    /// The exact token expected by `claude --effort`.
+    /// The token expected by `claude --effort` (`Ultracode` is not one — the
+    /// Claude adapter maps it to `xhigh` + the `ultracode` setting).
     pub fn as_cli(self) -> &'static str {
         match self {
             EffortLevel::Low => "low",
@@ -103,6 +107,7 @@ impl EffortLevel {
             EffortLevel::High => "high",
             EffortLevel::Xhigh => "xhigh",
             EffortLevel::Max => "max",
+            EffortLevel::Ultracode => "ultracode",
         }
     }
 
@@ -117,6 +122,7 @@ impl EffortLevel {
             "high" => Some(EffortLevel::High),
             "xhigh" => Some(EffortLevel::Xhigh),
             "max" => Some(EffortLevel::Max),
+            "ultracode" => Some(EffortLevel::Ultracode),
             _ => None,
         }
     }

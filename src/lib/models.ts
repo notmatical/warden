@@ -155,7 +155,17 @@ export const EFFORT_OPTIONS: EffortOption[] = [
   { value: "high", label: "High" },
   { value: "xhigh", label: "xHigh" },
   { value: "max", label: "Max" },
+  // A Claude Code session setting on top of xhigh effort (the agent also
+  // orchestrates dynamic workflows). Other backends clamp it to their top tier.
+  { value: "ultracode", label: "Ultracode" },
 ]
+
+/** The effort tiers a backend actually offers — Ultracode is Claude-only. */
+export function effortOptionsFor(backend?: Backend): EffortOption[] {
+  return backend === "claude" || backend === undefined
+    ? EFFORT_OPTIONS
+    : EFFORT_OPTIONS.filter((o) => o.value !== "ultracode")
+}
 
 export function effortLabel(value: EffortLevel): string {
   return EFFORT_OPTIONS.find((o) => o.value === value)?.label ?? value

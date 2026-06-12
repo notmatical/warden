@@ -232,7 +232,7 @@ fn variant_for_effort(effort: EffortLevel) -> &'static str {
         EffortLevel::Low => "low",
         EffortLevel::Medium => "medium",
         EffortLevel::High => "high",
-        EffortLevel::Xhigh | EffortLevel::Max => "max",
+        EffortLevel::Xhigh | EffortLevel::Max | EffortLevel::Ultracode => "max",
     }
 }
 
