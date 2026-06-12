@@ -357,9 +357,12 @@ pub async fn retry_worktree_setup(
 ) -> CommandResult<()> {
     let session = state.store.get_session(&session_id)?;
     if !session.is_isolated {
-        return Err(
-            AppError::Invalid("setup commands only run in isolated worktrees".to_string()).into(),
-        );
+        // Nothing to set up in the checkout — the failure being retried is a
+        // leftover from a torn-down worktree, so retrying clears it.
+        state.store.set_session_setup(&session_id, None, None)?;
+        let updated = state.store.get_session(&session_id)?;
+        emit_session(&app, &updated);
+        return Ok(());
     }
     let project = state.store.get_project(&session.project_id)?;
     git::setup::spawn_session_setup(&app, &state.store, &session, &project.path);
