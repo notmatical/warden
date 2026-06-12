@@ -47,6 +47,46 @@ function TargetIcon({ target }: { target: Target }) {
   return <Icon />
 }
 
+/** Past this many entries a group collapses into a labeled submenu; at or
+ *  below it the targets render inline. */
+const INLINE_LIMIT = 2
+
+/** One menu group (editors, terminals): inline rows when few, a labeled
+ *  submenu when it would crowd the menu. */
+function OpenInGroup({
+  targets,
+  label,
+  icon: GroupIcon,
+  onRun,
+}: {
+  targets: Target[]
+  label: string
+  icon: typeof Code
+  onRun: (target: Target) => void
+}) {
+  if (targets.length === 0) return null
+
+  const rows = targets.map((target) => (
+    <DropdownMenuItem key={target.id} onSelect={() => onRun(target)}>
+      <TargetIcon target={target} />
+      {target.label}
+    </DropdownMenuItem>
+  ))
+
+  if (targets.length <= INLINE_LIMIT) {
+    return <>{rows}</>
+  }
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger>
+        <GroupIcon className="text-muted-foreground" />
+        {label}
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent>{rows}</DropdownMenuSubContent>
+    </DropdownMenuSub>
+  )
+}
+
 const TERMINAL: Target = {
   id: "terminal",
   label: "Terminal",
@@ -175,35 +215,20 @@ export function OpenInButtons({ path }: { path: string | null | undefined }) {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
-          {editorTargets.length > 0 ? (
-            <>
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger>
-                  <Code className="text-muted-foreground" />
-                  IDE
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent>
-                  {editorTargets.map((target) => (
-                    <DropdownMenuItem
-                      key={target.id}
-                      onSelect={() => void run(target)}
-                    >
-                      <TargetIcon target={target} />
-                      {target.label}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-              <DropdownMenuSeparator />
-            </>
-          ) : null}
-          {terminalRows.map((target) => (
-            <DropdownMenuItem key={target.id} onSelect={() => void run(target)}>
-              <TargetIcon target={target} />
-              {target.label}
-            </DropdownMenuItem>
-          ))}
-          {terminalTargets.length > 0 ? <DropdownMenuSeparator /> : null}
+          <OpenInGroup
+            targets={editorTargets}
+            label="IDE"
+            icon={Code}
+            onRun={(t) => void run(t)}
+          />
+          {editorTargets.length > 0 ? <DropdownMenuSeparator /> : null}
+          <OpenInGroup
+            targets={terminalRows}
+            label="Terminal"
+            icon={SquareTerminal}
+            onRun={(t) => void run(t)}
+          />
+          <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => void run(FOLDER)}>
             <FolderOpen />
             File explorer
