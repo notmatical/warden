@@ -22,13 +22,26 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { APP_ICON_URL } from "@/lib/app-icons"
 import { copyText } from "@/lib/clipboard"
 import { listOpenApps, type OpenApp, openIn } from "@/lib/ipc"
 
 interface Target {
   id: string
   label: string
-  icon: typeof Code
+  /** Lucide glyph for the generic targets (terminal, file manager). */
+  icon?: typeof Code
+  /** Brand logo for editors. */
+  iconUrl?: string
+}
+
+/** A target's icon, sized for menu rows and the split button. */
+function TargetIcon({ target }: { target: Target }) {
+  if (target.iconUrl) {
+    return <img src={target.iconUrl} alt="" className="size-4 shrink-0" />
+  }
+  const Icon = target.icon ?? Code
+  return <Icon />
 }
 
 const TERMINAL: Target = {
@@ -83,7 +96,7 @@ export function OpenInButtons({ path }: { path: string | null | undefined }) {
   const editorTargets: Target[] = editors.map((app) => ({
     id: app.id,
     label: app.name,
-    icon: Code,
+    iconUrl: APP_ICON_URL[app.id],
   }))
   const targets: Target[] = [...editorTargets, TERMINAL, FOLDER]
   // Last-used target if it's still available; else the first detected editor,
@@ -92,7 +105,6 @@ export function OpenInButtons({ path }: { path: string | null | undefined }) {
     targets.find((t) => t.id === (lastId ?? readLastId())) ??
     editorTargets[0] ??
     FOLDER
-  const LastIcon = last.icon
 
   const run = async (target: Target) => {
     setLastId(target.id)
@@ -123,7 +135,7 @@ export function OpenInButtons({ path }: { path: string | null | undefined }) {
             aria-label={`Open in ${last.label}`}
             className="text-muted-foreground hover:text-foreground"
           >
-            <LastIcon />
+            <TargetIcon target={last} />
           </Button>
         </TooltipTrigger>
         <TooltipContent>Open in {last.label}</TooltipContent>
@@ -146,7 +158,7 @@ export function OpenInButtons({ path }: { path: string | null | undefined }) {
         <DropdownMenuContent align="end" className="w-48">
           {editorTargets.map((target) => (
             <DropdownMenuItem key={target.id} onSelect={() => void run(target)}>
-              <Code />
+              <TargetIcon target={target} />
               {target.label}
             </DropdownMenuItem>
           ))}
