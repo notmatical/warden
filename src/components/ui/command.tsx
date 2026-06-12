@@ -1,7 +1,6 @@
-import * as React from "react"
 import { Command as CommandPrimitive } from "cmdk"
-
-import { cn } from "@/lib/utils"
+import { CheckIcon, SearchIcon } from "lucide-react"
+import type * as React from "react"
 import {
   Dialog,
   DialogContent,
@@ -9,11 +8,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  InputGroup,
-  InputGroupAddon,
-} from "@/components/ui/input-group"
-import { SearchIcon, CheckIcon } from "lucide-react"
+import { InputGroup, InputGroupAddon } from "@/components/ui/input-group"
+import { cn } from "@/lib/utils"
 
 function Command({
   className,
@@ -69,7 +65,7 @@ function CommandInput({
 }: React.ComponentProps<typeof CommandPrimitive.Input>) {
   return (
     <div data-slot="command-input-wrapper" className="p-1 pb-0">
-      <InputGroup className="h-8! bg-input/50">
+      <InputGroup className="h-8! rounded-lg bg-input/50">
         <CommandPrimitive.Input
           data-slot="command-input"
           className={cn(
@@ -109,7 +105,10 @@ function CommandEmpty({
   return (
     <CommandPrimitive.Empty
       data-slot="command-empty"
-      className={cn("py-6 text-center text-sm", className)}
+      className={cn(
+        "py-6 text-center text-sm text-muted-foreground",
+        className
+      )}
       {...props}
     />
   )
@@ -183,11 +182,11 @@ function CommandShortcut({
 export {
   Command,
   CommandDialog,
-  CommandInput,
-  CommandList,
   CommandEmpty,
   CommandGroup,
+  CommandInput,
   CommandItem,
-  CommandShortcut,
+  CommandList,
   CommandSeparator,
+  CommandShortcut,
 }
