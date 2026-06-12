@@ -8,6 +8,7 @@ use crate::domain::{Backend, Session};
 use crate::error::{CommandResult, Result};
 use crate::providers::claude::history as claude_history;
 use crate::providers::codex::history as codex_history;
+use crate::providers::opencode::history as opencode_history;
 use crate::state::AppState;
 use crate::store::Store;
 use crate::terminal::{self, TerminalEvent};
@@ -55,12 +56,16 @@ fn launch_recipe(store: &Store, session: &Session) -> Result<(Option<String>, Ve
                 None => vec!["resume".to_string(), "--last".to_string()],
             },
         },
-        // OpenCode: a fresh session the first time; afterwards continue the
-        // most recent conversation in this directory (OpenCode keys its session
-        // store by cwd, and each warden terminal has its own worktree).
+        // OpenCode: a fresh session the first time; afterwards resume the bound
+        // id, recovered from OpenCode's session store like Codex above.
         Backend::Opencode => match session.terminal_started {
             false => Vec::new(),
-            true => vec!["--continue".to_string()],
+            true => match opencode_resume_id(store, session)? {
+                Some(id) => vec!["--session".to_string(), id],
+                // No stored session matched yet (e.g. nothing was sent last
+                // time): fall back to OpenCode's "most recent for this cwd".
+                None => vec!["--continue".to_string()],
+            },
         },
     };
     Ok((Some(program), args))
@@ -68,11 +73,27 @@ fn launch_recipe(store: &Store, session: &Session) -> Result<(Option<String>, Ve
 
 /// The Codex conversation id this terminal should resume, binding it on first use.
 fn codex_resume_id(store: &Store, session: &Session) -> Result<Option<String>> {
+    bind_resume_id(store, session, codex_history::newest_session_for_cwd)
+}
+
+/// The OpenCode conversation id this terminal should resume, binding it on first use.
+fn opencode_resume_id(store: &Store, session: &Session) -> Result<Option<String>> {
+    bind_resume_id(store, session, opencode_history::newest_session_for_cwd)
+}
+
+/// The provider conversation id this terminal should resume: the already-bound
+/// id if any, else the newest unclaimed provider session for the terminal's
+/// cwd (persisted so later launches reuse it).
+fn bind_resume_id(
+    store: &Store,
+    session: &Session,
+    find: impl Fn(&str, &std::collections::HashSet<String>) -> Option<String>,
+) -> Result<Option<String>> {
     if session.terminal_resume_id.is_some() {
         return Ok(session.terminal_resume_id.clone());
     }
     let taken = store.taken_resume_ids()?;
-    let found = codex_history::newest_session_for_cwd(&session.working_dir, &taken);
+    let found = find(&session.working_dir, &taken);
     if let Some(id) = &found {
         store.set_terminal_resume_id(&session.id, id)?;
     }

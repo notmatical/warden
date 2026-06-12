@@ -44,6 +44,21 @@ pub fn now_rfc3339() -> String {
     chrono::Utc::now().to_rfc3339()
 }
 
+/// Compare two paths for "same location", tolerant of separators and (on
+/// Windows) case. Avoids `canonicalize` so it still matches dirs that no
+/// longer exist.
+pub fn same_path(a: &str, b: &str) -> bool {
+    fn norm(p: &str) -> String {
+        let trimmed = p.replace('\\', "/").trim_end_matches('/').to_string();
+        if cfg!(windows) {
+            trimmed.to_lowercase()
+        } else {
+            trimmed
+        }
+    }
+    norm(a) == norm(b)
+}
+
 /// The first `len` characters of a string, used to derive short, human-friendly
 /// identifiers (e.g. worktree branch names) from UUIDs.
 pub fn short_id(id: &str, len: usize) -> String {
