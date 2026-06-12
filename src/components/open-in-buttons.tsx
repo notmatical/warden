@@ -218,7 +218,6 @@ export function OpenInButtons({ path }: { path: string | null | undefined }) {
             <FolderOpen />
             File explorer
           </DropdownMenuItem>
-          <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => void copyPath()}>
             <Copy />
             Copy path
