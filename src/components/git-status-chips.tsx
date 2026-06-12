@@ -243,11 +243,16 @@ function PrChip({ session }: { session: Session }) {
           className="size-3.5"
         />
         <span className="font-medium">#{session.prNumber}</span>
-        {session.prCheckCounts ? (
-          <CheckCounts counts={session.prCheckCounts} />
-        ) : (
-          <CheckDot status={session.prCheckStatus} />
-        )}
+        {session.prCheckCounts || session.prCheckStatus ? (
+          <>
+            <span aria-hidden className="h-3 w-px shrink-0 bg-border" />
+            {session.prCheckCounts ? (
+              <CheckCounts counts={session.prCheckCounts} />
+            ) : (
+              <CheckDot status={session.prCheckStatus} />
+            )}
+          </>
+        ) : null}
       </Button>
     </PrHoverCard>
   )

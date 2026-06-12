@@ -416,11 +416,16 @@ function OpenPrsSection({ projectId }: { projectId: string }) {
                   isDraft={session.prIsDraft}
                   reviewDecision={session.prReviewDecision}
                 />
-                {session.prCheckCounts ? (
-                  <CheckCounts counts={session.prCheckCounts} />
-                ) : (
-                  <CheckDot status={session.prCheckStatus} />
-                )}
+                {session.prCheckCounts || session.prCheckStatus ? (
+                  <>
+                    <span aria-hidden className="h-3 w-px shrink-0 bg-border" />
+                    {session.prCheckCounts ? (
+                      <CheckCounts counts={session.prCheckCounts} />
+                    ) : (
+                      <CheckDot status={session.prCheckStatus} />
+                    )}
+                  </>
+                ) : null}
               </span>
             </PrHoverCard>
 
