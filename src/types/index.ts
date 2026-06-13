@@ -133,6 +133,10 @@ export interface Session {
   kind: SessionKind
   effort: EffortLevel
   status: SessionStatus
+  /** True when the agent is blocked waiting on the user (a clarifying question
+   *  or a permission/approval prompt). Orthogonal to status: OpenCode/Codex
+   *  wait while "running", Claude waits while "idle". */
+  awaitingInput: boolean
   role: SessionRole
   autoNamed: boolean
   agentSessionId: string | null

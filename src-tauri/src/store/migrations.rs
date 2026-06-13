@@ -47,6 +47,9 @@ const MIGRATIONS: &[&str] = &[
         permission_mode   TEXT NOT NULL,
         effort            TEXT NOT NULL DEFAULT 'high',
         status            TEXT NOT NULL,
+        -- True when the agent is blocked waiting on the user (a clarifying
+        -- question or a permission/approval prompt). Orthogonal to `status`.
+        awaiting_input    INTEGER NOT NULL DEFAULT 0,
         role              TEXT NOT NULL,
         auto_named        INTEGER NOT NULL DEFAULT 1,
         agent_session_id  TEXT NOT NULL,

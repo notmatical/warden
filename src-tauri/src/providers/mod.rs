@@ -77,9 +77,22 @@ pub(crate) fn persist_event(app: &AppHandle, store: &Store, session_id: &str, ev
     if is_result {
         let _ = store.record_turn(session_id, 0.0);
         let _ = store.set_session_status(session_id, SessionStatus::Idle);
+        // A completed turn is no longer blocked on the user (any ask it raised
+        // was answered to get here).
+        let _ = store.set_session_awaiting_input(session_id, false);
         if let Ok(session) = store.get_session(session_id) {
             emit_session(app, &session);
         }
+    }
+}
+
+/// Set the session's "blocked waiting on the user" flag and emit the refreshed
+/// session so the sidebar/table "needs you" indicator updates live. For the
+/// standalone ask/answer points that don't otherwise re-emit the session.
+pub(crate) fn set_awaiting(app: &AppHandle, store: &Store, session_id: &str, awaiting: bool) {
+    let _ = store.set_session_awaiting_input(session_id, awaiting);
+    if let Ok(session) = store.get_session(session_id) {
+        emit_session(app, &session);
     }
 }
 

@@ -74,6 +74,9 @@ impl AgentManager {
         )?;
         emit_event(app, &record);
         store.set_session_status(&session.id, SessionStatus::Running)?;
+        // A new turn (including a resume after an approval) clears any prior
+        // "needs you" state — the user has responded.
+        let _ = store.set_session_awaiting_input(&session.id, false);
         if let Ok(updated) = store.get_session(&session.id) {
             emit_session(app, &updated);
         }
@@ -196,6 +199,8 @@ impl AgentManager {
                 let _ = store.set_session_status(session_id, SessionStatus::Error);
             }
         }
+        // A settled turn (success or error) is not blocked on the user.
+        let _ = store.set_session_awaiting_input(session_id, false);
         if let Ok(session) = store.get_session(session_id) {
             emit_session(app, &session);
         }
@@ -356,6 +361,7 @@ impl AgentManager {
             }
             _ => session_proc::kill(session_id),
         }
+        let _ = store.set_session_awaiting_input(session_id, false);
         if let Ok(session) = store.get_session(session_id) {
             emit_session(app, &session);
         }

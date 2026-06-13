@@ -360,6 +360,15 @@ async fn settle_and_cleanup(tail: &Tail) {
         let _ = tail
             .store
             .delete_agent_proc(&tail.session_id, &tail.proc_id);
+        // The process is gone, but the conversation may still be parked on an
+        // unanswered question/denied tool — answering re-spawns it.
+        let awaiting = tail
+            .store
+            .session_has_pending_decision(&tail.session_id)
+            .unwrap_or(false);
+        let _ = tail
+            .store
+            .set_session_awaiting_input(&tail.session_id, awaiting);
         if let Ok(session) = tail.store.get_session(&tail.session_id) {
             emit_session(&tail.app, &session);
         }
@@ -461,6 +470,15 @@ impl EventSink {
                 let _ = self
                     .store
                     .set_session_status(&self.session_id, SessionStatus::Idle);
+                // A Claude turn that ends on an unanswered question or a denied
+                // tool is waiting on the user even though it settled to Idle.
+                let awaiting = self
+                    .store
+                    .session_has_pending_decision(&self.session_id)
+                    .unwrap_or(false);
+                let _ = self
+                    .store
+                    .set_session_awaiting_input(&self.session_id, awaiting);
                 if let Ok(session) = self.store.get_session(&self.session_id) {
                     emit_session(&self.app, &session);
                 }
@@ -545,6 +563,9 @@ pub fn recover(app: AppHandle, store: Store) {
                 },
             );
             let _ = store.set_session_status(&session.id, SessionStatus::Idle);
+            // The shared server (Codex/OpenCode) died with the app, so any
+            // pending ask died with it — there is nothing left to answer.
+            let _ = store.set_session_awaiting_input(&session.id, false);
             if let Ok(updated) = store.get_session(&session.id) {
                 emit_session(&app, &updated);
             }

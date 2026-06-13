@@ -20,7 +20,7 @@ use tauri::AppHandle;
 use crate::domain::{AgentEvent, EffortLevel, PermissionMode, Session, TokenUsage, ToolDenial};
 use crate::error::{AppError, Result};
 use crate::events::{emit_delta, emit_event};
-use crate::providers::{clip, persist_event as persist};
+use crate::providers::{clip, persist_event as persist, set_awaiting};
 use crate::store::Store;
 
 use super::server;
@@ -184,6 +184,7 @@ pub async fn answer_question(
     ) {
         emit_event(app, &record);
     }
+    set_awaiting(app, store, session_id, false);
 
     let mut answers: Vec<Vec<String>> = vec![Vec::new(); question_count.max(1)];
     answers[0] = vec![text.to_string()];
@@ -941,6 +942,7 @@ fn handle_permission_asked(ctx: &SseContext, props: &Value) {
         &ctx.session_id,
         AgentEvent::PermissionRequest { denials },
     );
+    set_awaiting(&ctx.app, &ctx.store, &ctx.session_id, true);
 }
 
 /// Surface a blocking question ask as an interactive AskUserQuestion widget —
@@ -988,6 +990,7 @@ fn handle_question_asked(ctx: &SseContext, props: &Value) {
             parent_tool_use_id: None,
         },
     );
+    set_awaiting(&ctx.app, &ctx.store, &ctx.session_id, true);
 }
 
 /// Process a full part snapshot: stream unseen text as deltas, and persist a

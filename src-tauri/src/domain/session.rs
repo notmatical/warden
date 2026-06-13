@@ -297,6 +297,10 @@ pub struct Session {
     pub permission_mode: PermissionMode,
     pub effort: EffortLevel,
     pub status: SessionStatus,
+    /// True when the agent is blocked waiting on the user — a clarifying
+    /// question or a permission/approval prompt. Orthogonal to `status`:
+    /// OpenCode/Codex wait while `Running`, Claude waits while `Idle`.
+    pub awaiting_input: bool,
     pub role: SessionRole,
     /// True while the title is still auto-assigned, so background naming may
     /// replace it. Set false once the user renames or auto-naming completes.

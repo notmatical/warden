@@ -409,6 +409,30 @@ impl Store {
         Ok(false)
     }
 
+    /// Whether a session's most recent turn left the agent blocked on the user —
+    /// an unanswered `AskUserQuestion` *or* an unresolved permission/approval
+    /// prompt. A later user message (the answer, or the "approved, continue"
+    /// nudge that `resume` appends) means it was resolved. Drives the
+    /// cross-session "needs you" flag for the Claude backend, whose interactive
+    /// asks end the turn rather than blocking it.
+    pub fn session_has_pending_decision(&self, session_id: &str) -> Result<bool> {
+        let conn = self.lock();
+        let mut stmt =
+            conn.prepare("SELECT payload FROM events WHERE session_id = ?1 ORDER BY seq DESC")?;
+        let rows = stmt.query_map([session_id], |r| r.get::<_, String>("payload"))?;
+        for payload in rows {
+            match serde_json::from_str::<AgentEvent>(&payload?) {
+                Ok(AgentEvent::UserMessage { .. }) => return Ok(false),
+                Ok(AgentEvent::ToolUse { name, .. }) if name == "AskUserQuestion" => {
+                    return Ok(true)
+                }
+                Ok(AgentEvent::PermissionRequest { .. }) => return Ok(true),
+                _ => {}
+            }
+        }
+        Ok(false)
+    }
+
     // ----- workflows --------------------------------------------------------
 
     pub fn create_workflow(
@@ -704,6 +728,7 @@ impl Store {
             permission_mode: new.permission_mode,
             effort: new.effort,
             status: SessionStatus::Idle,
+            awaiting_input: false,
             role: new.role,
             auto_named: new.auto_named,
             agent_session_id: new.agent_session_id,
@@ -806,6 +831,18 @@ impl Store {
         conn.execute(
             "UPDATE sessions SET status = ?2, updated_at = ?3 WHERE id = ?1",
             (id, status.as_str(), now_rfc3339()),
+        )?;
+        Ok(())
+    }
+
+    /// Flip the "agent is blocked waiting on the user" flag. Deliberately does
+    /// *not* touch `updated_at` — an ask landing or being answered shouldn't
+    /// re-sort the session as if it had just produced new work.
+    pub fn set_session_awaiting_input(&self, id: &str, awaiting: bool) -> Result<()> {
+        let conn = self.lock();
+        conn.execute(
+            "UPDATE sessions SET awaiting_input = ?2 WHERE id = ?1",
+            (id, awaiting as i64),
         )?;
         Ok(())
     }
@@ -1409,7 +1446,7 @@ pub struct AgentProc {
 // ----- row mappers ----------------------------------------------------------
 
 const SESSION_SELECT: &str =
-    "SELECT id, group_id, project_id, title, backend, model, permission_mode, status, role, \
+    "SELECT id, group_id, project_id, title, backend, model, permission_mode, status, awaiting_input, role, \
     agent_session_id, working_dir, branch, base_sha, is_isolated, setup_status, setup_error, \
     allowed_tools, turns, cost_usd, \
     parent_id, workflow_id, created_at, updated_at, effort, auto_named, kind, terminal_command, terminal_started, \
@@ -1417,7 +1454,7 @@ const SESSION_SELECT: &str =
     pr_checked_at, pr_is_draft, pr_review_decision, pr_check_counts, pinned FROM sessions WHERE id = ?1";
 
 const SESSION_SELECT_ALL: &str =
-    "SELECT id, group_id, project_id, title, backend, model, permission_mode, status, role, \
+    "SELECT id, group_id, project_id, title, backend, model, permission_mode, status, awaiting_input, role, \
     agent_session_id, working_dir, branch, base_sha, is_isolated, setup_status, setup_error, \
     allowed_tools, turns, cost_usd, \
     parent_id, workflow_id, created_at, updated_at, effort, auto_named, kind, terminal_command, terminal_started, \
@@ -1479,6 +1516,7 @@ fn map_session(row: &Row<'_>) -> rusqlite::Result<Session> {
         permission_mode: PermissionMode::parse(&pm_str).unwrap_or(PermissionMode::Default),
         effort: EffortLevel::parse(&effort_str).unwrap_or(EffortLevel::High),
         status: SessionStatus::parse(&status_str).unwrap_or(SessionStatus::Idle),
+        awaiting_input: row.get::<_, i64>("awaiting_input")? != 0,
         role: SessionRole::parse(&role_str).unwrap_or(SessionRole::Chat),
         auto_named: row.get::<_, i64>("auto_named")? != 0,
         agent_session_id: row.get("agent_session_id")?,

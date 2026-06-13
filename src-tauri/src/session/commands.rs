@@ -552,6 +552,7 @@ pub async fn approve_tools(
     let session = state.store.get_session(&session_id)?;
     if session.backend == Backend::Opencode {
         crate::providers::opencode::agent::approve_pending_permission(&session_id).await;
+        crate::providers::set_awaiting(&app, &state.store, &session_id, false);
         return Ok(());
     }
     state.store.add_allowed_tools(&session_id, &patterns)?;
@@ -567,10 +568,15 @@ pub async fn approve_tools(
 /// and never reaches here.
 #[tauri::command]
 #[specta::specta]
-pub async fn reject_tools(state: State<'_, AppState>, session_id: String) -> CommandResult<()> {
+pub async fn reject_tools(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: String,
+) -> CommandResult<()> {
     let session = state.store.get_session(&session_id)?;
     if session.backend == Backend::Opencode {
         crate::providers::opencode::agent::reject_pending_permission(&session_id).await;
+        crate::providers::set_awaiting(&app, &state.store, &session_id, false);
     }
     Ok(())
 }

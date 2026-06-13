@@ -1470,7 +1470,13 @@ export type Session = { id: string; groupId: string;
  * The session's primary repo — where its agent runs. Additional roots are
  * tracked in `session_roots` and handed to the CLI as extra directories.
  */
-projectId: string; title: string; kind: SessionKind; backend: Backend; model: string; permissionMode: PermissionMode; effort: EffortLevel; status: SessionStatus; role: SessionRole; 
+projectId: string; title: string; kind: SessionKind; backend: Backend; model: string; permissionMode: PermissionMode; effort: EffortLevel; status: SessionStatus;
+/**
+ * True when the agent is blocked waiting on the user — a clarifying
+ * question or a permission/approval prompt. Orthogonal to `status`:
+ * OpenCode/Codex wait while `Running`, Claude waits while `Idle`.
+ */
+awaitingInput: boolean; role: SessionRole;
 /**
  * True while the title is still auto-assigned, so background naming may
  * replace it. Set false once the user renames or auto-naming completes.
