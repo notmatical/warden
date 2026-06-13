@@ -75,29 +75,20 @@ async fn server() -> Result<Arc<Client>> {
     Ok(client)
 }
 
-/// Routing key (the subscriber registers under the thread id): most messages
-/// carry `threadId`; `thread/started` nests it under `thread.id`. Some approval
-/// *requests* (permissions, file changes) omit it, so fall back to correlating
-/// via the in-flight turn — by `turnId` if present, else the sole active turn.
+/// Routing key — subscribers register under the thread id. Notifications and the
+/// modern approval/question requests carry `threadId`; `thread/started` nests it
+/// under `thread.id`; the legacy `applyPatchApproval`/`execCommandApproval`
+/// requests carry it as `conversationId` (also a thread id). Every addressable
+/// server message in the protocol carries one of these (verified against the
+/// app-server JSON schema), so an absent key means a genuinely unaddressable
+/// message — not a race between concurrent turns.
 fn route(_method: &str, params: &Value) -> Option<String> {
-    if let Some(thread_id) = params
+    params
         .get("threadId")
+        .or_else(|| params.get("conversationId"))
         .or_else(|| params.get("thread").and_then(|t| t.get("id")))
         .and_then(Value::as_str)
-    {
-        return Some(thread_id.to_string());
-    }
-    let guard = turns();
-    if let Some(turn_id) = params.get("turnId").and_then(Value::as_str) {
-        return guard
-            .values()
-            .find(|(_thread, turn)| turn == turn_id)
-            .map(|(thread, _turn)| thread.clone());
-    }
-    if guard.len() == 1 {
-        return guard.values().next().map(|(thread, _turn)| thread.clone());
-    }
-    None
+        .map(str::to_string)
 }
 
 /// Run the `initialize` handshake. Must be called once, right after spawn.
