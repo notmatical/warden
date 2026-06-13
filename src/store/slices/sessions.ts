@@ -286,8 +286,14 @@ export const createSessionsSlice: StateCreator<
 
   onSessionUpdated: (session) => {
     const prev = get().sessions[session.id]
+    // An agent that just paused to ask (a Claude turn ends to ask, so this
+    // doubles as "finished"); the needsInput nudge below takes precedence.
+    const startedWaiting =
+      prev !== undefined && !prev.awaitingInput && session.awaitingInput
     const finishedTurn =
-      prev?.status === "running" && session.status !== "running"
+      prev?.status === "running" &&
+      session.status !== "running" &&
+      !session.awaitingInput
     // CI checks settling (→ success/failure) on an open PR, via the poller.
     const checksSettled =
       prev !== undefined &&
@@ -339,6 +345,16 @@ export const createSessionsSlice: StateCreator<
           target: { kind: "session", id: session.id },
           tone: errored ? "error" : "default",
         }
+      )
+    }
+    // The agent paused mid-run to ask — this needs a reply, not just an FYI, so
+    // notify even when the turn is technically still running (OpenCode/Codex).
+    if (startedWaiting && !windowFocused()) {
+      void notifyFor(
+        "needsInput",
+        `${session.title} needs you`,
+        "The agent paused to ask a question or for approval.",
+        { target: { kind: "session", id: session.id } }
       )
     }
     if (checksSettled && !windowFocused()) {

@@ -29,6 +29,7 @@ export function windowFocused(): boolean {
 
 export type NotifyEvent =
   | "sessionDone"
+  | "needsInput"
   | "workflowDone"
   | "prChecks"
   | "linearAssigned"
@@ -180,6 +181,11 @@ export const NOTIFY_EVENTS: {
     hint: "A session's turn completed or stopped on an error.",
   },
   {
+    event: "needsInput",
+    label: "Agent needs you",
+    hint: "An agent paused mid-run to ask a question or for approval.",
+  },
+  {
     event: "workflowDone",
     label: "Workflow updates",
     hint: "A workflow finished, failed, or is waiting at a gate.",
@@ -210,6 +216,7 @@ const DEFAULT_PREFS: NotifyPrefs = {
   volume: 0.5,
   events: {
     sessionDone: { enabled: true, sound: "notify" },
+    needsInput: { enabled: true, sound: "notify" },
     workflowDone: { enabled: true, sound: "notify" },
     prChecks: { enabled: true, sound: "notify" },
     linearAssigned: { enabled: true, sound: "notify" },

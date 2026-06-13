@@ -1,4 +1,12 @@
-import { Bell, Bot, GitPullRequest, Inbox, Workflow, X } from "lucide-react"
+import {
+  Bell,
+  Bot,
+  GitPullRequest,
+  Inbox,
+  MessageCircleQuestion,
+  Workflow,
+  X,
+} from "lucide-react"
 import type { ComponentType } from "react"
 import type { NotifyEvent, ToastPayload } from "@/lib/notify"
 import { cn } from "@/lib/utils"
@@ -10,6 +18,7 @@ const EVENT_ICONS: Record<
   ComponentType<{ className?: string }>
 > = {
   sessionDone: Bot,
+  needsInput: MessageCircleQuestion,
   workflowDone: Workflow,
   prChecks: GitPullRequest,
   linearAssigned: Inbox,
