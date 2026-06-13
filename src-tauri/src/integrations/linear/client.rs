@@ -241,6 +241,7 @@ query Issues($first: Int!, $after: String, $filter: IssueFilter) {
       description
       priority
       url
+      branchName
       updatedAt
       state { id name color type }
       assignee { id name email avatarUrl }
@@ -308,6 +309,10 @@ pub struct LinearIssue {
     pub description: Option<String>,
     pub priority: f64,
     pub url: String,
+    /// Linear's workspace-configured git branch name for the issue.
+    /// Defaulted so payloads cached before this field existed still parse.
+    #[serde(default)]
+    pub branch_name: String,
     pub updated_at: String,
     pub state: LinearState,
     pub assignee: Option<LinearUserRef>,
@@ -366,6 +371,7 @@ impl From<RawIssue> for LinearIssue {
             description: r.description,
             priority: r.priority,
             url: r.url,
+            branch_name: r.branch_name,
             updated_at: r.updated_at,
             state: r.state,
             assignee: r.assignee,
@@ -424,6 +430,7 @@ struct RawIssue {
     description: Option<String>,
     priority: f64,
     url: String,
+    branch_name: String,
     updated_at: String,
     state: LinearState,
     assignee: Option<LinearUserRef>,
