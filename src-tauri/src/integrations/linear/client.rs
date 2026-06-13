@@ -182,6 +182,36 @@ pub async fn attach_github_url(key: &str, issue_id: &str, url: &str) -> Result<(
     Ok(())
 }
 
+/// Create an issue on a team. Returns the new issue's identifier and URL so the
+/// caller (an agent) can link back to it.
+pub async fn create_issue(
+    key: &str,
+    team_id: &str,
+    title: &str,
+    description: Option<&str>,
+) -> Result<CreatedIssue> {
+    let vars = serde_json::json!({
+        "input": { "teamId": team_id, "title": title, "description": description }
+    });
+    let data: IssueCreateData = request(key, ISSUE_CREATE_MUTATION, vars).await?;
+    if !data.issue_create.success {
+        return Err(AppError::Integration("linear: issueCreate failed".into()));
+    }
+    data.issue_create
+        .issue
+        .ok_or_else(|| AppError::Integration("linear: issueCreate returned no issue".into()))
+}
+
+/// Post a comment on an issue.
+pub async fn create_comment(key: &str, issue_id: &str, body: &str) -> Result<()> {
+    let vars = serde_json::json!({ "input": { "issueId": issue_id, "body": body } });
+    let data: CommentCreateData = request(key, COMMENT_CREATE_MUTATION, vars).await?;
+    if !data.comment_create.success {
+        return Err(AppError::Integration("linear: commentCreate failed".into()));
+    }
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // GraphQL documents
 // ---------------------------------------------------------------------------
@@ -207,6 +237,18 @@ mutation IssueSetState($id: String!, $stateId: String!) {
 const ATTACH_GITHUB_MUTATION: &str = r#"
 mutation AttachPr($issueId: String!, $url: String!) {
   attachmentLinkGitHub(issueId: $issueId, url: $url) { success }
+}
+"#;
+
+const ISSUE_CREATE_MUTATION: &str = r#"
+mutation IssueCreate($input: IssueCreateInput!) {
+  issueCreate(input: $input) { success issue { id identifier url } }
+}
+"#;
+
+const COMMENT_CREATE_MUTATION: &str = r#"
+mutation CommentCreate($input: CommentCreateInput!) {
+  commentCreate(input: $input) { success }
 }
 "#;
 
@@ -507,6 +549,33 @@ struct AttachGithubData {
 #[derive(Deserialize)]
 struct MutationSuccess {
     success: bool,
+}
+
+/// A newly created issue, surfaced to the agent that requested it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreatedIssue {
+    pub id: String,
+    pub identifier: String,
+    pub url: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct IssueCreateData {
+    issue_create: IssueCreatePayload,
+}
+
+#[derive(Deserialize)]
+struct IssueCreatePayload {
+    success: bool,
+    issue: Option<CreatedIssue>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CommentCreateData {
+    comment_create: MutationSuccess,
 }
 
 #[derive(Deserialize)]

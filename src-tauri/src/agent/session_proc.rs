@@ -106,7 +106,14 @@ pub async fn ensure(
     let out_file = std::fs::File::create(&out_path).map_err(|e| AppError::Agent(e.to_string()))?;
     let err_file = std::fs::File::create(&err_path).map_err(|e| AppError::Agent(e.to_string()))?;
 
-    let mut cmd = claude::session_command(session, add_dirs, context_file, resume)?;
+    let mcp_config = claude::warden_mcp_config(crate::mcp::is_enabled(store));
+    let mut cmd = claude::session_command(
+        session,
+        add_dirs,
+        context_file,
+        mcp_config.as_deref(),
+        resume,
+    )?;
     cmd.stdout(Stdio::from(out_file))
         .stderr(Stdio::from(err_file));
     crate::platform::detach_command(&mut cmd);

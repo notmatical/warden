@@ -231,14 +231,6 @@ export function listOpenPrs(projectId: string): Promise<PrSummary[]> {
   return invoke("list_open_prs", { projectId })
 }
 
-export function checkoutPr(
-  projectId: string,
-  number: number,
-  model: string
-): Promise<Session> {
-  return invoke("checkout_pr", { projectId, number, model })
-}
-
 export function refreshPrStatus(sessionId: string): Promise<PrInfo | null> {
   return invoke("refresh_pr_status", { sessionId })
 }
@@ -279,6 +271,16 @@ export interface CreateSessionInput {
 /** Report window focus; backend pollers tier their cadence off it. */
 export function setAppFocusState(focused: boolean): Promise<void> {
   return invoke("set_app_focus_state", { focused })
+}
+
+/** Whether agents are given Warden's MCP tools (create/comment/status on
+ *  connected integrations). Default on. */
+export function wardenMcpEnabled(): Promise<boolean> {
+  return invoke("warden_mcp_enabled")
+}
+
+export function setWardenMcpEnabled(enabled: boolean): Promise<void> {
+  return invoke("set_warden_mcp_enabled", { enabled })
 }
 
 export function createSession(input: CreateSessionInput): Promise<Session> {

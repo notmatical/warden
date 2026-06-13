@@ -4,6 +4,7 @@ mod core;
 mod domain;
 mod git;
 mod integrations;
+pub mod mcp;
 mod mentions;
 mod providers;
 mod session;
@@ -118,7 +119,6 @@ pub fn run() {
         integrations::github::commands::pr_details,
         integrations::github::commands::generate_pr_content,
         integrations::github::commands::list_open_prs,
-        integrations::github::commands::checkout_pr,
         integrations::github::commands::list_my_issues,
         integrations::github::commands::github_issue_comments,
         // linear
@@ -133,6 +133,9 @@ pub fn run() {
         integrations::linear::commands::linear_binding,
         integrations::linear::commands::linear_bindings,
         integrations::linear::commands::linear_set_binding,
+        // mcp
+        mcp::commands::warden_mcp_enabled,
+        mcp::commands::set_warden_mcp_enabled,
         // core
         core::poll_tier::set_app_focus_state,
         // terminal

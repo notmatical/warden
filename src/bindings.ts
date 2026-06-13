@@ -806,18 +806,6 @@ async listOpenPrs(projectId: string) : Promise<Result<PrSummary[], IpcError>> {
 }
 },
 /**
- * Check out an existing PR into a fresh isolated worktree and open a session on
- * it, for reviewing/running the PR locally.
- */
-async checkoutPr(projectId: string, number: number, model: string) : Promise<Result<Session, IpcError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("checkout_pr", { projectId, number, model }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
  * Open issues assigned to the user in one repo. Soft-fails to empty (no
  * remote / unauthenticated) so multi-repo aggregation degrades per repo.
  */
@@ -967,6 +955,28 @@ async linearSetBinding(projectId: string, binding: LinearBinding | null) : Promi
 }
 },
 /**
+ * Whether agents are given Warden's MCP tools (default on when connected).
+ */
+async wardenMcpEnabled() : Promise<Result<boolean, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("warden_mcp_enabled") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Turn the agent MCP tools on or off.
+ */
+async setWardenMcpEnabled(enabled: boolean) : Promise<Result<null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_warden_mcp_enabled", { enabled }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Frontend focus reporting: window focus/blur events land here.
  */
 async setAppFocusState(focused: boolean) : Promise<Result<null, IpcError>> {
@@ -1098,7 +1108,7 @@ workingDir: string | null;
 /**
  * Linear issue this session works on; drives writeback on PR open/merge.
  */
-linearIssueId: string | null;
+linearIssueId: string | null; 
 /**
  * Worktree branch name (e.g. `feature/WAR-123` derived from an issue).
  */
