@@ -1,4 +1,4 @@
-import { SquareTerminal } from "lucide-react"
+import { MessageCircleQuestion, SquareTerminal } from "lucide-react"
 import { BrailleSpinner } from "@/components/ui/braille-spinner"
 import { PRODUCT_ICON, PROVIDER_ICON } from "@/lib/provider-icons"
 import { cn } from "@/lib/utils"
@@ -9,22 +9,34 @@ import type { Backend, SessionKind, SessionStatus } from "@/types"
  * Native CLI terminals (a `terminalCommand` is set) show the product logo;
  * plain shell terminals show a generic terminal glyph; agent sessions show the
  * model's provider mark. When a status is given, a running session swaps the
- * glyph for a spinner and an error tints it red.
+ * glyph for a spinner and an error tints it red. A session blocked on the user
+ * (`awaiting`) swaps in a question mark, ahead of the running spinner.
  */
 export function SessionFavicon({
   kind,
   backend,
   status,
+  awaiting,
   terminalCommand,
   className,
 }: {
   kind: SessionKind
   backend: Backend
   status?: SessionStatus
+  /** The agent is blocked waiting on the user (a question or approval). */
+  awaiting?: boolean
   /** The native CLI a terminal launches; null/undefined for a plain shell. */
   terminalCommand?: string | null
   className?: string
 }) {
+  if (awaiting) {
+    return (
+      <MessageCircleQuestion
+        className={cn("size-3.5 shrink-0 text-violet-500", className)}
+      />
+    )
+  }
+
   if (status === "running") {
     return <BrailleSpinner className={cn("size-3.5 shrink-0", className)} />
   }

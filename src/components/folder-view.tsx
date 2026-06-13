@@ -65,10 +65,11 @@ import { FolderTasksSection } from "@/integrations/linear/components/folder-task
 import { useFolderLinearBinding } from "@/integrations/linear/hooks"
 import * as ipc from "@/lib/ipc"
 import { DEFAULT_CHAT_MODEL } from "@/lib/models"
+import { type EffectiveStatus, effectiveStatus } from "@/lib/session-status"
 import { formatDate, relativeTime } from "@/lib/time"
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store/app-store"
-import type { Label, Session, SessionKind, SessionStatus } from "@/types"
+import type { Label, Session, SessionKind } from "@/types"
 
 // Session · Labels · Branch · Pull request · Status · Last active · actions.
 const COLS =
@@ -80,9 +81,14 @@ const MENU_ITEM = "gap-2 text-[13px]"
 const PAGE = 15
 
 const STATUS: Record<
-  SessionStatus,
+  EffectiveStatus,
   { label: string; dot: string; pill: string }
 > = {
+  needsInput: {
+    label: "Needs you",
+    dot: "bg-violet-500",
+    pill: "bg-violet-500/10 text-violet-300 ring-violet-500/30",
+  },
   running: {
     label: "Running",
     dot: "bg-blue-500",
@@ -99,9 +105,9 @@ const STATUS: Record<
     pill: "bg-red-500/10 text-red-400 ring-red-500/30",
   },
 }
-const STATUS_ORDER: SessionStatus[] = ["running", "idle", "error"]
+const STATUS_ORDER: EffectiveStatus[] = ["needsInput", "running", "idle", "error"]
 
-function StatusBadge({ status }: { status: SessionStatus }) {
+function StatusBadge({ status }: { status: EffectiveStatus }) {
   const s = STATUS[status]
   return (
     <span
@@ -114,7 +120,7 @@ function StatusBadge({ status }: { status: SessionStatus }) {
         className={cn(
           "size-1.5 rounded-full",
           s.dot,
-          status === "running" && "animate-pulse"
+          (status === "running" || status === "needsInput") && "animate-pulse"
         )}
       />
       {s.label}
@@ -526,7 +532,7 @@ function SessionsSection({ projectId }: { projectId: string }) {
     return Object.values(sessionsMap)
       .filter((s) => s.projectId === projectId)
       .filter((s) => !q || s.title.toLowerCase().includes(q))
-      .filter((s) => allStatuses || statusFilter.has(s.status))
+      .filter((s) => allStatuses || statusFilter.has(effectiveStatus(s)))
       .filter(
         (s) =>
           labelFilter.size === 0 ||
@@ -669,6 +675,7 @@ function SessionsSection({ projectId }: { projectId: string }) {
                         kind={session.kind}
                         backend={session.backend}
                         status={session.status}
+                        awaiting={session.awaitingInput}
                         terminalCommand={session.terminalCommand}
                         className="size-[18px] shrink-0"
                       />
@@ -714,7 +721,7 @@ function SessionsSection({ projectId }: { projectId: string }) {
 
                     <SessionPrCell session={session} />
 
-                    <StatusBadge status={session.status} />
+                    <StatusBadge status={effectiveStatus(session)} />
 
                     <span className="flex items-center gap-1.5 text-muted-foreground text-xs tabular-nums">
                       {isStale(session) ? (

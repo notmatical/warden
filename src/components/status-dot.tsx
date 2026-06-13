@@ -1,23 +1,31 @@
+import type { EffectiveStatus } from "@/lib/session-status"
 import { cn } from "@/lib/utils"
-import type { SessionStatus } from "@/types"
 
-const STATUS_STYLES: Record<SessionStatus, string> = {
+const STATUS_STYLES: Record<EffectiveStatus, string> = {
   idle: "bg-muted-foreground/60",
   running: "bg-amber-500",
+  needsInput: "bg-violet-500",
   error: "bg-destructive",
 }
 
-const STATUS_LABEL: Record<SessionStatus, string> = {
+const STATUS_LABEL: Record<EffectiveStatus, string> = {
   idle: "Idle",
   running: "Running",
+  needsInput: "Needs you",
   error: "Error",
+}
+
+/** Colors for the attention-grabbing ping ring, for the statuses that get one. */
+const STATUS_PING: Partial<Record<EffectiveStatus, string>> = {
+  running: "bg-amber-500/70",
+  needsInput: "bg-violet-500/70",
 }
 
 export function StatusDot({
   status,
   className,
 }: {
-  status: SessionStatus
+  status: EffectiveStatus
   className?: string
 }) {
   return (
@@ -27,8 +35,13 @@ export function StatusDot({
       aria-label={STATUS_LABEL[status]}
       title={STATUS_LABEL[status]}
     >
-      {status === "running" && (
-        <span className="absolute inline-flex size-full animate-ping rounded-full bg-amber-500/70" />
+      {STATUS_PING[status] && (
+        <span
+          className={cn(
+            "absolute inline-flex size-full animate-ping rounded-full",
+            STATUS_PING[status]
+          )}
+        />
       )}
       <span
         className={cn(

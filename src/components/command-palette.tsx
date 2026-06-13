@@ -53,6 +53,7 @@ import { resolveCombo, subscribeUiCommand } from "@/lib/commands"
 import { comboLabel } from "@/lib/keybindings"
 import { DEFAULT_CHAT_MODEL } from "@/lib/models"
 import { isMac } from "@/lib/platform"
+import { effectiveStatus } from "@/lib/session-status"
 import {
   diffTabId,
   folderTabId,
@@ -115,7 +116,9 @@ function SessionItem({
     >
       {session.kind === "terminal" ? <SquareTerminal /> : <MessageSquare />}
       <span className="truncate">{session.title}</span>
-      {session.status !== "idle" ? <StatusDot status={session.status} /> : null}
+      {effectiveStatus(session) !== "idle" ? (
+        <StatusDot status={effectiveStatus(session)} />
+      ) : null}
       <CommandShortcut className="max-w-32 truncate font-normal tracking-normal">
         {project?.name ?? ""}
       </CommandShortcut>

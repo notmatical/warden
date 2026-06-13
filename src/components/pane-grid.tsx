@@ -8,6 +8,7 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable"
+import { effectiveStatus } from "@/lib/session-status"
 import { cn } from "@/lib/utils"
 import { leafCount } from "@/lib/viewport"
 import { describe, PaneContent } from "@/lib/viewport/content-registry"
@@ -20,6 +21,9 @@ function PaneHeader({ refId, active }: { refId: string; active: boolean }) {
   const title = useAppStore((s) => d.title(s, refId))
   const status = useAppStore((s) =>
     isSession ? s.sessions[refId]?.status : undefined
+  )
+  const awaiting = useAppStore((s) =>
+    isSession ? s.sessions[refId]?.awaitingInput : undefined
   )
   const closeTab = useAppStore((s) => s.closeTab)
   // A session pane waits for its record before showing chrome.
@@ -35,7 +39,12 @@ function PaneHeader({ refId, active }: { refId: string; active: boolean }) {
       )}
     >
       {isSession ? (
-        <StatusDot status={status as NonNullable<typeof status>} />
+        <StatusDot
+          status={effectiveStatus({
+            status: status as NonNullable<typeof status>,
+            awaitingInput: Boolean(awaiting),
+          })}
+        />
       ) : (
         <Icon className="size-3.5 shrink-0 text-muted-foreground" />
       )}

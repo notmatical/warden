@@ -18,6 +18,7 @@ function Tab({ sessionId }: { sessionId: string }) {
   // Narrow primitive selectors — re-render only when the rendered fields change.
   const title = useAppStore((s) => s.sessions[sessionId]?.title)
   const status = useAppStore((s) => s.sessions[sessionId]?.status)
+  const awaiting = useAppStore((s) => s.sessions[sessionId]?.awaitingInput)
   const role = useAppStore((s) => s.sessions[sessionId]?.role)
   const backend = useAppStore((s) => s.sessions[sessionId]?.backend)
   const kind = useAppStore((s) => s.sessions[sessionId]?.kind)
@@ -66,6 +67,7 @@ function Tab({ sessionId }: { sessionId: string }) {
       kind={kind}
       backend={backend}
       status={status}
+      awaiting={awaiting}
       terminalCommand={terminalCommand}
       className="size-[18px]"
     />

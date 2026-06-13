@@ -10,13 +10,18 @@ import {
   HoverCardTrigger,
 } from "@/components/ui/hover-card"
 import { formatModelName } from "@/lib/models"
+import {
+  type EffectiveStatus,
+  effectiveStatus,
+} from "@/lib/session-status"
 import { relativeTime } from "@/lib/time"
 import { cn } from "@/lib/utils"
 import type { Session } from "@/types"
 
-const STATUS_DOT: Record<Session["status"], string> = {
+const STATUS_DOT: Record<EffectiveStatus, string> = {
   idle: "bg-muted-foreground/40",
   running: "animate-pulse bg-amber-500",
+  needsInput: "animate-pulse bg-violet-500",
   error: "bg-red-500",
 }
 
@@ -67,6 +72,7 @@ export function SessionHoverCard({
             kind={session.kind}
             backend={session.backend}
             status={session.status}
+            awaiting={session.awaitingInput}
             terminalCommand={session.terminalCommand}
           />
           <span className="min-w-0 flex-1 truncate font-medium text-sm">
@@ -74,10 +80,10 @@ export function SessionHoverCard({
           </span>
           <span
             role="img"
-            aria-label={session.status}
+            aria-label={effectiveStatus(session)}
             className={cn(
               "size-2 shrink-0 rounded-full",
-              STATUS_DOT[session.status]
+              STATUS_DOT[effectiveStatus(session)]
             )}
           />
         </div>

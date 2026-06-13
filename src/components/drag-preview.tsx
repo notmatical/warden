@@ -12,6 +12,8 @@ export function DragPreview({ sessionId }: { sessionId: string }) {
       <SessionFavicon
         kind={session.kind}
         backend={session.backend}
+        status={session.status}
+        awaiting={session.awaitingInput}
         terminalCommand={session.terminalCommand}
       />
       <span className="truncate">{session.title}</span>
