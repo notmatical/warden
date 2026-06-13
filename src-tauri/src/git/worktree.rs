@@ -47,26 +47,6 @@ pub fn is_managed_worktree(repo: &Path, path: &Path) -> bool {
     path.starts_with(worktrees_root(repo))
 }
 
-/// Provision an isolated worktree checked out to an existing PR's head branch,
-/// for reviewing it. `base` is the PR's base branch (its merge target).
-pub fn provision_pr_worktree(project: &Project, number: i64, base: &str) -> Result<ProvisionedDir> {
-    let repo = Path::new(&project.path);
-    let branch = format!("warden-pr-{number}");
-    git::fetch_pr(repo, number, &branch)?;
-
-    let dest = ensure_worktrees_root(repo)?.join(format!("pr-{number}"));
-    git::add_worktree(repo, &dest, &branch)?;
-
-    Ok(ProvisionedDir {
-        working_dir: dest.to_string_lossy().into_owned(),
-        branch: Some(branch),
-        // Diff/sync against the PR's base tip.
-        base_sha: git::rev_parse(repo, base),
-        base_branch: Some(base.to_string()),
-        is_isolated: true,
-    })
-}
-
 /// Reduce a name to a filesystem-safe directory segment.
 fn sanitize(name: &str) -> String {
     let cleaned: String = name

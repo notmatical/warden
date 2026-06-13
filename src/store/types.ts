@@ -177,7 +177,6 @@ export interface AppState {
     sessionId: string,
     mode?: MergeMode
   ) => Promise<SyncOutcome | null>
-  checkoutPr: (projectId: string, number: number) => Promise<Session | null>
   loadGroupData: (groupId: string) => Promise<void>
   createGroup: (name: string) => Promise<Group | null>
   selectGroup: (id: string) => Promise<void>

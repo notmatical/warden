@@ -130,24 +130,6 @@ pub fn list_prs(repo: &Path) -> Vec<PrSummary> {
         .unwrap_or_default()
 }
 
-/// The base branch a PR targets (e.g. `main`), via `gh pr view`.
-pub fn pr_base_ref(repo: &Path, number: i64) -> Option<String> {
-    let out = gh(
-        repo,
-        &["pr", "view", &number.to_string(), "--json", "baseRefName"],
-    )
-    .output()
-    .ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    serde_json::from_slice::<Value>(&out.stdout)
-        .ok()?
-        .get("baseRefName")?
-        .as_str()
-        .map(str::to_string)
-}
-
 /// Distill `gh`'s `statusCheckRollup` array into one aggregate state: any failing
 /// check ⇒ Failure, else any in-flight ⇒ Pending, else Success. Empty ⇒ None.
 fn rollup_to_status(rollup: Option<&Value>) -> Option<CheckStatus> {

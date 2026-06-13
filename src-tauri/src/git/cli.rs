@@ -221,36 +221,6 @@ pub fn delete_branch(repo: &Path, branch: &str) -> Result<()> {
     Ok(())
 }
 
-/// Fetch a pull request's head commit into a local `branch` (forced, so a
-/// re-checkout picks up new pushes to the PR).
-pub fn fetch_pr(repo: &Path, number: i64, branch: &str) -> Result<()> {
-    run(
-        repo,
-        &[
-            "fetch",
-            "origin",
-            &format!("pull/{number}/head:{branch}"),
-            "--force",
-        ],
-    )?;
-    Ok(())
-}
-
-/// Add a worktree at `dest` checked out to an existing `branch`.
-pub fn add_worktree(repo: &Path, dest: &Path, branch: &str) -> Result<()> {
-    let _ = run(repo, &["worktree", "prune"]);
-    run(repo, &["worktree", "add", &dest.to_string_lossy(), branch])?;
-    Ok(())
-}
-
-/// The commit a ref currently points at, if it resolves.
-pub fn rev_parse(repo: &Path, rev: &str) -> Option<String> {
-    run(repo, &["rev-parse", rev])
-        .ok()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-}
-
 /// The full textual diff of a worktree against `base` (a sha or branch) —
 /// working-tree changes included — for handing to a review agent.
 pub fn worktree_diff(worktree: &Path, base: &str) -> String {
