@@ -35,6 +35,9 @@ export interface LinearIssue {
   /** Linear priority: 0 none, 1 urgent, 2 high, 3 medium, 4 low. */
   priority: number
   url: string
+  /** Linear's workspace-configured git branch name. Empty on payloads cached
+   *  before the field existed. */
+  branchName: string
   updatedAt: string
   state: LinearState
   assignee: LinearUserRef | null
