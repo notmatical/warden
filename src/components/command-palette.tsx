@@ -6,7 +6,6 @@ import {
   CircleX,
   FileDiff,
   FolderGit2,
-  ListTodo,
   MessageSquare,
   Monitor,
   Moon,
@@ -57,7 +56,6 @@ import {
   diffTabId,
   folderTabId,
   ISSUES_TAB_ID,
-  TASKS_TAB_ID,
   WORKFLOWS_TAB_ID,
 } from "@/lib/viewport"
 import { useAppStore } from "@/store/app-store"
@@ -565,16 +563,8 @@ export function CommandPalette() {
                     </CommandItem>
                   ))}
                   <CommandItem
-                    value="nav:tasks"
-                    keywords={["tasks", "linear"]}
-                    onSelect={() => openRef(TASKS_TAB_ID)}
-                  >
-                    <ListTodo />
-                    Tasks
-                  </CommandItem>
-                  <CommandItem
                     value="nav:issues"
-                    keywords={["issues", "github"]}
+                    keywords={["issues", "tasks", "linear", "github"]}
                     onSelect={() => openRef(ISSUES_TAB_ID)}
                   >
                     <CircleDot />

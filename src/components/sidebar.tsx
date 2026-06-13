@@ -4,7 +4,6 @@ import {
   FolderGit2,
   FolderPlus,
   Layers,
-  ListTodo,
   Pencil,
   Plus,
   Settings2,
@@ -16,8 +15,7 @@ import { type KeyboardEvent, type ReactNode, useEffect, useState } from "react"
 
 import { AgentProvidersIcon } from "@/components/agent-providers-icon"
 import { useConfirm } from "@/components/confirm-dialog"
-import { ClaudeIcon, CodexIcon, GitHubIcon } from "@/components/icons/brand"
-import { ReviewPrDialog } from "@/components/review-pr-dialog"
+import { ClaudeIcon, CodexIcon } from "@/components/icons/brand"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -61,12 +59,7 @@ import {
 import { UpdateBanner } from "@/components/update-banner"
 import { DEFAULT_CHAT_MODEL } from "@/lib/models"
 import { cn } from "@/lib/utils"
-import {
-  folderTabId,
-  ISSUES_TAB_ID,
-  TASKS_TAB_ID,
-  WORKFLOWS_TAB_ID,
-} from "@/lib/viewport"
+import { folderTabId, ISSUES_TAB_ID, WORKFLOWS_TAB_ID } from "@/lib/viewport"
 import { useAppStore } from "@/store/app-store"
 import type { Group, Project, SessionKind } from "@/types"
 
@@ -122,8 +115,6 @@ function RootRow({ groupId, project }: { groupId: string; project: Project }) {
   const codexAuthed = useAppStore((s) =>
     s.providers.some((p) => p.id === "codex" && p.authed)
   )
-
-  const [reviewOpen, setReviewOpen] = useState(false)
 
   const newSession = async (kind: SessionKind) => {
     await createSession({
@@ -208,18 +199,8 @@ function RootRow({ groupId, project }: { groupId: string; project: Project }) {
               Native Codex
             </DropdownMenuItem>
           ) : null}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => setReviewOpen(true)}>
-            <GitHubIcon />
-            Review a PR…
-          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <ReviewPrDialog
-        projectId={project.id}
-        open={reviewOpen}
-        onOpenChange={setReviewOpen}
-      />
     </SidebarMenuSubItem>
   )
 }
@@ -451,7 +432,6 @@ function CollapsedGroupRow({
 
 const PRIMARY_NAV = [
   { id: WORKFLOWS_TAB_ID, label: "Workflows", icon: WorkflowIcon },
-  { id: TASKS_TAB_ID, label: "Tasks", icon: ListTodo },
   { id: ISSUES_TAB_ID, label: "Issues", icon: CircleDot },
 ] as const
 
