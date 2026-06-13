@@ -25,10 +25,14 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 /// How much captured stderr is kept for mid-turn death messages.
 const STDERR_TAIL_CHARS: usize = 2_000;
 
-/// A server notification routed to a subscriber.
+/// A server message routed to a subscriber: a notification (`id` is `None`) or
+/// a server-initiated request the adapter must answer with [`Client::respond`]
+/// (`id` is `Some`).
 pub struct Notification {
     pub method: String,
     pub params: Value,
+    /// The JSON-RPC request id, when this is a request expecting a response.
+    pub id: Option<u64>,
 }
 
 /// Extracts a notification's routing key (e.g. its thread id) from
@@ -146,6 +150,23 @@ impl Client {
             .await
     }
 
+    /// Answer a server-initiated request (its id came in on a routed
+    /// [`Notification`]). Used by the Codex adapter to reply to approval and
+    /// user-input prompts so the blocked turn continues.
+    pub async fn respond(&self, id: u64, result: Value) -> Result<()> {
+        self.write(&json!({ "jsonrpc": "2.0", "id": id, "result": result }))
+            .await
+    }
+
+    /// Answer a server-initiated request with a JSON-RPC error (e.g. an
+    /// unsupported request the adapter declines to handle).
+    pub async fn respond_error(&self, id: u64, code: i64, message: &str) -> Result<()> {
+        self.write(
+            &json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } }),
+        )
+        .await
+    }
+
     /// Receive the notifications whose routing key is `key`. The channel
     /// closes when the server exits or `unsubscribe` is called.
     pub fn subscribe(&self, key: &str) -> mpsc::UnboundedReceiver<Notification> {
@@ -215,15 +236,21 @@ impl Client {
         let _ = tx.send(result);
     }
 
-    fn dispatch_notification(&self, method: &str, msg: &Value) {
+    /// Route a notification (`id` is `None`) or a server-initiated request
+    /// (`id` is `Some`) to its subscriber, keyed by what `route` extracts.
+    fn dispatch_routed(&self, method: &str, msg: &Value, id: Option<u64>) {
         let params = msg.get("params").cloned().unwrap_or(Value::Null);
         let Some(key) = (self.route)(method, &params) else {
+            if id.is_some() {
+                log::debug!("{}: unroutable server request {method}", self.name);
+            }
             return;
         };
         if let Some(tx) = self.routes_map().get(&key) {
             let _ = tx.send(Notification {
                 method: method.to_string(),
                 params,
+                id,
             });
         }
     }
@@ -251,11 +278,12 @@ async fn reader_loop(client: Arc<Client>, stdout: tokio::process::ChildStdout) {
             // Response to one of our requests.
             (None, true) => client.dispatch_response(&msg),
             // Notification (no id) — route to its subscriber.
-            (Some(method), false) => client.dispatch_notification(method, &msg),
-            // Server-initiated request (e.g. an approval prompt). None of the
-            // current adapters expect these; log rather than drop silently.
+            (Some(method), false) => client.dispatch_routed(method, &msg, None),
+            // Server-initiated request (e.g. a Codex approval/question prompt) —
+            // route it to the turn's subscriber with its id so the adapter can
+            // respond. A non-numeric id can't be answered, so it's dropped.
             (Some(method), true) => {
-                log::debug!("{}: ignoring server request {method}", client.name);
+                client.dispatch_routed(method, &msg, msg.get("id").and_then(Value::as_u64));
             }
             (None, false) => {}
         }
