@@ -24,11 +24,11 @@ use serde_json::{json, Value};
 use tauri::AppHandle;
 use tokio::sync::Mutex as AsyncMutex;
 
-use crate::domain::{AgentEvent, EffortLevel, PermissionMode, Session, TokenUsage};
+use crate::domain::{AgentEvent, EffortLevel, PermissionMode, Session, TokenUsage, ToolDenial};
 use crate::error::{AppError, Result};
-use crate::events::emit_delta;
+use crate::events::{emit_delta, emit_event};
 use crate::providers::jsonrpc::Client;
-use crate::providers::{clip, persist_event as persist};
+use crate::providers::{clip, persist_event as persist, set_awaiting};
 use crate::store::Store;
 
 /// The shared app-server client. A dead server (crash, kill) is replaced on
@@ -75,14 +75,29 @@ async fn server() -> Result<Arc<Client>> {
     Ok(client)
 }
 
-/// Notification routing key: most carry `threadId`; `thread/started` nests it
-/// under `thread.id`.
+/// Routing key (the subscriber registers under the thread id): most messages
+/// carry `threadId`; `thread/started` nests it under `thread.id`. Some approval
+/// *requests* (permissions, file changes) omit it, so fall back to correlating
+/// via the in-flight turn — by `turnId` if present, else the sole active turn.
 fn route(_method: &str, params: &Value) -> Option<String> {
-    params
+    if let Some(thread_id) = params
         .get("threadId")
         .or_else(|| params.get("thread").and_then(|t| t.get("id")))
         .and_then(Value::as_str)
-        .map(str::to_string)
+    {
+        return Some(thread_id.to_string());
+    }
+    let guard = turns();
+    if let Some(turn_id) = params.get("turnId").and_then(Value::as_str) {
+        return guard
+            .values()
+            .find(|(_thread, turn)| turn == turn_id)
+            .map(|(thread, _turn)| thread.clone());
+    }
+    if guard.len() == 1 {
+        return guard.values().next().map(|(thread, _turn)| thread.clone());
+    }
+    None
 }
 
 /// Run the `initialize` handshake. Must be called once, right after spawn.
@@ -115,6 +130,134 @@ fn set_turn_id(session_id: &str, turn_id: &str) {
 
 fn unregister_turn(session_id: &str) {
     turns().remove(session_id);
+    asks().remove(session_id);
+}
+
+// ----- pending asks (approvals + clarifying questions) -----------------------
+
+/// A live Codex ask: the in-flight turn is blocked on its JSON-RPC request id
+/// until we [`Client::respond`]. Each variant carries the reply shape it needs.
+enum CodexAsk {
+    /// Command-execution / file-change approval → `{ "decision": ... }`.
+    Decision { rpc_id: u64 },
+    /// Filesystem/network permission → `{ "permissions": ..., "scope": ... }`.
+    /// `requested` is echoed back on approve, granting exactly what was asked.
+    Permission { rpc_id: u64, requested: Value },
+    /// Clarifying questions → `{ "answers": { <questionId>: ... } }`.
+    UserInput {
+        rpc_id: u64,
+        question_ids: Vec<String>,
+    },
+}
+
+/// Pending asks by warden session id, oldest first.
+static ASKS: LazyLock<Mutex<HashMap<String, Vec<CodexAsk>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+fn asks() -> std::sync::MutexGuard<'static, HashMap<String, Vec<CodexAsk>>> {
+    ASKS.lock().unwrap_or_else(|p| p.into_inner())
+}
+
+fn register_ask(session_id: &str, ask: CodexAsk) {
+    asks().entry(session_id.to_string()).or_default().push(ask);
+}
+
+/// Whether the session's in-flight turn is blocked on an unanswered question
+/// (vs. a command/permission approval, which the approval bar handles).
+pub fn has_pending_user_input(session_id: &str) -> bool {
+    asks()
+        .get(session_id)
+        .is_some_and(|list| list.iter().any(|a| matches!(a, CodexAsk::UserInput { .. })))
+}
+
+/// Remove and return the session's oldest ask matching `want_user_input`.
+fn take_ask(session_id: &str, want_user_input: bool) -> Option<CodexAsk> {
+    let mut guard = asks();
+    let list = guard.get_mut(session_id)?;
+    let index = list
+        .iter()
+        .position(|a| matches!(a, CodexAsk::UserInput { .. }) == want_user_input)?;
+    Some(list.remove(index))
+}
+
+/// Approve the session's pending command/permission approval (`accept`). Returns
+/// whether one was pending; the blocked turn then continues server-side.
+pub async fn approve_pending(session_id: &str) -> bool {
+    respond_approval(session_id, true).await
+}
+
+/// Decline the session's pending command/permission approval. Returns whether
+/// one was pending; the turn continues, told the action was refused.
+pub async fn reject_pending(session_id: &str) -> bool {
+    respond_approval(session_id, false).await
+}
+
+async fn respond_approval(session_id: &str, approve: bool) -> bool {
+    let Some(client) = current() else {
+        return false;
+    };
+    let Some(ask) = take_ask(session_id, false) else {
+        return false;
+    };
+    let (rpc_id, result) = match ask {
+        CodexAsk::Decision { rpc_id } => (
+            rpc_id,
+            json!({ "decision": if approve { "accept" } else { "decline" } }),
+        ),
+        CodexAsk::Permission { rpc_id, requested } => (
+            rpc_id,
+            json!({
+                "permissions": if approve { requested } else { json!({}) },
+                "scope": "turn",
+            }),
+        ),
+        // take_ask(.., false) only yields approvals.
+        CodexAsk::UserInput { .. } => return false,
+    };
+    if let Err(e) = client.respond(rpc_id, result).await {
+        log::warn!("codex approval reply failed: {e}");
+    }
+    true
+}
+
+/// Answer the session's pending clarifying question with the user's reply text.
+/// The prose goes in as the first question's answer (the model reads prose; the
+/// composer reply already covers every sub-question), mirroring OpenCode.
+pub async fn answer_user_input(
+    app: &AppHandle,
+    store: &Store,
+    session_id: &str,
+    text: &str,
+) -> Result<()> {
+    let client =
+        current().ok_or_else(|| AppError::Agent("codex app-server not running".to_string()))?;
+    let Some(CodexAsk::UserInput {
+        rpc_id,
+        question_ids,
+    }) = take_ask(session_id, true)
+    else {
+        return Err(AppError::Agent("no pending codex question".to_string()));
+    };
+
+    // Show the reply in the transcript as the next user message.
+    if let Ok(record) = store.append_event(
+        session_id,
+        &AgentEvent::UserMessage {
+            text: text.to_string(),
+        },
+    ) {
+        emit_event(app, &record);
+    }
+    set_awaiting(app, store, session_id, false);
+
+    let mut answers = serde_json::Map::new();
+    if let Some(first) = question_ids.first() {
+        answers.insert(first.clone(), json!(text));
+    }
+    client
+        .respond(rpc_id, json!({ "answers": answers }))
+        .await
+        .map_err(|e| AppError::Agent(format!("codex question reply failed: {e}")))
 }
 
 /// Interrupt a session's in-flight Codex turn (`turn/interrupt`). Returns whether
@@ -193,12 +336,38 @@ fn codex_usage(turn: Option<&Value>) -> Option<TokenUsage> {
 
 /// Build `thread/start` params for an autonomous (3a) Codex thread. The session's
 /// model selects the engine; the `-fast` suffix maps to the priority service tier.
+/// Codex's thread-level approval policy + sandbox, mapped from the session's
+/// permission mode (the per-turn [`sandbox_policy`] refines the sandbox each
+/// turn). The `granular` policy surfaces command/permission approvals only when
+/// the agent steps outside the workspace-write sandbox — edits inside it auto-
+/// proceed — so collaboration kicks in for the actions that actually matter.
+fn approval_policy(mode: PermissionMode) -> (Value, &'static str) {
+    match mode {
+        // Read-only research: never write, never prompt.
+        PermissionMode::Plan => (json!("never"), "read-only"),
+        // Full machine access, no prompts.
+        PermissionMode::BypassPermissions => (json!("never"), "danger-full-access"),
+        PermissionMode::AcceptEdits | PermissionMode::Default => (
+            json!({
+                "granular": {
+                    "mcp_elicitations": false,
+                    "sandbox_approval": true,
+                    "rules": true,
+                    "request_permissions": true,
+                }
+            }),
+            "workspace-write",
+        ),
+    }
+}
+
 fn thread_params(session: &Session, base_instructions: &str) -> Value {
     let (model, is_fast) = split_fast_model(&session.model);
+    let (approval, sandbox) = approval_policy(session.permission_mode);
     let mut params = json!({
         "cwd": session.working_dir,
-        "approvalPolicy": "never",
-        "sandbox": "workspace-write",
+        "approvalPolicy": approval,
+        "sandbox": sandbox,
         "model": model,
     });
     if is_fast {
@@ -319,6 +488,22 @@ pub async fn run_turn(
 
     let mut finished = false;
     while let Some(note) = rx.recv().await {
+        // A server-initiated request (an approval or a clarifying question)
+        // carries an id we must answer; it never ends the turn.
+        if let Some(rpc_id) = note.id {
+            handle_request(
+                &client,
+                app,
+                store,
+                &session.id,
+                session.permission_mode,
+                &note.method,
+                &note.params,
+                rpc_id,
+            )
+            .await;
+            continue;
+        }
         if handle_notification(app, store, &session.id, &note.method, &note.params) {
             finished = true;
             break;
@@ -405,6 +590,164 @@ fn handle_notification(
             params.get("willRetry").and_then(Value::as_bool) == Some(false)
         }
         _ => false,
+    }
+}
+
+/// Handle a server-initiated request mid-turn: surface approvals and clarifying
+/// questions as interactive prompts (registering a pending ask, answered via the
+/// approval bar or the composer), and auto-answer the ones that need no human
+/// (file edits inside the sandbox, MCP elicitations). Plan mode declines
+/// anything that would write. The exact methods/reply shapes follow the
+/// `codex app-server` protocol (verified against the reference app); older
+/// builds named the approvals `applyPatchApproval`/`execCommandApproval`.
+#[allow(clippy::too_many_arguments)]
+async fn handle_request(
+    client: &Client,
+    app: &AppHandle,
+    store: &Store,
+    session_id: &str,
+    mode: PermissionMode,
+    method: &str,
+    params: &Value,
+    rpc_id: u64,
+) {
+    let is_plan = mode == PermissionMode::Plan;
+    match method {
+        // File edits: auto-accept inside the sandbox, decline in read-only plan.
+        "item/fileChange/requestApproval" | "applyPatchApproval" => {
+            let decision = if is_plan { "decline" } else { "accept" };
+            let _ = client
+                .respond(rpc_id, json!({ "decision": decision }))
+                .await;
+        }
+        // Command execution: surface for approval (declined outright in plan).
+        "item/commandExecution/requestApproval" | "execCommandApproval" => {
+            if is_plan {
+                let _ = client
+                    .respond(rpc_id, json!({ "decision": "decline" }))
+                    .await;
+                return;
+            }
+            let command = params
+                .get("command")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            let cwd = params
+                .get("cwd")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            let reason = params
+                .get("reason")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            register_ask(session_id, CodexAsk::Decision { rpc_id });
+            persist(
+                app,
+                store,
+                session_id,
+                AgentEvent::PermissionRequest {
+                    denials: vec![ToolDenial {
+                        tool_name: "Bash".to_string(),
+                        pattern: command.to_string(),
+                        input: json!({ "command": command, "cwd": cwd, "reason": reason }),
+                    }],
+                },
+            );
+            set_awaiting(app, store, session_id, true);
+        }
+        // Filesystem/network permission grant.
+        "item/permissions/requestApproval" => {
+            if is_plan {
+                let _ = client
+                    .respond(rpc_id, json!({ "permissions": {}, "scope": "turn" }))
+                    .await;
+                return;
+            }
+            let requested = params.get("permissions").cloned().unwrap_or(Value::Null);
+            let reason = params
+                .get("reason")
+                .and_then(Value::as_str)
+                .unwrap_or("filesystem / network access");
+            register_ask(
+                session_id,
+                CodexAsk::Permission {
+                    rpc_id,
+                    requested: requested.clone(),
+                },
+            );
+            persist(
+                app,
+                store,
+                session_id,
+                AgentEvent::PermissionRequest {
+                    denials: vec![ToolDenial {
+                        tool_name: "Permissions".to_string(),
+                        pattern: reason.to_string(),
+                        input: requested,
+                    }],
+                },
+            );
+            set_awaiting(app, store, session_id, true);
+        }
+        // Clarifying questions — rendered via the shared AskUserQuestion widget,
+        // answered through the composer (see `answer_user_input`).
+        "item/tool/requestUserInput" => {
+            let mut question_ids = Vec::new();
+            let questions: Vec<Value> = params
+                .get("questions")
+                .and_then(Value::as_array)
+                .map(|arr| {
+                    arr.iter()
+                        .map(|q| {
+                            if let Some(id) = q.get("id").and_then(Value::as_str) {
+                                question_ids.push(id.to_string());
+                            }
+                            json!({
+                                "question": q.get("question").cloned().unwrap_or_default(),
+                                "header": q.get("header").cloned().unwrap_or_default(),
+                                "options": q.get("options").cloned().unwrap_or(json!([])),
+                                "multiSelect": false,
+                            })
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            if questions.is_empty() {
+                let _ = client.respond(rpc_id, json!({ "answers": {} })).await;
+                return;
+            }
+            register_ask(
+                session_id,
+                CodexAsk::UserInput {
+                    rpc_id,
+                    question_ids,
+                },
+            );
+            persist(
+                app,
+                store,
+                session_id,
+                AgentEvent::ToolUse {
+                    id: format!("codex-input-{rpc_id}"),
+                    name: "AskUserQuestion".to_string(),
+                    input: json!({ "questions": questions }),
+                    parent_tool_use_id: None,
+                },
+            );
+            set_awaiting(app, store, session_id, true);
+        }
+        // MCP elicitations are disabled in the approval policy; accept any that
+        // still arrive rather than wedging the turn.
+        "mcpServer/elicitation/request" => {
+            let _ = client.respond(rpc_id, json!({ "action": "accept" })).await;
+        }
+        // Anything else (e.g. dynamic tool calls) is unsupported — decline so the
+        // turn isn't left blocked waiting on us.
+        other => {
+            let _ = client
+                .respond_error(rpc_id, -32601, &format!("unsupported request {other}"))
+                .await;
+        }
     }
 }
 

@@ -460,13 +460,26 @@ pub async fn send_message(
 ) -> CommandResult<()> {
     let session = state.store.get_session(&session_id)?;
 
-    // An OpenCode turn blocked on a question consumes the next message as the
-    // answer (Claude's question flow ends the turn, so its reply is just the
-    // next turn's prompt — this is the OpenCode equivalent).
+    // A turn blocked on a clarifying question (OpenCode/Codex) consumes the next
+    // message as the answer and continues server-side, rather than starting a
+    // fresh turn. Claude's question flow ends the turn, so its reply is just the
+    // next turn's prompt — these are the live-turn equivalents.
     if session.backend == Backend::Opencode
         && crate::providers::opencode::agent::has_pending_question(&session_id)
     {
         return crate::providers::opencode::agent::answer_question(
+            &app,
+            &state.store,
+            &session_id,
+            &text,
+        )
+        .await
+        .map_err(Into::into);
+    }
+    if session.backend == Backend::Codex
+        && crate::providers::codex::agent::has_pending_user_input(&session_id)
+    {
+        return crate::providers::codex::agent::answer_user_input(
             &app,
             &state.store,
             &session_id,
@@ -555,6 +568,11 @@ pub async fn approve_tools(
         crate::providers::set_awaiting(&app, &state.store, &session_id, false);
         return Ok(());
     }
+    if session.backend == Backend::Codex {
+        crate::providers::codex::agent::approve_pending(&session_id).await;
+        crate::providers::set_awaiting(&app, &state.store, &session_id, false);
+        return Ok(());
+    }
     state.store.add_allowed_tools(&session_id, &patterns)?;
     state
         .manager
@@ -576,6 +594,9 @@ pub async fn reject_tools(
     let session = state.store.get_session(&session_id)?;
     if session.backend == Backend::Opencode {
         crate::providers::opencode::agent::reject_pending_permission(&session_id).await;
+        crate::providers::set_awaiting(&app, &state.store, &session_id, false);
+    } else if session.backend == Backend::Codex {
+        crate::providers::codex::agent::reject_pending(&session_id).await;
         crate::providers::set_awaiting(&app, &state.store, &session_id, false);
     }
     Ok(())
