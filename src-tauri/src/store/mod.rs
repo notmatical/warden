@@ -1660,6 +1660,67 @@ mod tests {
     }
 
     #[test]
+    fn awaiting_input_flag_round_trips() {
+        let (store, session_id) = store_with_session();
+        assert!(!store.get_session(&session_id).unwrap().awaiting_input);
+        store.set_session_awaiting_input(&session_id, true).unwrap();
+        assert!(store.get_session(&session_id).unwrap().awaiting_input);
+        store
+            .set_session_awaiting_input(&session_id, false)
+            .unwrap();
+        assert!(!store.get_session(&session_id).unwrap().awaiting_input);
+    }
+
+    #[test]
+    fn pending_decision_tracks_questions_and_permissions() {
+        let (store, session_id) = store_with_session();
+
+        // Fresh session: nothing pending.
+        assert!(!store.session_has_pending_decision(&session_id).unwrap());
+
+        // An unanswered question is pending until a later user message answers it.
+        store
+            .append_event(
+                &session_id,
+                &AgentEvent::ToolUse {
+                    id: "q1".into(),
+                    name: "AskUserQuestion".into(),
+                    input: serde_json::json!({ "questions": [] }),
+                    parent_tool_use_id: None,
+                },
+            )
+            .unwrap();
+        assert!(store.session_has_pending_decision(&session_id).unwrap());
+        store
+            .append_event(
+                &session_id,
+                &AgentEvent::UserMessage {
+                    text: "blue".into(),
+                },
+            )
+            .unwrap();
+        assert!(!store.session_has_pending_decision(&session_id).unwrap());
+
+        // A permission request (denied tool) is pending until answered/resumed.
+        store
+            .append_event(
+                &session_id,
+                &AgentEvent::PermissionRequest { denials: vec![] },
+            )
+            .unwrap();
+        assert!(store.session_has_pending_decision(&session_id).unwrap());
+        store
+            .append_event(
+                &session_id,
+                &AgentEvent::UserMessage {
+                    text: "approved".into(),
+                },
+            )
+            .unwrap();
+        assert!(!store.session_has_pending_decision(&session_id).unwrap());
+    }
+
+    #[test]
     fn append_events_with_offset_is_atomic_and_guarded() {
         let (store, session_id) = store_with_session();
         store

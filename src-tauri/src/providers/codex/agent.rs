@@ -932,3 +932,30 @@ fn stringify(value: &Value) -> String {
         other => other.to_string(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn approval_policy_maps_permission_modes() {
+        // Edit modes use the granular policy + workspace-write sandbox, so the
+        // agent only prompts when it steps outside the sandbox.
+        for mode in [PermissionMode::Default, PermissionMode::AcceptEdits] {
+            let (policy, sandbox) = approval_policy(mode);
+            assert_eq!(sandbox, "workspace-write");
+            assert_eq!(policy["granular"]["request_permissions"], json!(true));
+            assert_eq!(policy["granular"]["sandbox_approval"], json!(true));
+            assert_eq!(policy["granular"]["mcp_elicitations"], json!(false));
+        }
+        // Plan is read-only and never prompts; bypass is full access, no prompts.
+        assert_eq!(
+            approval_policy(PermissionMode::Plan),
+            (json!("never"), "read-only")
+        );
+        assert_eq!(
+            approval_policy(PermissionMode::BypassPermissions),
+            (json!("never"), "danger-full-access")
+        );
+    }
+}
