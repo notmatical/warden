@@ -16,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { backendForModel, DEFAULT_CHAT_MODEL } from "@/lib/models"
 import { useAppStore } from "@/store/app-store"
@@ -41,7 +42,8 @@ export function SendToAgentDialogCore({
 }: {
   /** Short display id of the thing being sent (e.g. "WAR-12", "#42"). */
   identifier: string
-  /** Worktree branch name when isolating (e.g. "feature/WAR-12"). */
+  /** Pre-filled worktree branch name when isolating (e.g. "war-12-fix-x");
+   *  the user can edit it before sending. */
   branchHint?: string
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -82,15 +84,17 @@ export function SendToAgentDialogCore({
   const [model, setModel] = useState(DEFAULT_CHAT_MODEL)
   const [mode, setMode] = useState<PermissionMode>("bypassPermissions")
   const [isolate, setIsolate] = useState(false)
+  const [branch, setBranch] = useState("")
   const [creating, setCreating] = useState(false)
 
   const preselectRef = useRef(preselectProjectId)
   preselectRef.current = preselectProjectId
 
-  // Re-seed the folder each time the dialog opens for a new subject.
+  // Re-seed the folder and branch each time the dialog opens for a new subject.
   const seedKey = open ? identifier : undefined
   useEffect(() => {
     if (seedKey === undefined) return
+    setBranch(branchHint ?? "")
     setFolder(
       (defaultProjectId ? folderRefFor(defaultProjectId) : null) ?? firstFolder
     )
@@ -108,7 +112,7 @@ export function SendToAgentDialogCore({
     return () => {
       stale = true
     }
-  }, [seedKey, defaultProjectId, folderRefFor, firstFolder])
+  }, [seedKey, branchHint, defaultProjectId, folderRefFor, firstFolder])
 
   const handleSend = async () => {
     if (!folder) return
@@ -123,7 +127,7 @@ export function SendToAgentDialogCore({
         backend: backendForModel(model),
         role: "chat",
         isolate,
-        branchHint: isolate ? branchHint : undefined,
+        branchHint: isolate ? branch.trim() || undefined : undefined,
         firstMessage: buildFirstMessage(),
         ...createOverrides,
       })
@@ -178,14 +182,7 @@ export function SendToAgentDialogCore({
             <label htmlFor="send-isolate" className="flex flex-col">
               <span className="text-sm">Isolate in worktree</span>
               <span className="text-muted-foreground text-xs">
-                {isolate && branchHint ? (
-                  <>
-                    Work on <span className="font-mono">{branchHint}</span>,
-                    merge when done.
-                  </>
-                ) : (
-                  "Work on a separate branch, merge when done."
-                )}
+                Work on a separate branch, merge when done.
               </span>
             </label>
             <Switch
@@ -194,6 +191,18 @@ export function SendToAgentDialogCore({
               onCheckedChange={setIsolate}
             />
           </div>
+
+          {isolate ? (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-muted-foreground text-xs">Branch</span>
+              <Input
+                value={branch}
+                onChange={(e) => setBranch(e.target.value)}
+                placeholder="Branch name"
+                className="h-8 font-mono text-[12px]"
+              />
+            </div>
+          ) : null}
 
           {children}
         </div>
