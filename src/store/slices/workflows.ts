@@ -35,7 +35,6 @@ type WorkflowsSlice = Pick<
   | "resumeRun"
   | "retryRun"
   | "loadWorkflowRun"
-  | "loadRunById"
   | "applyWorkflowRun"
 >
 
@@ -344,14 +343,6 @@ export const createWorkflowsSlice: StateCreator<
     }
   },
 
-  loadRunById: async (runId) => {
-    try {
-      const view = await ipc.getWorkflowRun(runId)
-      set({ workflowRun: view })
-    } catch (error) {
-      reportError("Failed to load workflow run", error)
-    }
-  },
 
   applyWorkflowRun: (view: WorkflowRunView) => {
     const prev = get().workflowRun

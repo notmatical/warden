@@ -19,11 +19,10 @@ import {
 } from "@xyflow/react"
 import {
   Check,
-  ChevronDown,
   Copy,
-  ExternalLink,
-  Loader2,
+  FolderGit2,
   MoreHorizontal,
+  Network,
   Pencil,
   Play,
   Plus,
@@ -43,12 +42,7 @@ import {
 import { toast } from "sonner"
 
 import { useConfirm } from "@/components/confirm-dialog"
-import { EffortMenu } from "@/components/controls/effort-menu"
-import { ModeMenu } from "@/components/controls/mode-menu"
-import { ModelMenu } from "@/components/controls/model-menu"
-import { Transcript } from "@/components/transcript"
 import { Button } from "@/components/ui/button"
-import { Callout } from "@/components/ui/callout"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,20 +50,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Input } from "@/components/ui/input"
 import { listWorkflowRuns } from "@/lib/ipc"
-import { backendForModel } from "@/lib/models"
 import { relativeTime } from "@/lib/time"
 import { cn } from "@/lib/utils"
+import { folderTabId } from "@/lib/viewport"
 import { createsCycle } from "@/lib/workflow-graph"
-import { GATE_META, INTENT_META, INTENT_ORDER } from "@/lib/workflow-intents"
+import { INTENT_META } from "@/lib/workflow-intents"
 import { useAppStore } from "@/store/app-store"
 import type {
   AgentTaskConfig,
   Intent,
   NodeKind,
-  NodeRunStatus,
-  RunStatus,
   Workflow,
   WorkflowGraph,
   WorkflowRun,
@@ -78,85 +69,9 @@ import type {
 import { AgentNode, type AgentNodeData } from "./agent-node"
 import { GateNode } from "./gate-node"
 import { NodePalette } from "./node-palette"
+import { STATUS_PILL } from "./status"
 
 const nodeTypes = { agent: AgentNode, gate: GateNode }
-
-// Colored status chip (shares the workflows table's color language): a tinted
-// fill + ring, with the dot echoing the state color. Covers run statuses and
-// node statuses — the editor renders both with the same pill.
-const STATUS_PILL: Record<
-  RunStatus | NodeRunStatus,
-  { label: string; dot: string; pill: string }
-> = {
-  pending: {
-    label: "Pending",
-    dot: "bg-muted-foreground/40",
-    pill: "bg-muted/60 text-muted-foreground ring-border",
-  },
-  running: {
-    label: "Running",
-    dot: "bg-blue-500",
-    pill: "bg-blue-500/10 text-blue-400 ring-blue-500/30",
-  },
-  done: {
-    label: "Done",
-    dot: "bg-emerald-500",
-    pill: "bg-emerald-500/10 text-emerald-400 ring-emerald-500/30",
-  },
-  completed: {
-    label: "Done",
-    dot: "bg-emerald-500",
-    pill: "bg-emerald-500/10 text-emerald-400 ring-emerald-500/30",
-  },
-  failed: {
-    label: "Failed",
-    dot: "bg-red-500",
-    pill: "bg-red-500/10 text-red-400 ring-red-500/30",
-  },
-  paused: {
-    label: "Paused",
-    dot: "bg-amber-500",
-    pill: "bg-amber-500/10 text-amber-400 ring-amber-500/30",
-  },
-  awaitingInput: {
-    label: "Needs input",
-    dot: "bg-amber-500",
-    pill: "bg-amber-500/10 text-amber-400 ring-amber-500/30",
-  },
-  skipped: {
-    label: "Skipped",
-    dot: "bg-muted-foreground/40",
-    pill: "bg-muted/50 text-muted-foreground ring-border",
-  },
-  canceled: {
-    label: "Canceled",
-    dot: "bg-muted-foreground/40",
-    pill: "bg-muted/50 text-muted-foreground ring-border",
-  },
-}
-
-function StatusPill({
-  status,
-  pulse,
-}: {
-  status: RunStatus | NodeRunStatus
-  pulse?: boolean
-}) {
-  const s = STATUS_PILL[status]
-  return (
-    <span
-      className={cn(
-        "flex w-fit items-center gap-1.5 rounded-lg px-2 py-1 font-medium text-[11px] shadow-sm ring-1 ring-inset backdrop-blur",
-        s.pill
-      )}
-    >
-      <span
-        className={cn("size-1.5 rounded-full", s.dot, pulse && "animate-pulse")}
-      />
-      {s.label}
-    </span>
-  )
-}
 
 /** A settled run's wall-clock duration, like "3m 12s". */
 function runDuration(r: WorkflowRun): string | null {
@@ -199,7 +114,10 @@ function toRF(
   const nodes: Node[] = []
   const kept = new Set<string>()
   graph.nodes.forEach((n, i) => {
-    const position = n.position ?? { x: 140, y: 80 + i * 150 }
+    // Flow left-to-right: a horizontal pitch clears a card's width (~352px) for
+    // graphs without saved positions, so tall cards don't stack. Dragged
+    // positions are respected.
+    const position = n.position ?? { x: 80 + i * 440, y: 80 }
     if (n.kind.type === "gate") {
       nodes.push({ id: n.id, type: "gate", position, data: { workflowId } })
       kept.add(n.id)
@@ -244,35 +162,86 @@ function toGraph(nodes: Node[], edges: Edge[]): WorkflowGraph {
   }
 }
 
+/** Arrange nodes left-to-right by dependency depth: a node sits one column
+ *  right of its deepest parent, and siblings in a column stack with enough
+ *  pitch to clear a tall card. Non-destructive — invoked from "Tidy layout". */
+function layoutHorizontal(nodes: Node[], edges: Edge[]): Node[] {
+  const COL = 440
+  const ROW = 360
+  const ids = new Set(nodes.map((n) => n.id))
+  const parents = new Map<string, string[]>()
+  for (const e of edges) {
+    if (ids.has(e.source) && ids.has(e.target)) {
+      const arr = parents.get(e.target)
+      if (arr) arr.push(e.source)
+      else parents.set(e.target, [e.source])
+    }
+  }
+  const depth = new Map<string, number>()
+  const visiting = new Set<string>()
+  const depthOf = (id: string): number => {
+    const cached = depth.get(id)
+    if (cached !== undefined) return cached
+    if (visiting.has(id)) return 0 // cycle guard (graphs are validated acyclic)
+    visiting.add(id)
+    const ps = parents.get(id) ?? []
+    const d = ps.length === 0 ? 0 : Math.max(...ps.map(depthOf)) + 1
+    visiting.delete(id)
+    depth.set(id, d)
+    return d
+  }
+  const perCol = new Map<number, number>()
+  return nodes.map((n) => {
+    const col = depthOf(n.id)
+    const row = perCol.get(col) ?? 0
+    perCol.set(col, row + 1)
+    return { ...n, position: { x: 80 + col * COL, y: 80 + row * ROW } }
+  })
+}
+
 function Canvas({ workflow }: { workflow: Workflow }) {
   const saveWorkflowGraph = useAppStore((s) => s.saveWorkflowGraph)
   const runWorkflowById = useAppStore((s) => s.runWorkflowById)
   const cancelWorkflow = useAppStore((s) => s.cancelWorkflow)
-  const resumeRun = useAppStore((s) => s.resumeRun)
   const retryRun = useAppStore((s) => s.retryRun)
-  const loadRunById = useAppStore((s) => s.loadRunById)
-  const loadWorkflowRun = useAppStore((s) => s.loadWorkflowRun)
   const workflowRun = useAppStore((s) => s.workflowRun)
-  const loadEvents = useAppStore((s) => s.loadEvents)
   const openSession = useAppStore((s) => s.openSession)
   const renameWorkflow = useAppStore((s) => s.renameWorkflow)
   const duplicateWorkflow = useAppStore((s) => s.duplicateWorkflow)
   const exportWorkflow = useAppStore((s) => s.exportWorkflow)
   const deleteWorkflow = useAppStore((s) => s.deleteWorkflow)
   const openWorkflow = useAppStore((s) => s.openWorkflow)
+  const openTab = useAppStore((s) => s.openTab)
   const confirm = useConfirm()
+
+  // The folder this workflow runs in — surfaced by the title so it's never a
+  // mystery which repo a run touches.
+  const project = useAppStore((s) =>
+    Object.values(s.rootsByGroup)
+      .flat()
+      .find((p) => p.id === workflow.projectId)
+  )
 
   // The store holds one live run view globally; only trust it when it belongs
   // to this workflow, so a background run can't paint status into this canvas.
   const run = workflowRun?.run.workflowId === workflow.id ? workflowRun : null
   const runStatus = run?.run.status
 
-  // Run history (fetched when the status pill's dropdown opens). latestRunId
-  // marks whether the canvas is showing a past run instead of the newest one.
+  // Recent runs — a read-only list of the last few, newest first, for timing.
   const [runHistory, setRunHistory] = useState<WorkflowRun[]>([])
-  const [latestRunId, setLatestRunId] = useState<string | null>(null)
-  const viewingPast =
-    latestRunId !== null && run !== null && run.run.id !== latestRunId
+
+  const refreshHistory = useCallback(() => {
+    void listWorkflowRuns(workflow.id, 5)
+      .then(setRunHistory)
+      .catch(() => {})
+  }, [workflow.id])
+
+  // Refresh on mount and whenever the live run settles (new runs appear,
+  // durations finalize) so the list stays current.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runStatus is an intentional refresh trigger when the live run settles
+  useEffect(() => {
+    refreshHistory()
+  }, [runStatus, refreshHistory])
 
   const openNodeSession = (sessionId: string | null | undefined) => {
     if (!sessionId) return
@@ -290,7 +259,6 @@ function Canvas({ workflow }: { workflow: Workflow }) {
   const [initial] = useState(() => toRF(workflow.graph, workflow.id))
   const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
 
   // Debounced autosave; the unmount flush below makes sure closing the tab
   // within the debounce window can't drop the last edits.
@@ -298,7 +266,20 @@ function Canvas({ workflow }: { workflow: Workflow }) {
   const pendingSave = useRef(false)
   const latest = useRef({ nodes, edges })
   latest.current = { nodes, edges }
+  // The last graph we persisted. Selection now lives in the `nodes` array, so
+  // selecting a node re-renders without changing the graph — skip those saves.
+  const lastSaved = useRef(
+    JSON.stringify(toGraph(initial.nodes, initial.edges))
+  )
+  const persist = useCallback(() => {
+    const graph = toGraph(latest.current.nodes, latest.current.edges)
+    const serialized = JSON.stringify(graph)
+    if (serialized === lastSaved.current) return
+    lastSaved.current = serialized
+    void saveWorkflowGraph(workflow.id, graph)
+  }, [workflow.id, saveWorkflowGraph])
   const mounted = useRef(false)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: nodes/edges are intentional change triggers; persist reads their latest values from a ref
   useEffect(() => {
     if (!mounted.current) {
       mounted.current = true
@@ -308,20 +289,19 @@ function Canvas({ workflow }: { workflow: Workflow }) {
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => {
       pendingSave.current = false
-      void saveWorkflowGraph(workflow.id, toGraph(nodes, edges))
+      persist()
     }, 600)
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current)
     }
-  }, [nodes, edges, workflow.id, saveWorkflowGraph])
+  }, [nodes, edges, persist])
   useEffect(
     () => () => {
       if (!pendingSave.current) return
       pendingSave.current = false
-      const g = latest.current
-      void saveWorkflowGraph(workflow.id, toGraph(g.nodes, g.edges))
+      persist()
     },
-    [workflow.id, saveWorkflowGraph]
+    [persist]
   )
 
   const onConnect = useCallback(
@@ -344,10 +324,12 @@ function Canvas({ workflow }: { workflow: Workflow }) {
   ) => {
     const id = crypto.randomUUID()
     setNodes((ns) => {
-      const pos = position ?? {
-        x: 160 + ns.length * 24,
-        y: 120 + ns.length * 24,
-      }
+      // Left-to-right flow: a node's position is its top-left and its target
+      // handle sits at the left-vertical-center, so drop the left edge at the
+      // release point and lift it so that handle lands near the cursor.
+      const pos = position
+        ? { x: position.x, y: position.y - 130 }
+        : { x: 120 + ns.length * 440, y: 100 }
       const node: Node =
         kind === "gate"
           ? {
@@ -366,7 +348,11 @@ function Canvas({ workflow }: { workflow: Workflow }) {
                 workflowId: workflow.id,
               },
             }
-      return [...ns, node]
+      // Select the new node so it opens expanded for immediate editing.
+      return [
+        ...ns.map((n) => ({ ...n, selected: false })),
+        { ...node, selected: true },
+      ]
     })
     if (connectFrom) {
       setEdges((es) =>
@@ -381,12 +367,17 @@ function Canvas({ workflow }: { workflow: Workflow }) {
         )
       )
     }
-    setSelectedId(id)
   }
 
   // Drag a connection off into empty canvas → palette + auto-connect. Also
   // opened by right-clicking the canvas (no source).
-  const { screenToFlowPosition, deleteElements } = useReactFlow()
+  const { screenToFlowPosition, deleteElements, fitView } = useReactFlow()
+
+  const tidyLayout = () => {
+    setNodes((ns) => layoutHorizontal(ns, edges))
+    // Refit once React Flow has the new positions.
+    setTimeout(() => fitView({ padding: 0.2, maxZoom: 1.25, duration: 300 }), 0)
+  }
   const connectingFrom = useRef<string | null>(null)
   const [palette, setPalette] = useState<{
     screen: { x: number; y: number }
@@ -437,48 +428,6 @@ function Canvas({ workflow }: { workflow: Workflow }) {
     event.preventDefault()
     openPaletteAt(event.clientX, event.clientY)
   }
-  const openAddPalette = (event: ReactMouseEvent<HTMLButtonElement>) => {
-    const r = event.currentTarget.getBoundingClientRect()
-    openPaletteAt(r.left, r.bottom + 6)
-  }
-
-  const selected = nodes.find((n) => n.id === selectedId) ?? null
-  const selectedMeta = selected
-    ? selected.type === "gate"
-      ? GATE_META
-      : INTENT_META[(selected.data as AgentNodeData).config.intent]
-    : null
-  const [panelTab, setPanelTab] = useState<"config" | "output">("config")
-  const nodeRun = selected
-    ? (run?.nodes.find((n) => n.nodeId === selected.id) ?? null)
-    : null
-  const nodeSessionId = nodeRun?.sessionId ?? null
-  const hasRunInfo = nodeRun != null && nodeRun.status !== "pending"
-  // Selecting a node with nothing to show on Output falls back to Config.
-  useEffect(() => {
-    if (!hasRunInfo) setPanelTab("config")
-  }, [hasRunInfo])
-  useEffect(() => {
-    if (panelTab === "output" && nodeSessionId) void loadEvents(nodeSessionId)
-  }, [panelTab, nodeSessionId, loadEvents])
-
-  const patchData = (patch: Record<string, unknown>) =>
-    setNodes((ns) =>
-      ns.map((n) =>
-        n.id === selectedId ? { ...n, data: { ...n.data, ...patch } } : n
-      )
-    )
-  const patchConfig = (patch: Partial<AgentTaskConfig>) => {
-    const cfg = (selected?.data as AgentNodeData | undefined)?.config
-    if (cfg) patchData({ config: { ...cfg, ...patch } })
-  }
-
-  const deleteSelectedNode = () => {
-    if (!selectedId) return
-    const id = selectedId
-    setSelectedId(null)
-    void deleteElements({ nodes: [{ id }] })
-  }
 
   const startRun = async () => {
     // Surface a missing required prompt now instead of running a blank task.
@@ -495,21 +444,29 @@ function Canvas({ workflow }: { workflow: Workflow }) {
       toast.error(`"${d.label || meta.label}" needs more detail`, {
         description: `Fill in "${meta.promptLabel}" before running.`,
       })
-      setSelectedId(missing.id)
-      setPanelTab("config")
+      // Select the offending node so it opens expanded at the empty field.
+      setNodes((ns) => ns.map((n) => ({ ...n, selected: n.id === missing.id })))
       return
     }
     if (saveTimer.current) clearTimeout(saveTimer.current)
     pendingSave.current = false
-    // A fresh run becomes the latest, so the past-run marker is stale.
-    setLatestRunId(null)
-    await saveWorkflowGraph(workflow.id, toGraph(nodes, edges))
+    const graph = toGraph(nodes, edges)
+    lastSaved.current = JSON.stringify(graph)
+    await saveWorkflowGraph(workflow.id, graph)
     void runWorkflowById(workflow.id)
   }
 
   const running = runStatus === "running"
   // Paused counts too: a second concurrent run of the same workflow is refused.
   const activeRun = running || runStatus === "paused"
+  // A required prompt left empty would run a blank task — disable Run up front
+  // (startRun also guards and points the user at the offending node).
+  const missingPrompt = nodes.some(
+    (n) =>
+      n.type === "agent" &&
+      INTENT_META[(n.data as AgentNodeData).config.intent].promptRequired &&
+      !(n.data as AgentNodeData).config.prompt.trim()
+  )
 
   return (
     <div className="flex h-full flex-col">
@@ -529,13 +486,11 @@ function Canvas({ workflow }: { workflow: Workflow }) {
               e.preventDefault()
               void deleteElements({ edges: [{ id: edge.id }] })
             }}
-            onNodeClick={(_, n) => setSelectedId(n.id)}
             onNodeDoubleClick={(_, n) =>
               openNodeSession(
                 run?.nodes.find((r) => r.nodeId === n.id)?.sessionId
               )
             }
-            onPaneClick={() => setSelectedId(null)}
             nodeTypes={nodeTypes}
             deleteKeyCode={["Delete", "Backspace"]}
             fitView
@@ -545,6 +500,50 @@ function Canvas({ workflow }: { workflow: Workflow }) {
           >
             <Background />
             <Controls showInteractive={false} />
+
+            {nodes.length === 0 ? (
+              <Panel position="top-center" className="pointer-events-none">
+                <div className="mt-24 rounded-lg border border-border/60 bg-card/70 px-3 py-2 text-muted-foreground text-xs shadow-sm backdrop-blur">
+                  Right-click the canvas to add a node
+                </div>
+              </Panel>
+            ) : null}
+
+            {/* Run history — a small floating table at bottom-right, in the
+                same control language as the zoom buttons. */}
+            {runHistory.length > 0 ? (
+              <Panel position="bottom-right">
+                <div className="nodrag nowheel w-56 overflow-hidden rounded-lg border border-border/60 bg-card/90 shadow-sm ring-1 ring-border/60 backdrop-blur">
+                  <div className="border-border/60 border-b bg-card/90 px-2.5 py-1.5 font-medium text-[10px] text-muted-foreground uppercase tracking-wide">
+                    Recent runs
+                  </div>
+                  <div className="p-1">
+                    {runHistory.map((r) => (
+                      <div
+                        key={r.id}
+                        className="flex items-center gap-2 px-2 py-1 text-[11px]"
+                      >
+                        <span
+                          className={cn(
+                            "size-1.5 shrink-0 rounded-full",
+                            STATUS_PILL[r.status].dot
+                          )}
+                        />
+                        <span className="flex-1 truncate text-muted-foreground">
+                          {STATUS_PILL[r.status].label}
+                        </span>
+                        <span className="text-[9px] text-muted-foreground/70 tabular-nums">
+                          {runDuration(r)}
+                        </span>
+                        <span className="text-[9px] text-muted-foreground/70 tabular-nums">
+                          {relativeTime(r.createdAt)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </Panel>
+            ) : null}
 
             {/* Title — floating top-left, like the zoom controls. */}
             <Panel position="top-left" className="flex items-center gap-2">
@@ -598,107 +597,26 @@ function Canvas({ workflow }: { workflow: Workflow }) {
                   {workflow.name}
                 </button>
               )}
-              {runStatus ? (
-                <DropdownMenu
-                  onOpenChange={(open) => {
-                    if (!open) return
-                    void listWorkflowRuns(workflow.id)
-                      .then((runs) => {
-                        setRunHistory(runs)
-                        setLatestRunId(runs[0]?.id ?? null)
-                      })
-                      .catch(() => {})
-                  }}
-                >
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      aria-label="Run history"
-                      className="flex cursor-pointer items-center gap-1"
-                    >
-                      <StatusPill status={runStatus} pulse={running} />
-                      <ChevronDown className="size-3 text-muted-foreground/70" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-72">
-                    <div className="px-2 py-1.5 font-medium text-[11px] text-muted-foreground">
-                      Run history
-                    </div>
-                    {runHistory.map((r) => (
-                      <DropdownMenuItem
-                        key={r.id}
-                        onSelect={() => void loadRunById(r.id)}
-                        className="gap-2 text-[13px]"
-                      >
-                        <span
-                          className={cn(
-                            "size-2 shrink-0 rounded-full",
-                            STATUS_PILL[r.status].dot
-                          )}
-                        />
-                        <span className="flex-1">
-                          {STATUS_PILL[r.status].label}
-                        </span>
-                        {r.id === run?.run.id ? (
-                          <span className="text-[10px] text-muted-foreground">
-                            viewing
-                          </span>
-                        ) : null}
-                        <span className="text-[10px] text-muted-foreground tabular-nums">
-                          {runDuration(r)}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground tabular-nums">
-                          {relativeTime(r.createdAt)}
-                        </span>
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : null}
-              {viewingPast ? (
+              {project ? (
                 <button
                   type="button"
-                  onClick={() => {
-                    setLatestRunId(null)
-                    void loadWorkflowRun(workflow.id)
-                  }}
-                  className="rounded-lg bg-card/80 px-2 py-1 font-medium text-[11px] text-muted-foreground shadow-sm ring-1 ring-border/60 backdrop-blur transition-colors hover:bg-card hover:text-foreground"
+                  onClick={() => openTab(folderTabId(project.id))}
+                  title={`Runs in ${project.path} — open folder`}
+                  className="flex items-center gap-1.5 self-stretch rounded-lg bg-card/80 px-2.5 font-medium text-muted-foreground text-sm shadow-sm ring-1 ring-border/60 backdrop-blur transition-colors hover:bg-card hover:text-foreground"
                 >
-                  Viewing a past run · Back to latest
+                  <FolderGit2 className="size-3.5 shrink-0" />
+                  <span className="max-w-48 truncate">{project.name}</span>
                 </button>
               ) : null}
             </Panel>
 
             {/* Actions — floating top-right. */}
             <Panel position="top-right" className="flex items-center gap-2">
-              <Button
-                variant="secondary"
-                size="lg"
-                className="gap-1.5 shadow-sm"
-                onClick={openAddPalette}
-              >
-                <Plus className="size-4" />
-                Add node
-              </Button>
-              {activeRun ? (
-                <Button
-                  variant="secondary"
-                  size="lg"
-                  onClick={() => void cancelWorkflow(workflow.id)}
-                  className="gap-1.5 text-red-500 shadow-sm hover:text-red-500"
-                >
-                  <Square className="size-3.5 fill-current" />
-                  Stop
-                </Button>
-              ) : null}
               {run && runStatus === "failed" ? (
                 <Button
                   variant="secondary"
                   size="lg"
-                  onClick={() => {
-                    setLatestRunId(null)
-                    void retryRun(run.run.id)
-                  }}
+                  onClick={() => void retryRun(run.run.id)}
                   className="gap-1.5 shadow-sm"
                   title="Re-run the unfinished steps; completed ones are kept"
                 >
@@ -706,19 +624,34 @@ function Canvas({ workflow }: { workflow: Workflow }) {
                   Retry
                 </Button>
               ) : null}
-              <Button
-                size="lg"
-                onClick={() => void startRun()}
-                disabled={nodes.length === 0 || activeRun}
-                className="gap-2 bg-emerald-600 px-5 font-semibold text-white shadow-sm shadow-emerald-900/20 hover:bg-emerald-600/90"
-              >
-                {running ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
+              {activeRun ? (
+                // While running/paused the Run button flips to a destructive
+                // Stop, so the workflow is canceled from the same control.
+                <Button
+                  variant="destructive"
+                  size="lg"
+                  onClick={() => void cancelWorkflow(workflow.id)}
+                  className="gap-2 px-5 font-semibold shadow-sm"
+                >
+                  <Square className="size-3.5 fill-current" />
+                  Stop
+                </Button>
+              ) : (
+                <Button
+                  size="lg"
+                  onClick={() => void startRun()}
+                  disabled={nodes.length === 0 || missingPrompt}
+                  title={
+                    missingPrompt
+                      ? "Fill in every required prompt before running"
+                      : undefined
+                  }
+                  className="gap-2 bg-emerald-600 px-5 font-semibold text-white shadow-sm shadow-emerald-900/20 hover:bg-emerald-600/90"
+                >
                   <Play className="size-4 fill-current" />
-                )}
-                {running ? "Running" : "Run"}
-              </Button>
+                  Run
+                </Button>
+              )}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -731,6 +664,14 @@ function Canvas({ workflow }: { workflow: Workflow }) {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-44">
+                  <DropdownMenuItem
+                    onSelect={tidyLayout}
+                    disabled={nodes.length === 0}
+                  >
+                    <Network className="size-3.5" />
+                    Tidy layout
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem
                     onSelect={() => {
                       setNameDraft(workflow.name)
@@ -780,193 +721,6 @@ function Canvas({ workflow }: { workflow: Workflow }) {
             </Panel>
           </ReactFlow>
         </div>
-
-        {selected && selectedMeta ? (
-          <aside className="flex w-96 shrink-0 flex-col border-l border-border/60">
-            {/* Identity header: what the node is, plus delete/close. */}
-            <div className="flex shrink-0 items-center gap-2.5 border-b border-border/60 p-3">
-              <div
-                className={cn(
-                  "flex size-8 shrink-0 items-center justify-center rounded-lg",
-                  selectedMeta.tile
-                )}
-              >
-                <selectedMeta.icon
-                  className={cn("size-4", selectedMeta.accent)}
-                />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="truncate font-medium text-[13px]">
-                  {selected.type === "gate"
-                    ? selectedMeta.label
-                    : (selected.data as AgentNodeData).label ||
-                      selectedMeta.label}
-                </div>
-                <div className="truncate text-[11px] text-muted-foreground">
-                  {selectedMeta.description}
-                </div>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Delete node"
-                onClick={deleteSelectedNode}
-                className="text-muted-foreground hover:text-red-500"
-              >
-                <Trash2 className="size-3.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Close panel"
-                onClick={() => setSelectedId(null)}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <X className="size-4" />
-              </Button>
-            </div>
-
-            {selected.type === "gate" ? (
-              <div className="space-y-3 overflow-y-auto p-3">
-                {nodeRun ? (
-                  <div className="flex items-center justify-between">
-                    <StatusPill
-                      status={nodeRun.status}
-                      pulse={nodeRun.status === "running"}
-                    />
-                    {nodeRun.status === "paused" ? (
-                      <div className="flex gap-1.5">
-                        <Button
-                          size="xs"
-                          onClick={() => void resumeRun(true, run?.run.id)}
-                          className="gap-1 bg-emerald-600 text-white hover:bg-emerald-600/90"
-                        >
-                          <Check className="size-3" />
-                          Approve
-                        </Button>
-                        <Button
-                          size="xs"
-                          variant="ghost"
-                          onClick={() => void resumeRun(false, run?.run.id)}
-                          className="gap-1 text-red-500 hover:bg-red-500/10 hover:text-red-500"
-                        >
-                          <X className="size-3" />
-                          Reject
-                        </Button>
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-                {nodeRun?.error ? (
-                  <Callout variant="destructive" size="sm">
-                    {nodeRun.error}
-                  </Callout>
-                ) : null}
-                <Callout size="sm">
-                  The run pauses here until you approve. Rejecting cancels the
-                  rest of the run.
-                </Callout>
-              </div>
-            ) : (
-              <>
-                <div className="flex shrink-0 items-center gap-1 border-b border-border/60 p-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setPanelTab("config")}
-                    className={cn(
-                      "flex-1 rounded-md px-2 py-1 font-medium text-xs transition",
-                      panelTab === "config"
-                        ? "bg-muted text-foreground"
-                        : "text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    Config
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPanelTab("output")}
-                    disabled={!hasRunInfo}
-                    className={cn(
-                      "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1 font-medium text-xs transition disabled:opacity-40",
-                      panelTab === "output"
-                        ? "bg-muted text-foreground"
-                        : "text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    Output
-                    {nodeRun?.error ? (
-                      <span className="size-1.5 rounded-full bg-red-500" />
-                    ) : null}
-                  </button>
-                </div>
-                {panelTab === "config" ? (
-                  <div className="space-y-3 overflow-y-auto p-3">
-                    <div className="space-y-1">
-                      <span className="font-medium text-[11px] text-muted-foreground">
-                        Label
-                      </span>
-                      <Input
-                        value={(selected.data as AgentNodeData).label}
-                        onChange={(e) => patchData({ label: e.target.value })}
-                        className="h-8 text-[13px]"
-                      />
-                    </div>
-                    <AgentConfig
-                      config={(selected.data as AgentNodeData).config}
-                      patchConfig={patchConfig}
-                    />
-                  </div>
-                ) : (
-                  <div className="flex min-h-0 flex-1 flex-col">
-                    <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/60 px-3 py-2">
-                      {nodeRun ? (
-                        <StatusPill
-                          status={nodeRun.status}
-                          pulse={nodeRun.status === "running"}
-                        />
-                      ) : (
-                        <span />
-                      )}
-                      {nodeSessionId ? (
-                        <Button
-                          variant="ghost"
-                          size="xs"
-                          onClick={() => openNodeSession(nodeSessionId)}
-                          className="gap-1.5 text-muted-foreground hover:text-foreground"
-                        >
-                          <ExternalLink className="size-3.5" />
-                          Open full session
-                        </Button>
-                      ) : null}
-                    </div>
-                    {nodeRun?.error ? (
-                      <Callout
-                        variant="destructive"
-                        size="sm"
-                        className="mx-3 mt-3 shrink-0"
-                      >
-                        {nodeRun.error}
-                      </Callout>
-                    ) : null}
-                    {nodeSessionId ? (
-                      <div className="relative min-h-0 flex-1">
-                        <Transcript sessionId={nodeSessionId} bottomInset={0} />
-                      </div>
-                    ) : nodeRun?.output?.trim() ? (
-                      <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap p-3 text-muted-foreground text-xs">
-                        {nodeRun.output}
-                      </div>
-                    ) : (
-                      <p className="p-6 text-center text-muted-foreground text-xs">
-                        No output for this node yet.
-                      </p>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
-          </aside>
-        ) : null}
       </div>
 
       {palette ? (
@@ -990,120 +744,6 @@ function Canvas({ workflow }: { workflow: Workflow }) {
         </div>
       ) : null}
     </div>
-  )
-}
-
-/** The intent-driven config for an agent node. */
-function AgentConfig({
-  config,
-  patchConfig,
-}: {
-  config: AgentTaskConfig
-  patchConfig: (patch: Partial<AgentTaskConfig>) => void
-}) {
-  const meta = INTENT_META[config.intent]
-  const IntentIcon = meta.icon
-  return (
-    <>
-      <div className="space-y-1">
-        <span className="font-medium text-[11px] text-muted-foreground">
-          Does
-        </span>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="flex w-full items-center gap-2 rounded-md border border-border/60 px-2.5 py-1.5 text-left text-[13px] hover:bg-muted/40"
-            >
-              <IntentIcon className={cn("size-4", meta.accent)} />
-              <span className="flex-1">{meta.label}</span>
-              <span className="text-[10px] text-muted-foreground">
-                {meta.description}
-              </span>
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-56">
-            {INTENT_ORDER.map((intent) => {
-              const m = INTENT_META[intent]
-              const Icon = m.icon
-              return (
-                <DropdownMenuItem
-                  key={intent}
-                  // Clear the mode override: it's a Custom-only knob, and a
-                  // stale bypassPermissions must not follow the node into a
-                  // read-only intent like Review.
-                  onSelect={() => patchConfig({ intent, permissionMode: null })}
-                  className="gap-2"
-                >
-                  <Icon className={cn("size-4", m.accent)} />
-                  {m.label}
-                </DropdownMenuItem>
-              )
-            })}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
-      <div className="flex items-center gap-1.5">
-        <ModelMenu
-          value={config.model}
-          onChange={(model) => patchConfig({ model })}
-          backend={backendForModel(config.model)}
-          started={false}
-        />
-        <EffortMenu
-          value={config.effort}
-          onChange={(effort) => patchConfig({ effort })}
-          backend={backendForModel(config.model)}
-        />
-        {config.intent === "custom" ? (
-          <ModeMenu
-            // Mirror the backend default for Custom (acceptEdits), so the menu
-            // never shows a scarier mode than the one that actually runs.
-            value={config.permissionMode ?? "acceptEdits"}
-            onChange={(permissionMode) => patchConfig({ permissionMode })}
-          />
-        ) : null}
-      </div>
-
-      <div className="space-y-1">
-        <span className="font-medium text-[11px] text-muted-foreground">
-          {meta.promptLabel}
-        </span>
-        <textarea
-          value={config.prompt}
-          onChange={(e) => patchConfig({ prompt: e.target.value })}
-          rows={meta.promptRequired ? 5 : 3}
-          placeholder={meta.promptPlaceholder}
-          className="w-full resize-none rounded-md border border-border/60 bg-transparent px-2.5 py-1.5 text-[13px] outline-none placeholder:text-muted-foreground/60 focus-visible:border-border"
-        />
-        {meta.promptRequired && !config.prompt.trim() ? (
-          <p className="text-[11px] text-amber-500">
-            Required before the workflow can run.
-          </p>
-        ) : null}
-      </div>
-
-      {meta.writesCode ? (
-        <div className="space-y-1">
-          <span className="font-medium text-[11px] text-muted-foreground">
-            Branch (optional)
-          </span>
-          <Input
-            value={config.branchHint ?? ""}
-            onChange={(e) =>
-              patchConfig({ branchHint: e.target.value || null })
-            }
-            placeholder="defaults to the run's branch"
-            className="h-8 font-mono text-[12px]"
-          />
-        </div>
-      ) : (
-        <Callout>
-          Read-only. Researches and hands its result to the next node.
-        </Callout>
-      )}
-    </>
   )
 }
 
