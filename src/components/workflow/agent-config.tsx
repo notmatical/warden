@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { backendForModel } from "@/lib/models"
 import { cn } from "@/lib/utils"
 import { INTENT_META, INTENT_ORDER } from "@/lib/workflow-intents"
@@ -112,12 +113,13 @@ export function AgentConfig({
         <span className="font-medium text-[11px] text-muted-foreground">
           {meta.promptLabel}
         </span>
-        <textarea
+        <Textarea
           value={config.prompt}
           onChange={(e) => patchConfig({ prompt: e.target.value })}
           rows={meta.promptRequired ? 3 : 2}
           placeholder={meta.promptPlaceholder}
-          className="nodrag w-full resize-none rounded-md border border-border/60 bg-transparent px-2.5 py-1.5 text-[13px] outline-none placeholder:text-muted-foreground/60 focus-visible:border-border"
+          spellCheck={false}
+          className="nodrag min-h-14 text-[13px]"
         />
         {meta.promptRequired && !config.prompt.trim() ? (
           <p className="text-[11px] text-amber-500">
@@ -135,6 +137,7 @@ export function AgentConfig({
             value={config.branchHint ?? ""}
             onChange={(e) => patchConfig({ branchHint: e.target.value || null })}
             placeholder="defaults to the run's branch"
+            spellCheck={false}
             className="nodrag h-7 font-mono text-[12px]"
           />
         </div>
