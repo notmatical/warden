@@ -59,6 +59,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { FolderWorkflowsSection } from "@/components/workflow/folder-workflows-section"
 import { WorktreeSetupDialog } from "@/components/worktree-setup-dialog"
 import { BindLinearBanner } from "@/integrations/linear/components/bind-linear-banner"
 import { FolderTasksSection } from "@/integrations/linear/components/folder-tasks-section"
@@ -326,6 +327,7 @@ export function FolderView({ projectId }: { projectId: string }) {
         <OpenPrsSection projectId={projectId} />
 
         <SessionsSection projectId={projectId} />
+        <FolderWorkflowsSection projectId={projectId} />
 
         {linear.phase === "bound" && linear.binding ? (
           <FolderTasksSection
