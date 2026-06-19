@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
-use crate::util::codex_home;
+use crate::util::{codex_home, same_path};
 
 /// Newest Codex rollout id whose session was started in `working_dir`, skipping
 /// ids already claimed by another warden session and one-shot `codex exec` runs.
@@ -61,18 +61,4 @@ fn read_session_meta(path: &Path) -> Option<(String, String, bool)> {
     let is_exec = payload.get("source").and_then(Value::as_str) == Some("exec")
         || payload.get("originator").and_then(Value::as_str) == Some("codex_exec");
     Some((id, cwd, is_exec))
-}
-
-/// Compare two paths for "same location", tolerant of separators and (on Windows)
-/// case. Avoids `canonicalize` so it still matches dirs that no longer exist.
-fn same_path(a: &str, b: &str) -> bool {
-    fn norm(p: &str) -> String {
-        let trimmed = p.replace('\\', "/").trim_end_matches('/').to_string();
-        if cfg!(windows) {
-            trimmed.to_lowercase()
-        } else {
-            trimmed
-        }
-    }
-    norm(a) == norm(b)
 }

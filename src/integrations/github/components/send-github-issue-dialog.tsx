@@ -1,4 +1,5 @@
 import { SendToAgentDialogCore } from "@/components/common/send-to-agent-dialog"
+import { issueBranchName } from "@/lib/branch"
 
 import { buildGithubIssuePrompt } from "../prompt"
 import type { GhIssueComment, RepoIssue } from "../types"
@@ -27,6 +28,7 @@ export function SendGithubIssueDialog({
       onOpenChange={onOpenChange}
       buildTitle={() => `#${issue.number}: ${issue.title}`}
       buildFirstMessage={() => buildGithubIssuePrompt(issue, comments)}
+      branchHint={issueBranchName(issue.number, issue.title)}
       defaultProjectId={issue.projectId}
       onSent={() => onSent?.()}
     />

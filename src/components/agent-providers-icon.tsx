@@ -1,11 +1,11 @@
 import { Sparkles } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 
-import { PROVIDER_ICON, PROVIDER_ORDER } from "@/lib/provider-icons"
+import { PRODUCT_ICON, PROVIDER_ORDER } from "@/lib/provider-icons"
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store/app-store"
 
-/** Icon for a generic agent session: the brand mark of the provider you're
+/** Icon for a generic agent session: the product mark of the provider you're
  *  signed into, gently rotating through them when more than one is enabled.
  *  Falls back to a spark when no provider is authed. */
 export function AgentProvidersIcon({ className }: { className?: string }) {
@@ -31,7 +31,7 @@ export function AgentProvidersIcon({ className }: { className?: string }) {
   if (enabled.length === 0) return <Sparkles className={className} />
 
   const provider = enabled[index % enabled.length]
-  const Icon = PROVIDER_ICON[provider]
+  const Icon = PRODUCT_ICON[provider]
   // Remount on swap so the fade-in replays.
   return (
     <Icon

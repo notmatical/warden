@@ -102,18 +102,24 @@ export const useAppStore = create<AppState>()(
           )
           void ipc.setAppFocusState(document.hasFocus())
 
-          // Notify on freshly assigned Linear issues. Seeding from the
-          // pre-sync cache means assignments made while the app was closed
-          // notify on launch, while a first-ever sync stays silent.
+          // Notify on freshly assigned Linear issues. The baseline seeds from
+          // the pre-sync cache, so assignments made while the app was closed
+          // notify on launch. An empty cache (first connect, recreated
+          // database) leaves the baseline unset, so the first sync adopts its
+          // whole set silently instead of announcing every assigned issue.
           let knownLinearIds: Set<string> | null = null
-          void linearCachedIssues()
+          const seeded = linearCachedIssues()
             .then((issues) => {
-              // A change event may beat the seed; never clobber its newer set.
-              knownLinearIds ??= new Set(issues.map((i) => i.id))
+              if (issues.length > 0) {
+                knownLinearIds = new Set(issues.map((i) => i.id))
+              }
             })
             .catch(() => {})
           void onLinearChanged(async () => {
             try {
+              // The first change event can race the seed read; the baseline
+              // must win or every cached issue would look fresh.
+              await seeded
               const issues = await linearCachedIssues()
               const ids = new Set(issues.map((i) => i.id))
               if (knownLinearIds) {

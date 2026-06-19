@@ -8,6 +8,8 @@ import type { AppState } from "../types"
 type ProvidersSlice = Pick<
   AppState,
   | "providers"
+  | "opencodeModels"
+  | "opencodeModelsLoading"
   | "githubStatus"
   | "loadProviders"
   | "installProvider"
@@ -19,8 +21,14 @@ type ProvidersSlice = Pick<
   | "setGithubSource"
 >
 
-/** Agent-CLI provider status (Claude/Codex) and the GitHub CLI: load, install,
- *  update, and switch managed/system source. */
+/** OpenCode model availability is per-account and the listing shells out to
+ *  its CLI, so refreshes (provider loads re-run on every window focus) are
+ *  throttled. */
+const OPENCODE_MODELS_TTL_MS = 60_000
+let opencodeModelsFetchedAt = 0
+
+/** Agent-CLI provider status (Claude/Codex/OpenCode) and the GitHub CLI: load,
+ *  install, update, and switch managed/system source. */
 export const createProvidersSlice: StateCreator<
   AppState,
   [],
@@ -28,12 +36,40 @@ export const createProvidersSlice: StateCreator<
   ProvidersSlice
 > = (set, get) => ({
   providers: [],
+  opencodeModels: [],
+  opencodeModelsLoading: false,
   githubStatus: null,
 
   loadProviders: async () => {
     try {
       const providers = await ipc.listProviderStatus()
       set({ providers })
+
+      // Refresh the OpenCode model catalog alongside provider status: the
+      // picker only shows models the account can run, which shifts with
+      // sign-ins done inside or outside the app.
+      const opencode = providers.find((p) => p.id === "opencode")
+      const stale = Date.now() - opencodeModelsFetchedAt > OPENCODE_MODELS_TTL_MS
+      if (opencode?.installed && (stale || get().opencodeModels.length === 0)) {
+        opencodeModelsFetchedAt = Date.now()
+        // The listing shells out to the CLI (seconds); the picker shows a
+        // skeleton while this is true and no models are known yet.
+        set({ opencodeModelsLoading: true })
+        void ipc
+          .listOpencodeModels()
+          .then((models) =>
+            set({
+              opencodeModels: models.map((m) => ({
+                ...m,
+                provider: "OpenCode",
+              })),
+            })
+          )
+          .catch(() => {
+            // CLI hiccups just leave the previous (possibly empty) list.
+          })
+          .finally(() => set({ opencodeModelsLoading: false }))
+      }
     } catch (error) {
       reportError("Failed to load providers", error)
     }

@@ -68,6 +68,7 @@ pub fn run() {
         session::commands::attach_to_session,
         session::commands::cancel_session,
         session::commands::approve_tools,
+        session::commands::reject_tools,
         session::commands::approve_plan,
         session::commands::list_context_sources,
         session::commands::add_context_source,
@@ -105,8 +106,10 @@ pub fn run() {
         mentions::commands::fetch_repo_ref,
         // external
         core::external::open_in,
+        core::external::list_open_apps,
         // providers
         providers::commands::list_provider_status,
+        providers::commands::list_opencode_models,
         providers::commands::install_provider,
         providers::commands::update_provider,
         providers::commands::set_provider_source,

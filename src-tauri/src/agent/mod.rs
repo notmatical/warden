@@ -22,15 +22,18 @@ use crate::store::Store;
 // The per-provider turn adapters live with the rest of each provider's code.
 use crate::providers::claude::agent as claude;
 use crate::providers::codex::agent as codex;
+use crate::providers::opencode::agent as opencode;
 
 use stream::parse_line;
 
-/// App-exit teardown. The shared Codex app-server dies with the app; Claude
-/// session processes are deliberately left running — each sees stdin EOF,
-/// finishes any in-flight turn into its output file, and exits on its own.
-/// The next launch reattaches or drains them (see [`session_proc::recover`]).
+/// App-exit teardown. The shared Codex app-server and OpenCode server die with
+/// the app; Claude session processes are deliberately left running — each sees
+/// stdin EOF, finishes any in-flight turn into its output file, and exits on
+/// its own. The next launch reattaches or drains them (see
+/// [`session_proc::recover`]).
 pub fn shutdown() {
     codex::kill_all();
+    opencode::kill_all();
 }
 
 /// What a completed one-shot turn produced (recipes/naming).
@@ -227,13 +230,19 @@ impl AgentManager {
         }
         let context = crate::providers::context::assemble(&sources);
 
-        if session.backend == Backend::Codex {
-            // Codex runs the turn to completion in its adapter, settling the
-            // session to Idle on the terminating `turn/completed`. A failure to
-            // start the turn is surfaced as an error event here.
-            if let Err(err) =
-                codex::run_turn(&app, &store, &session, &prompt, &context.system_text).await
-            {
+        // Codex and OpenCode run the turn to completion in their adapters,
+        // settling the session to Idle on the turn's terminal event. A failure
+        // to start (or finish) the turn is surfaced as an error event here.
+        if session.backend != Backend::Claude {
+            let run = match session.backend {
+                Backend::Codex => {
+                    codex::run_turn(&app, &store, &session, &prompt, &context.system_text).await
+                }
+                _ => {
+                    opencode::run_turn(&app, &store, &session, &prompt, &context.system_text).await
+                }
+            };
+            if let Err(err) = run {
                 let failed: Result<TurnOutput> = Err(err);
                 self.finalize(&app, &store, &session.id, &failed);
             }
@@ -336,12 +345,16 @@ impl AgentManager {
         // Settle the status before stopping so the reader's EOF handler reads this
         // as a cancel rather than a crash.
         let _ = store.set_session_status(session_id, SessionStatus::Idle);
-        // Codex turns run on the shared app-server — interrupt the turn; Claude
-        // turns run a per-session process — kill it.
-        if matches!(session.as_ref().map(|s| s.backend), Some(Backend::Codex)) {
-            codex::interrupt(session_id);
-        } else {
-            session_proc::kill(session_id);
+        // Codex and OpenCode turns run on a shared server — interrupt the turn;
+        // Claude turns run a per-session process — kill it.
+        match session.as_ref().map(|s| s.backend) {
+            Some(Backend::Codex) => {
+                codex::interrupt(session_id);
+            }
+            Some(Backend::Opencode) => {
+                opencode::interrupt(session_id);
+            }
+            _ => session_proc::kill(session_id),
         }
         if let Ok(session) = store.get_session(session_id) {
             emit_session(app, &session);

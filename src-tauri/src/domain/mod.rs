@@ -12,8 +12,8 @@ pub use group::Group;
 pub use label::{Label, ProjectLabels};
 pub use project::Project;
 pub use session::{
-    Backend, CheckStatus, EffortLevel, PermissionMode, Session, SessionKind, SessionRole,
-    SessionStatus, SetupStatus,
+    Backend, CheckStatus, EffortLevel, PermissionMode, PrCheckCounts, Session, SessionKind,
+    SessionRole, SessionStatus, SetupStatus,
 };
 #[cfg(test)]
 pub use workflow::WorkflowEdge;

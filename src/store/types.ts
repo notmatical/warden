@@ -18,6 +18,8 @@ import type {
   SessionRole,
   SyncOutcome,
 } from "@/types"
+
+import type { ModelOption } from "@/lib/models"
 import type {
   RunStatus,
   Workflow,
@@ -48,6 +50,8 @@ export interface CreateSessionOptions {
   workingDir?: string
   /** Linear issue this session works on; drives writeback on PR open/merge. */
   linearIssueId?: string
+  /** Worktree branch name (e.g. "feature/WAR-123" derived from an issue). */
+  branchHint?: string
 }
 
 export interface SessionSettingsPatch {
@@ -82,6 +86,11 @@ export interface AppState {
   sessions: Record<string, Session>
   /** Install/auth status of each agent CLI provider. */
   providers: ProviderStatus[]
+  /** Picker entries for the models the local OpenCode install can run —
+   *  per-account, so loaded from its CLI rather than the static config. */
+  opencodeModels: ModelOption[]
+  /** True while the OpenCode model listing CLI is running. */
+  opencodeModelsLoading: boolean
   /** Install/auth status of the GitHub CLI (loaded lazily by Settings). */
   githubStatus: ProviderStatus | null
   eventsBySession: Record<string, EventRecord[]>
@@ -229,6 +238,7 @@ export interface AppState {
   ) => Promise<void>
   cancel: (sessionId: string) => Promise<void>
   approveTools: (sessionId: string, patterns: string[]) => Promise<void>
+  rejectTools: (sessionId: string) => Promise<void>
   approvePlan: (sessionId: string) => Promise<void>
   resolveApproval: (sessionId: string, eventId: string) => void
   runPlanToCode: (opts: RunPlanToCodeOptions) => Promise<void>

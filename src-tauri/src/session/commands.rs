@@ -19,14 +19,14 @@ use crate::util::uuid;
 /// Default reasoning effort for a new session.
 const DEFAULT_EFFORT: EffortLevel = EffortLevel::High;
 
-/// Infer the backend that runs a given model id. Codex/GPT ids run on Codex;
-/// everything else runs on Claude.
-fn backend_for_model(model: &str) -> Backend {
-    let id = model.to_ascii_lowercase();
-    if id.starts_with("gpt") || id.starts_with("codex") {
-        Backend::Codex
+/// Ultracode is a Claude Code session setting; a session landing on another
+/// backend (model switch, explicit choice) falls back to the next highest
+/// tier instead of carrying a label its menu doesn't offer.
+fn clamp_effort(backend: Backend, effort: EffortLevel) -> EffortLevel {
+    if backend != Backend::Claude && effort == EffortLevel::Ultracode {
+        EffortLevel::Max
     } else {
-        Backend::Claude
+        effort
     }
 }
 
@@ -57,6 +57,8 @@ pub struct CreateSessionOptions {
     pub working_dir: Option<String>,
     /// Linear issue this session works on; drives writeback on PR open/merge.
     pub linear_issue_id: Option<String>,
+    /// Worktree branch name (e.g. `feature/WAR-123` derived from an issue).
+    pub branch_hint: Option<String>,
 }
 
 #[tauri::command]
@@ -110,7 +112,7 @@ pub async fn create_session(
         },
         None => {
             let isolate = options.isolate.unwrap_or(kind != SessionKind::Terminal);
-            provision_working_dir(&project, isolate, None)?
+            provision_working_dir(&project, isolate, options.branch_hint.as_deref())?
         }
     };
     // An explicit backend wins; otherwise it follows from the model id, since
@@ -119,7 +121,8 @@ pub async fn create_session(
         .backend
         .as_deref()
         .and_then(Backend::parse)
-        .unwrap_or_else(|| backend_for_model(&model));
+        .unwrap_or_else(|| Backend::for_model(&model));
+    let effort = clamp_effort(backend, effort);
 
     let session = state.store.create_session(NewSession {
         group_id,
@@ -164,7 +167,7 @@ pub async fn update_session(
     let session = state.store.get_session(&session_id)?;
 
     let model = model.unwrap_or(session.model);
-    let backend = backend_for_model(&model);
+    let backend = Backend::for_model(&model);
     let permission_mode = permission_mode
         .as_deref()
         .and_then(PermissionMode::parse)
@@ -173,6 +176,7 @@ pub async fn update_session(
         .as_deref()
         .and_then(EffortLevel::parse)
         .unwrap_or(session.effort);
+    let effort = clamp_effort(backend, effort);
 
     state
         .store
@@ -366,9 +370,12 @@ pub async fn retry_worktree_setup(
 ) -> CommandResult<()> {
     let session = state.store.get_session(&session_id)?;
     if !session.is_isolated {
-        return Err(
-            AppError::Invalid("setup commands only run in isolated worktrees".to_string()).into(),
-        );
+        // Nothing to set up in the checkout — the failure being retried is a
+        // leftover from a torn-down worktree, so retrying clears it.
+        state.store.set_session_setup(&session_id, None, None)?;
+        let updated = state.store.get_session(&session_id)?;
+        emit_session(&app, &updated);
+        return Ok(());
     }
     let project = state.store.get_project(&session.project_id)?;
     git::setup::spawn_session_setup(&app, &state.store, &session, &project.path);
@@ -453,6 +460,22 @@ pub async fn send_message(
 ) -> CommandResult<()> {
     let session = state.store.get_session(&session_id)?;
 
+    // An OpenCode turn blocked on a question consumes the next message as the
+    // answer (Claude's question flow ends the turn, so its reply is just the
+    // next turn's prompt — this is the OpenCode equivalent).
+    if session.backend == Backend::Opencode
+        && crate::providers::opencode::agent::has_pending_question(&session_id)
+    {
+        return crate::providers::opencode::agent::answer_question(
+            &app,
+            &state.store,
+            &session_id,
+            &text,
+        )
+        .await
+        .map_err(Into::into);
+    }
+
     // A brand-new chat session gets a clean title generated from its first
     // message, in the background, unless the user has already named it. Title
     // off the user's own words, before attachment references are appended.
@@ -515,7 +538,9 @@ pub async fn cancel_session(
     Ok(())
 }
 
-/// Approve denied tool patterns for a session and resume the turn.
+/// Approve denied tool patterns for a session and resume the turn. For
+/// OpenCode the turn is still alive, blocked on the ask — approving replies to
+/// it server-side and the turn continues on its own.
 #[tauri::command]
 #[specta::specta]
 pub async fn approve_tools(
@@ -524,13 +549,30 @@ pub async fn approve_tools(
     session_id: String,
     patterns: Vec<String>,
 ) -> CommandResult<()> {
-    state.store.add_allowed_tools(&session_id, &patterns)?;
     let session = state.store.get_session(&session_id)?;
+    if session.backend == Backend::Opencode {
+        crate::providers::opencode::agent::approve_pending_permission(&session_id).await;
+        return Ok(());
+    }
+    state.store.add_allowed_tools(&session_id, &patterns)?;
     state
         .manager
         .resume(app, state.store.clone(), session)
         .await
         .map_err(Into::into)
+}
+
+/// Reject a pending tool ask. Only OpenCode has a live ask to answer — a
+/// Claude denial already ended the turn, so dismissing is purely client-side
+/// and never reaches here.
+#[tauri::command]
+#[specta::specta]
+pub async fn reject_tools(state: State<'_, AppState>, session_id: String) -> CommandResult<()> {
+    let session = state.store.get_session(&session_id)?;
+    if session.backend == Backend::Opencode {
+        crate::providers::opencode::agent::reject_pending_permission(&session_id).await;
+    }
+    Ok(())
 }
 
 /// Approve the agent's plan: leave `plan` mode for `acceptEdits` and resume so

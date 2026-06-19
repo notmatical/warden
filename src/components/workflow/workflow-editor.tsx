@@ -1054,6 +1054,7 @@ function AgentConfig({
         <EffortMenu
           value={config.effort}
           onChange={(effort) => patchConfig({ effort })}
+          backend={backendForModel(config.model)}
         />
         {config.intent === "custom" ? (
           <ModeMenu

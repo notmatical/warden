@@ -15,8 +15,9 @@ import {
 import { type KeyboardEvent, type ReactNode, useEffect, useState } from "react"
 
 import { AgentProvidersIcon } from "@/components/agent-providers-icon"
+import { NativeCliSub } from "@/components/common/native-cli-sub"
 import { useConfirm } from "@/components/confirm-dialog"
-import { ClaudeIcon, CodexIcon, GitHubIcon } from "@/components/icons/brand"
+import { GitHubIcon } from "@/components/icons/brand"
 import { ReviewPrDialog } from "@/components/review-pr-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -112,16 +113,9 @@ function RowAction({
 
 function RootRow({ groupId, project }: { groupId: string; project: Project }) {
   const createSession = useAppStore((s) => s.createSession)
-  const createNativeSession = useAppStore((s) => s.createNativeSession)
   const removeRoot = useAppStore((s) => s.removeRoot)
   const openTab = useAppStore((s) => s.openTab)
   const active = useAppStore((s) => s.activeTabId === folderTabId(project.id))
-  const claudeAuthed = useAppStore((s) =>
-    s.providers.some((p) => p.id === "claude" && p.authed)
-  )
-  const codexAuthed = useAppStore((s) =>
-    s.providers.some((p) => p.id === "codex" && p.authed)
-  )
 
   const [reviewOpen, setReviewOpen] = useState(false)
 
@@ -191,23 +185,7 @@ function RootRow({ groupId, project }: { groupId: string; project: Project }) {
             <SquareTerminal />
             Terminal session
           </DropdownMenuItem>
-          {claudeAuthed || codexAuthed ? <DropdownMenuSeparator /> : null}
-          {claudeAuthed ? (
-            <DropdownMenuItem
-              onSelect={() => void createNativeSession(project.id, "claude")}
-            >
-              <ClaudeIcon />
-              Native Claude
-            </DropdownMenuItem>
-          ) : null}
-          {codexAuthed ? (
-            <DropdownMenuItem
-              onSelect={() => void createNativeSession(project.id, "codex")}
-            >
-              <CodexIcon />
-              Native Codex
-            </DropdownMenuItem>
-          ) : null}
+          <NativeCliSub projectId={project.id} />
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => setReviewOpen(true)}>
             <GitHubIcon />

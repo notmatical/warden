@@ -3,6 +3,7 @@ import { toast } from "sonner"
 
 import { SendToAgentDialogCore } from "@/components/common/send-to-agent-dialog"
 import { Switch } from "@/components/ui/switch"
+import { issueBranchName } from "@/lib/branch"
 import { useAppStore } from "@/store/app-store"
 
 import { linearBindings, linearStartIssue } from "../ipc"
@@ -63,6 +64,10 @@ export function SendToAgentDialog({
       onOpenChange={onOpenChange}
       buildTitle={() => `${issue.identifier}: ${issue.title}`}
       buildFirstMessage={() => buildIssuePrompt(issue, comments)}
+      branchHint={
+        issue.branchName ||
+        issueBranchName(issue.identifier.toLowerCase(), issue.title)
+      }
       preselectProjectId={preselect}
       defaultProjectId={defaultProjectId}
       createOverrides={{ linearIssueId: issue.id }}

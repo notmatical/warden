@@ -57,6 +57,17 @@ export function listProviderStatus(): Promise<ProviderStatus[]> {
   return invoke("list_provider_status")
 }
 
+/** A model the local OpenCode install can run, as `id` (picker model id) and
+ *  `label` (the `provider/model` identifier OpenCode prints). */
+export interface OpencodeModel {
+  id: string
+  label: string
+}
+
+export function listOpencodeModels(): Promise<OpencodeModel[]> {
+  return invoke("list_opencode_models")
+}
+
 export function installProvider(id: Provider): Promise<void> {
   return invoke("install_provider", { id })
 }
@@ -277,6 +288,8 @@ export interface CreateSessionInput {
   workingDir?: string
   /** Linear issue this session works on; drives writeback on PR open/merge. */
   linearIssueId?: string
+  /** Worktree branch name (e.g. "feature/WAR-123" derived from an issue). */
+  branchHint?: string
 }
 
 /** Report window focus; backend pollers tier their cadence off it. */
@@ -300,6 +313,7 @@ export function createSession(input: CreateSessionInput): Promise<Session> {
       nativeCommand: input.nativeCommand ?? null,
       workingDir: input.workingDir ?? null,
       linearIssueId: input.linearIssueId ?? null,
+      branchHint: input.branchHint ?? null,
     },
   })
 }
@@ -452,10 +466,21 @@ export function dismissSetupError(sessionId: string): Promise<void> {
   return invoke("dismiss_setup_error", { sessionId })
 }
 
-export type OpenTarget = "folder" | "terminal" | "zed" | "vscode"
+/** `"folder"`, `"terminal"`, or an installed app id from `listOpenApps`. */
+export type OpenTarget = string
 
 export function openIn(target: OpenTarget, path: string): Promise<void> {
   return invoke("open_in", { target, path })
+}
+
+/** An editor installed on this machine, offered by the "open in…" menu. */
+export interface OpenApp {
+  id: string
+  name: string
+}
+
+export function listOpenApps(): Promise<OpenApp[]> {
+  return invoke("list_open_apps")
 }
 
 export function sendMessage(
@@ -570,6 +595,10 @@ export function approveTools(
   patterns: string[]
 ): Promise<void> {
   return invoke("approve_tools", { sessionId, patterns })
+}
+
+export function rejectTools(sessionId: string): Promise<void> {
+  return invoke("reject_tools", { sessionId })
 }
 
 export function approvePlan(sessionId: string): Promise<void> {

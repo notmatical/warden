@@ -10,22 +10,26 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Kbd } from "@/components/ui/kbd"
 import { useControllableOpen } from "@/hooks/use-controllable-open"
-import { EFFORT_OPTIONS, effortLabel } from "@/lib/models"
+import { effortLabel, effortOptionsFor } from "@/lib/models"
 import { cn } from "@/lib/utils"
-import type { EffortLevel } from "@/types"
+import type { Backend, EffortLevel } from "@/types"
 
-/** Cool → hot, signaling increasing reasoning effort. */
+/** Cool → hot, signaling increasing reasoning effort; ultracode goes beyond
+ *  the scale (effort plus workflow orchestration). */
 const EFFORT_COLOR: Record<EffortLevel, string> = {
   low: "text-slate-400",
   medium: "text-sky-500",
   high: "text-emerald-500",
   xhigh: "text-amber-500",
   max: "text-red-500",
+  ultracode: "text-fuchsia-500",
 }
 
 interface EffortMenuProps {
   value: EffortLevel
   onChange: (effort: EffortLevel) => void
+  /** Backend the session runs on; Ultracode is offered for Claude only. */
+  backend?: Backend
   disabled?: boolean
   open?: boolean
   onOpenChange?: (open: boolean) => void
@@ -34,32 +38,30 @@ interface EffortMenuProps {
 export function EffortMenu({
   value,
   onChange,
+  backend,
   disabled,
   open: controlledOpen,
   onOpenChange,
 }: EffortMenuProps) {
   const [open, setOpen] = useControllableOpen(controlledOpen, onOpenChange)
+  const options = effortOptionsFor(backend)
 
   // While the menu is open, the bare number keys pick a level directly.
   useEffect(() => {
     if (!open) return
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
       const index = Number(event.key) - 1
-      if (
-        !Number.isInteger(index) ||
-        index < 0 ||
-        index >= EFFORT_OPTIONS.length
-      ) {
+      if (!Number.isInteger(index) || index < 0 || index >= options.length) {
         return
       }
       event.preventDefault()
       event.stopPropagation()
-      onChange(EFFORT_OPTIONS[index].value)
+      onChange(options[index].value)
       setOpen(false)
     }
     window.addEventListener("keydown", onKeyDown, true)
     return () => window.removeEventListener("keydown", onKeyDown, true)
-  }, [open, onChange, setOpen])
+  }, [open, onChange, setOpen, options])
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
@@ -76,7 +78,7 @@ export function EffortMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-44">
-        {EFFORT_OPTIONS.map((option, index) => {
+        {options.map((option, index) => {
           const selected = value === option.value
           return (
             <DropdownMenuItem

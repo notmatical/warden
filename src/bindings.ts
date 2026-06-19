@@ -327,11 +327,26 @@ async cancelSession(sessionId: string) : Promise<Result<null, IpcError>> {
 }
 },
 /**
- * Approve denied tool patterns for a session and resume the turn.
+ * Approve denied tool patterns for a session and resume the turn. For
+ * OpenCode the turn is still alive, blocked on the ask — approving replies to
+ * it server-side and the turn continues on its own.
  */
 async approveTools(sessionId: string, patterns: string[]) : Promise<Result<null, IpcError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("approve_tools", { sessionId, patterns }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Reject a pending tool ask. Only OpenCode has a live ask to answer — a
+ * Claude denial already ended the turn, so dismissing is purely client-side
+ * and never reaches here.
+ */
+async rejectTools(sessionId: string) : Promise<Result<null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("reject_tools", { sessionId }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -677,8 +692,8 @@ async fetchRepoRef(workingDir: string, kind: string, number: number) : Promise<R
 }
 },
 /**
- * Open `path` in an external app selected by `target`:
- * `"folder"`, `"terminal"`, `"zed"`, or `"vscode"`.
+ * Open `path` in an external app selected by `target`: `"folder"`,
+ * `"terminal"` (the OS default), or an editor id from [`list_open_apps`].
  */
 async openIn(target: string, path: string) : Promise<Result<null, IpcError>> {
     try {
@@ -688,9 +703,34 @@ async openIn(target: string, path: string) : Promise<Result<null, IpcError>> {
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * The editors installed on this machine, in registry order. The folder and
+ * terminal targets are always available and not listed here (the terminal
+ * opens the OS default).
+ */
+async listOpenApps() : Promise<Result<OpenApp[], IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("list_open_apps") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async listProviderStatus() : Promise<Result<ToolStatus[], IpcError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("list_provider_status") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * The models the local OpenCode install can run (connected providers only) —
+ * the picker's OpenCode pane, since availability is per-account.
+ */
+async listOpencodeModels() : Promise<Result<OpencodeModel[], IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("list_opencode_models") };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -1073,10 +1113,10 @@ export type Attachment = { id: string; name: string;
  */
 path: string; isImage: boolean; isDir: boolean }
 /**
- * Which agent backend powers a session. Only Claude is implemented today, but
- * the enum is the seam where future providers (codex, cursor, ...) plug in.
+ * Which agent backend powers a session. This enum is the seam where providers
+ * plug in; each variant has an adapter under `crate::providers`.
  */
-export type Backend = "claude" | "codex"
+export type Backend = "claude" | "codex" | "opencode"
 /**
  * Aggregate CI-check state for a session's pull request, distilled from `gh`'s
  * `statusCheckRollup`. Absent when the PR has no checks.
@@ -1122,7 +1162,11 @@ workingDir: string | null;
 /**
  * Linear issue this session works on; drives writeback on PR open/merge.
  */
-linearIssueId: string | null }
+linearIssueId: string | null; 
+/**
+ * Worktree branch name (e.g. `feature/WAR-123` derived from an issue).
+ */
+branchHint: string | null }
 /**
  * What deleting a session would destroy, so the UI can ask before — instead of
  * force-deleting work. All zeros when nothing is at risk: checkout sessions
@@ -1147,9 +1191,11 @@ sharedSessions: number }
  */
 export type DiffFile = { path: string; added: number; removed: number; binary: boolean; patch: string }
 /**
- * Reasoning effort handed to the agent CLI (`claude --effort`).
+ * Reasoning effort for a session. `low..max` are `claude --effort` tokens;
+ * `Ultracode` is a Claude Code session setting on top (xhigh effort plus
+ * workflow orchestration) — each adapter maps it to what its CLI accepts.
  */
-export type EffortLevel = "low" | "medium" | "high" | "xhigh" | "max"
+export type EffortLevel = "low" | "medium" | "high" | "xhigh" | "max" | "ultracode"
 /**
  * A persisted, ordered event in a session's append-only log. The transcript
  * you render today and the cross-agent thread you render later are both just
@@ -1279,7 +1325,12 @@ export type Label = { id: string; projectId: string; name: string;
 color: string; createdAt: string }
 export type LinearBinding = { teamId: string; projectId: string | null }
 export type LinearComment = { id: string; body: string; createdAt: string; user: LinearUserRef | null }
-export type LinearIssue = { id: string; identifier: string; title: string; description: string | null; priority: number; url: string; updatedAt: string; state: LinearState; assignee: LinearUserRef | null; team: LinearTeamRef; project: LinearProjectRef | null; labels: string[] }
+export type LinearIssue = { id: string; identifier: string; title: string; description: string | null; priority: number; url: string;
+/**
+ * Linear's workspace-configured git branch name for the issue.
+ * Defaulted so payloads cached before this field existed still parse.
+ */
+branchName: string; updatedAt: string; state: LinearState; assignee: LinearUserRef | null; team: LinearTeamRef; project: LinearProjectRef | null; labels: string[] }
 export type LinearProjectRef = { id: string; name: string }
 export type LinearState = { id: string; name: string; color: string; 
 /**
@@ -1321,6 +1372,23 @@ export type NodeRunStatus = "pending" | "running" | "done" | "failed" | "skipped
  */
 "awaitingInput"
 /**
+ * One installed editor, surfaced to the "open in…" menu.
+ */
+export type OpenApp = { id: string; name: string }
+/**
+ * One selectable OpenCode model for the picker.
+ */
+export type OpencodeModel = { 
+/**
+ * Picker model id, prefixed so it routes to the OpenCode backend
+ * (`opencode/<model>` for Zen, `opencode/<provider>/<model>` otherwise).
+ */
+id: string; 
+/**
+ * The `provider/model` identifier as OpenCode prints it.
+ */
+label: string }
+/**
  * Permission posture handed to the agent CLI. Sessions are worktree-isolated,
  * so `BypassPermissions` is the default for autonomous, prompt-free turns.
  */
@@ -1333,6 +1401,11 @@ export type PlanToCodeResult = { planner: Session; coder: Session }
  * One CI check (check run or commit status) on a PR's head commit.
  */
 export type PrCheck = { name: string; state: PrCheckState; url: string | null; startedAt: string | null; completedAt: string | null }
+/**
+ * Per-state tallies of a PR's CI checks, persisted alongside the aggregate
+ * rollup so list views can render counts without shelling out to `gh`.
+ */
+export type PrCheckCounts = { passed: number; failed: number; pending: number; skipped: number }
 /**
  * One CI check's outcome on a PR, for the hover card's per-check rows.
  */
@@ -1362,11 +1435,20 @@ export type PrInfo = { number: number; url: string;
 /**
  * GitHub's PR state: `OPEN`, `MERGED`, or `CLOSED`.
  */
-state: string; title: string; 
+state: string; title: string; isDraft: boolean; 
+/**
+ * `APPROVED`, `CHANGES_REQUESTED`, or `REVIEW_REQUIRED` (absent when the
+ * repo requires no review).
+ */
+reviewDecision: string | null; 
 /**
  * Aggregate CI-check state, or `None` when the PR has no checks.
  */
-checkStatus: CheckStatus | null }
+checkStatus: CheckStatus | null; 
+/**
+ * Per-state CI check tallies, `None` when the PR has no checks.
+ */
+checkCounts: PrCheckCounts | null }
 /**
  * An open PR in a repo, for the review-checkout picker.
  */
@@ -1489,7 +1571,16 @@ prState: string | null;
 /**
  * Aggregate CI-check state for the PR, and when it was last polled (epoch s).
  */
-prCheckStatus: CheckStatus | null; prCheckedAt: number | null; 
+prCheckStatus: CheckStatus | null; prCheckedAt: number | null; prIsDraft: boolean; 
+/**
+ * GitHub's review decision (`APPROVED`/`CHANGES_REQUESTED`/`REVIEW_REQUIRED`),
+ * absent when the repo requires no review.
+ */
+prReviewDecision: string | null; 
+/**
+ * Per-state CI check tallies, `None` when the PR has no checks.
+ */
+prCheckCounts: PrCheckCounts | null; 
 /**
  * Pinned sessions sort to the top of the folder's session list.
  */

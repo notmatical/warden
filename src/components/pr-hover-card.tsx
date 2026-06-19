@@ -2,6 +2,7 @@ import { openUrl } from "@tauri-apps/plugin-opener"
 import { Check, Loader2, Minus, X } from "lucide-react"
 import { type ReactNode, useRef, useState } from "react"
 
+import { ReviewBadge, StateBadge } from "@/components/common/pr-badges"
 import { GitHubIcon } from "@/components/icons/brand"
 import { Button } from "@/components/ui/button"
 import {
@@ -58,52 +59,6 @@ function CheckRow({ check }: { check: PrCheck }) {
       {inner}
     </button>
   )
-}
-
-const PILL =
-  "inline-flex w-fit items-center rounded-lg px-1.5 py-px font-medium text-[10px] ring-1 ring-inset"
-
-function StateBadge({ state, isDraft }: { state: string; isDraft: boolean }) {
-  const [label, tone] = isDraft
-    ? ["draft", "bg-muted/60 text-muted-foreground ring-border"]
-    : state === "MERGED"
-      ? ["merged", "bg-violet-500/10 text-violet-400 ring-violet-500/30"]
-      : state === "CLOSED"
-        ? ["closed", "bg-red-500/10 text-red-400 ring-red-500/30"]
-        : ["open", "bg-emerald-500/10 text-emerald-500 ring-emerald-500/30"]
-  return <span className={cn(PILL, tone)}>{label}</span>
-}
-
-function ReviewBadge({ decision }: { decision: string | null }) {
-  if (decision === "APPROVED") {
-    return (
-      <span
-        className={cn(
-          PILL,
-          "bg-emerald-500/10 text-emerald-500 ring-emerald-500/30"
-        )}
-      >
-        approved
-      </span>
-    )
-  }
-  if (decision === "CHANGES_REQUESTED") {
-    return (
-      <span className={cn(PILL, "bg-red-500/10 text-red-400 ring-red-500/30")}>
-        changes requested
-      </span>
-    )
-  }
-  if (decision === "REVIEW_REQUIRED") {
-    return (
-      <span
-        className={cn(PILL, "bg-muted/60 text-muted-foreground ring-border")}
-      >
-        review required
-      </span>
-    )
-  }
-  return null
 }
 
 function Details({ pr }: { pr: PrDetails }) {
