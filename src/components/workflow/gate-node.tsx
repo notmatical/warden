@@ -1,7 +1,8 @@
 import { Handle, type NodeProps, Position, useReactFlow } from "@xyflow/react"
-import { Check, Trash2, X } from "lucide-react"
+import { Check, Loader2, Trash2, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { Callout } from "@/components/ui/callout"
 import {
   ContextMenu,
   ContextMenuContent,
@@ -11,6 +12,8 @@ import {
 import { cn } from "@/lib/utils"
 import { GATE_META } from "@/lib/workflow-intents"
 import { useAppStore } from "@/store/app-store"
+
+import { STATUS_PILL, StatusPill } from "./status"
 
 /** A gate carries no config — its name is fixed. The data slot only tags the
  *  owning workflow so run status can't bleed in from another workflow's run. */
@@ -29,12 +32,13 @@ const HANDLE_CLASS =
 export function GateNode({ id, data, selected }: NodeProps) {
   const node = data as GateNodeData
   const { deleteElements } = useReactFlow()
-  const status = useAppStore((s) =>
+  const nodeRun = useAppStore((s) =>
     s.workflowRun?.run.workflowId === node.workflowId
-      ? s.workflowRun.nodes.find((n) => n.nodeId === id)?.status
+      ? s.workflowRun.nodes.find((n) => n.nodeId === id)
       : undefined
   )
   const resumeRun = useAppStore((s) => s.resumeRun)
+  const status = nodeRun?.status
   const paused = status === "paused"
   const GateIcon = GATE_META.icon
 
@@ -46,7 +50,7 @@ export function GateNode({ id, data, selected }: NodeProps) {
         <div className="relative w-60">
           <Handle
             type="target"
-            position={Position.Top}
+            position={Position.Left}
             className={HANDLE_CLASS}
           />
           <div
@@ -67,10 +71,24 @@ export function GateNode({ id, data, selected }: NodeProps) {
                   {paused ? "Awaiting your approval" : "Pauses for approval"}
                 </div>
               </div>
+              {paused ? (
+                <Loader2 className="size-3.5 shrink-0 animate-spin text-amber-500" />
+              ) : status && status !== "pending" ? (
+                <span
+                  className={cn(
+                    "size-2 shrink-0 rounded-full",
+                    STATUS_PILL[status].dot
+                  )}
+                />
+              ) : null}
             </div>
 
             {paused ? (
-              <div className="nodrag flex gap-1.5 px-2.5 py-2">
+              // biome-ignore lint/a11y/noStaticElementInteractions: the key guard only stops canvas delete-shortcuts while a button is focused, not real interaction
+              <div
+                className="nodrag flex gap-1.5 px-2.5 py-2"
+                onKeyDown={(e) => e.stopPropagation()}
+              >
                 <Button
                   size="xs"
                   onClick={() => void resumeRun(true)}
@@ -90,10 +108,27 @@ export function GateNode({ id, data, selected }: NodeProps) {
                 </Button>
               </div>
             ) : null}
+
+            {/* Open by default: a gate has nothing to edit, so it always shows
+                its status, any error, and what it does. */}
+            <div className="space-y-2 p-2.5">
+              {status && status !== "pending" && !paused ? (
+                <StatusPill status={status} />
+              ) : null}
+              {nodeRun?.error ? (
+                <Callout variant="destructive" size="sm">
+                  {nodeRun.error}
+                </Callout>
+              ) : null}
+              <Callout size="sm">
+                The run pauses here until you approve. Rejecting cancels the rest
+                of the run.
+              </Callout>
+            </div>
           </div>
           <Handle
             type="source"
-            position={Position.Bottom}
+            position={Position.Right}
             className={HANDLE_CLASS}
           />
         </div>

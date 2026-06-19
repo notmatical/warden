@@ -16,6 +16,10 @@ import {
   DataTableEmpty,
   DataTableRow,
 } from "@/components/common/data-table"
+import {
+  FolderPicker,
+  type FolderRef,
+} from "@/components/controls/folder-picker"
 import { useConfirm } from "@/components/confirm-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -131,9 +135,8 @@ export function WorkflowsView() {
   const deleteWorkflow = useAppStore((s) => s.deleteWorkflow)
   const cancelWorkflow = useAppStore((s) => s.cancelWorkflow)
   const activeGroupId = useAppStore((s) => s.activeGroupId)
-  const activeRoots = useAppStore((s) =>
-    activeGroupId ? s.rootsByGroup[activeGroupId] : undefined
-  )
+  const groups = useAppStore((s) => s.groups)
+  const rootsByGroup = useAppStore((s) => s.rootsByGroup)
   const confirm = useConfirm()
 
   // A dropdown-item select can "fall through" as a click on the row beneath the
@@ -155,6 +158,10 @@ export function WorkflowsView() {
   const [importOpen, setImportOpen] = useState(false)
   const [importCode, setImportCode] = useState("")
   const [importing, setImporting] = useState(false)
+  const [newOpen, setNewOpen] = useState(false)
+  const [newName, setNewName] = useState("New workflow")
+  // The folder a new/imported workflow is created in (its agents run there).
+  const [targetFolder, setTargetFolder] = useState<FolderRef | null>(null)
 
   useEffect(() => {
     void loadAllWorkflows()
@@ -199,17 +206,48 @@ export function WorkflowsView() {
       return next
     })
 
-  const newProject = activeRoots?.[0]?.id ?? projects[0]?.id
-  const create = async () => {
-    if (!newProject) return
-    const wf = await createWorkflow(newProject, "New workflow")
-    if (wf) openWorkflow(wf.id)
+  // Default the picker to the active folder, falling back to any folder, so
+  // the common case is one click but the target is always explicit.
+  const defaultFolder = useMemo<FolderRef | null>(() => {
+    if (activeGroupId && rootsByGroup[activeGroupId]?.[0]) {
+      return {
+        groupId: activeGroupId,
+        projectId: rootsByGroup[activeGroupId][0].id,
+      }
+    }
+    for (const g of groups) {
+      const root = rootsByGroup[g.id]?.[0]
+      if (root) return { groupId: g.id, projectId: root.id }
+    }
+    return null
+  }, [activeGroupId, groups, rootsByGroup])
+
+  const openNew = () => {
+    setNewName("New workflow")
+    setTargetFolder(defaultFolder)
+    setNewOpen(true)
+  }
+  const runCreate = async () => {
+    if (!targetFolder) return
+    const wf = await createWorkflow(
+      targetFolder.projectId,
+      newName.trim() || "New workflow"
+    )
+    if (wf) {
+      setNewOpen(false)
+      openWorkflow(wf.id)
+    }
   }
 
+  const openImport = () => {
+    setImportCode("")
+    setTargetFolder(defaultFolder)
+    setImportOpen(true)
+  }
   const runImport = async () => {
-    if (!newProject || !importCode.trim() || importing) return
+    if (!targetFolder || !importCode.trim() || importing) return
     setImporting(true)
-    const wf = await importWorkflow(newProject, importCode)
+    const wf = await importWorkflow(targetFolder.projectId, importCode)
     setImporting(false)
     if (wf) {
       setImportOpen(false)
@@ -230,16 +268,13 @@ export function WorkflowsView() {
         <div className="flex items-center gap-2">
           <Button
             variant="secondary"
-            onClick={() => {
-              setImportCode("")
-              setImportOpen(true)
-            }}
-            disabled={!newProject}
+            onClick={openImport}
+            disabled={!defaultFolder}
           >
             <Download className="size-4" />
             Import
           </Button>
-          <Button onClick={() => void create()} disabled={!newProject}>
+          <Button onClick={openNew} disabled={!defaultFolder}>
             <Plus className="size-4" />
             New workflow
           </Button>
@@ -466,13 +501,54 @@ export function WorkflowsView() {
         </DataTable>
       </div>
 
+      <Dialog open={newOpen} onOpenChange={setNewOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New workflow</DialogTitle>
+            <DialogDescription>
+              Pick the folder it runs in — its agents work in that repo.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <span className="text-muted-foreground text-xs">Name</span>
+              <Input
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault()
+                    void runCreate()
+                  }
+                }}
+                placeholder="New workflow"
+                autoFocus
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-muted-foreground text-xs">Folder</span>
+              <FolderPicker value={targetFolder} onChange={setTargetFolder} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              size="sm"
+              onClick={() => void runCreate()}
+              disabled={!targetFolder || !newName.trim()}
+            >
+              Create workflow
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={importOpen} onOpenChange={setImportOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Import workflow</DialogTitle>
             <DialogDescription>
-              Paste a workflow code exported from Warden. It'll be added as a
-              new workflow{newProject ? ` in ${projectName(newProject)}` : ""}.
+              Paste a workflow code exported from Warden — it's added as a new
+              workflow in the folder you pick.
             </DialogDescription>
           </DialogHeader>
           <Textarea
@@ -486,10 +562,13 @@ export function WorkflowsView() {
             }}
             placeholder="warden-wf-…"
             rows={5}
-            // biome-ignore lint/a11y/noAutofocus: paste target in a modal
             autoFocus
             className="max-h-48 overflow-y-auto break-all font-mono text-xs"
           />
+          <div className="flex flex-col gap-1.5">
+            <span className="text-muted-foreground text-xs">Folder</span>
+            <FolderPicker value={targetFolder} onChange={setTargetFolder} />
+          </div>
           <DialogFooter className="sm:justify-between">
             <Button
               variant="ghost"
@@ -503,7 +582,7 @@ export function WorkflowsView() {
             <Button
               size="sm"
               onClick={() => void runImport()}
-              disabled={!importCode.trim() || importing || !newProject}
+              disabled={!importCode.trim() || importing || !targetFolder}
             >
               {importing ? "Importing…" : "Import"}
             </Button>
