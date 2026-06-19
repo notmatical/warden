@@ -14,6 +14,9 @@ serde_json = "1.0"
 # Pinned to match the shell exactly so the `Type` derives unify into one specta
 # and tauri-specta accepts core types in the bindings builder.
 specta = { version = "=2.0.0-rc.22", features = ["derive", "serde_json"] }
+# Derives the enum<->string conversions (one declarative source, replacing the
+# hand-rolled as_str/parse match arms).
+strum = { version = "0.26", features = ["derive"] }
 
 # Tauri is optional: the core compiles without it (a standing decoupling test and
 # a future CLI/server surface). The shell enables `features = ["tauri"]`.

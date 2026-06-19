@@ -103,10 +103,12 @@ App stays at repo root during Phase 1; only the Rust crate boundary changes.
 - [x] `domain/event.rs` → **`core/event/types.rs`** — `AgentEvent`, `EventRecord`,
       `TokenUsage`, `ToolDenial` (cross-backend contract; pairs with emit machinery).
       Shim: `domain/mod.rs` re-exports from `warden_core`. Verified green.
-- [ ] `domain/session.rs` enums → split: `Backend`, `PermissionMode`, `EffortLevel`
-      → **`core/backend.rs`** + **`core/turn.rs`** (agent-invocation vocabulary);
-      `SessionStatus`, `SessionKind`, `SessionRole`, `SetupStatus`, `CheckStatus`,
-      `PrCheckCounts` → **`session/types.rs`**
+- [x] `domain/session.rs` vocab → **`core/backend.rs`** + **`core/turn.rs`** —
+      `Backend` (identity), `PermissionMode`, `EffortLevel`. `strum` derives replace
+      the `as_str`/`parse` boilerplate (1 source; alignment tests guard drift);
+      `Backend::for_model` deferred to the provider registry. Verified (3 tests).
+- [ ] `domain/session.rs` state enums → **`session/types.rs`** — `SessionStatus`,
+      `SessionKind`, `SessionRole`, `SetupStatus`, `CheckStatus`, `PrCheckCounts`
 - [ ] `domain/session.rs` `Session` struct → **`session/types.rs`** *(40-field; decomp deferred)*
 - [ ] `domain/context.rs` → **`session/types.rs`** (`ContextSource`, `SessionContextSource`)
 - [ ] `domain/workflow.rs` → **`workflow/types.rs`** (all `Workflow*` types)
