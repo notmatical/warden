@@ -70,13 +70,19 @@ pub async fn status_all() -> Result<Vec<ToolStatus>> {
 /// (Codex, OpenCode). The turn's terminal `Result` event also settles the
 /// session back to idle and accrues the turn.
 pub(crate) fn persist_event(app: &AppHandle, store: &Store, session_id: &str, event: AgentEvent) {
-    let is_result = matches!(event, AgentEvent::Result { .. });
+    // A terminal Result settles the session — errored if the turn failed,
+    // otherwise idle.
+    let result_status = match &event {
+        AgentEvent::Result { is_error: true, .. } => Some(SessionStatus::Error),
+        AgentEvent::Result { .. } => Some(SessionStatus::Idle),
+        _ => None,
+    };
     if let Ok(record) = store.append_event(session_id, &event) {
         emit_event(app, &record);
     }
-    if is_result {
+    if let Some(status) = result_status {
         let _ = store.record_turn(session_id, 0.0);
-        let _ = store.set_session_status(session_id, SessionStatus::Idle);
+        let _ = store.set_session_status(session_id, status);
         if let Ok(session) = store.get_session(session_id) {
             emit_session(app, &session);
         }

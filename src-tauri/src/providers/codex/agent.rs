@@ -24,9 +24,9 @@ use serde_json::{json, Value};
 use tauri::AppHandle;
 use tokio::sync::Mutex as AsyncMutex;
 
-use crate::domain::{AgentEvent, EffortLevel, PermissionMode, Session, TokenUsage};
+use crate::domain::{AgentEvent, EffortLevel, PermissionMode, Session, SessionStatus, TokenUsage};
 use crate::error::{AppError, Result};
-use crate::events::emit_delta;
+use crate::events::{emit_delta, emit_session};
 use crate::providers::jsonrpc::Client;
 use crate::providers::{clip, persist_event as persist};
 use crate::store::Store;
@@ -76,13 +76,41 @@ async fn server() -> Result<Arc<Client>> {
 }
 
 /// Notification routing key: most carry `threadId`; `thread/started` nests it
-/// under `thread.id`.
-fn route(_method: &str, params: &Value) -> Option<String> {
-    params
+/// under `thread.id`. An `error` with no thread id (e.g. a turn/start model
+/// rejection) is routed to the sole in-flight turn so its drain loop fails
+/// instead of hanging forever.
+fn route(method: &str, params: &Value) -> Option<String> {
+    let sole_thread = {
+        let turns = turns();
+        (turns.len() == 1).then(|| turns.values().next().map(|(thread, _)| thread.clone()))
+    }
+    .flatten();
+    route_key(method, params, sole_thread.as_deref())
+}
+
+/// Pure routing decision (no global state) so it can be tested.
+fn route_key(method: &str, params: &Value, sole_thread: Option<&str>) -> Option<String> {
+    if let Some(id) = params
         .get("threadId")
         .or_else(|| params.get("thread").and_then(|t| t.get("id")))
         .and_then(Value::as_str)
-        .map(str::to_string)
+    {
+        return Some(id.to_string());
+    }
+    if method == "error" {
+        return sole_thread.map(str::to_string);
+    }
+    None
+}
+
+/// Persist a session status and push the updated session to the UI. A terminal
+/// `error` (no `Result` follows) settles here; `Result` settling lives in the
+/// shared `persist_event`.
+fn settle(app: &AppHandle, store: &Store, session_id: &str, status: SessionStatus) {
+    let _ = store.set_session_status(session_id, status);
+    if let Ok(session) = store.get_session(session_id) {
+        emit_session(app, &session);
+    }
 }
 
 /// Run the `initialize` handshake. Must be called once, right after spawn.
@@ -401,8 +429,17 @@ fn handle_notification(
                 .unwrap_or("codex reported an error")
                 .to_string();
             persist(app, store, session_id, AgentEvent::Error { message });
-            // A non-retrying error ends the turn; a retry keeps it alive.
-            params.get("willRetry").and_then(Value::as_bool) == Some(false)
+            // Terminal unless the server explicitly says it will retry — an
+            // absent `willRetry` (e.g. an invalid-model 400) is a hard failure,
+            // not something to wait on. End the turn and mark the session
+            // errored so the caller (and any workflow poller) sees the failure.
+            let retrying = params.get("willRetry").and_then(Value::as_bool) == Some(true);
+            if retrying {
+                false
+            } else {
+                settle(app, store, session_id, SessionStatus::Error);
+                true
+            }
         }
         _ => false,
     }
@@ -587,5 +624,47 @@ fn stringify(value: &Value) -> String {
     match value {
         Value::String(s) => s.clone(),
         other => other.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::route_key;
+    use serde_json::json;
+
+    #[test]
+    fn routes_by_thread_id() {
+        let p = json!({ "threadId": "t1" });
+        assert_eq!(
+            route_key("item/completed", &p, Some("sole")).as_deref(),
+            Some("t1")
+        );
+    }
+
+    #[test]
+    fn routes_by_nested_thread_id() {
+        let p = json!({ "thread": { "id": "t2" } });
+        assert_eq!(route_key("thread/started", &p, None).as_deref(), Some("t2"));
+    }
+
+    #[test]
+    fn unkeyed_error_falls_back_to_sole_turn() {
+        let p = json!({ "error": { "message": "bad model" } });
+        assert_eq!(
+            route_key("error", &p, Some("sole")).as_deref(),
+            Some("sole")
+        );
+    }
+
+    #[test]
+    fn unkeyed_error_drops_when_no_sole_turn() {
+        let p = json!({ "error": { "message": "bad model" } });
+        assert_eq!(route_key("error", &p, None), None);
+    }
+
+    #[test]
+    fn unkeyed_non_error_is_not_routed() {
+        let p = json!({ "delta": "hi" });
+        assert_eq!(route_key("item/agentMessage/delta", &p, Some("sole")), None);
     }
 }
