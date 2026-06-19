@@ -33,6 +33,9 @@ interface EffortMenuProps {
   disabled?: boolean
   open?: boolean
   onOpenChange?: (open: boolean) => void
+  /** "toolbar" (default): compact ghost trigger, for the composer. "form":
+   *  full-width field-style trigger, for dialogs and the workflow node. */
+  variant?: "toolbar" | "form"
 }
 
 export function EffortMenu({
@@ -42,6 +45,7 @@ export function EffortMenu({
   disabled,
   open: controlledOpen,
   onOpenChange,
+  variant = "toolbar",
 }: EffortMenuProps) {
   const [open, setOpen] = useControllableOpen(controlledOpen, onOpenChange)
   const options = effortOptionsFor(backend)
@@ -63,8 +67,22 @@ export function EffortMenu({
     return () => window.removeEventListener("keydown", onKeyDown, true)
   }, [open, onChange, setOpen, options])
 
-  return (
-    <DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
+  const trigger =
+    variant === "form" ? (
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="outline"
+          disabled={disabled}
+          className="h-9 w-full justify-between gap-2 border-input bg-transparent px-3 font-normal hover:bg-input/30 dark:bg-input/30 dark:hover:bg-input/50"
+        >
+          <span className="flex min-w-0 items-center gap-2">
+            <Gauge className={cn("size-3.5 shrink-0", EFFORT_COLOR[value])} />
+            <span className="truncate text-sm">{effortLabel(value)}</span>
+          </span>
+          <ChevronDown className="size-3.5 shrink-0 text-muted-foreground/60" />
+        </Button>
+      </DropdownMenuTrigger>
+    ) : (
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
@@ -77,6 +95,11 @@ export function EffortMenu({
           <ChevronDown className="size-3 opacity-50" />
         </Button>
       </DropdownMenuTrigger>
+    )
+
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen} modal={variant === "form"}>
+      {trigger}
       <DropdownMenuContent align="start" className="w-44">
         {options.map((option, index) => {
           const selected = value === option.value

@@ -217,6 +217,10 @@ impl Client {
 
     fn dispatch_notification(&self, method: &str, msg: &Value) {
         let params = msg.get("params").cloned().unwrap_or(Value::Null);
+        self.dispatch_with_params(method, params);
+    }
+
+    fn dispatch_with_params(&self, method: &str, params: Value) {
         let Some(key) = (self.route)(method, &params) else {
             return;
         };
@@ -256,6 +260,13 @@ async fn reader_loop(client: Arc<Client>, stdout: tokio::process::ChildStdout) {
             // current adapters expect these; log rather than drop silently.
             (Some(method), true) => {
                 log::debug!("{}: ignoring server request {method}", client.name);
+            }
+            // A bare top-level error (no id, no method) — some servers emit one
+            // for a request they can't attribute to a turn. Surface it as an
+            // `error` notification so the adapter fails the turn instead of
+            // hanging; routing keys it to the in-flight turn.
+            (None, false) if msg.get("error").is_some() => {
+                client.dispatch_with_params("error", msg.clone());
             }
             (None, false) => {}
         }

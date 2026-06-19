@@ -16,12 +16,13 @@ use std::path::Path;
 use std::sync::Arc;
 
 use tauri::AppHandle;
+use tokio::sync::watch;
 use tokio::task::JoinSet;
 
 use crate::agent::AgentManager;
 use crate::domain::{
     AgentTaskConfig, ContextSource, NodeKind, NodeRunStatus, PermissionMode, RunStatus, Session,
-    SessionKind, SessionStatus, WorkflowGraph, WorkflowNodeRun,
+    SessionKind, SessionStatus, SetupStatus, WorkflowGraph, WorkflowNodeRun,
 };
 use crate::error::{AppError, Result};
 use crate::events::emit_session;
@@ -68,7 +69,16 @@ fn canceled(ctx: &RunContext) -> bool {
 /// Drive a run to completion or a gate, settling its status.
 pub async fn drive(ctx: RunContext) {
     let ctx = Arc::new(ctx);
-    match run_steps(&ctx).await {
+    // Run the scheduler in a child task so a panic settles the run as Failed
+    // rather than dropping the handle and leaving a zombie "Running" row.
+    let inner = ctx.clone();
+    let outcome = match tauri::async_runtime::spawn(async move { run_steps(&inner).await }).await {
+        Ok(r) => r,
+        Err(join_err) => Err(AppError::Agent(format!(
+            "workflow executor crashed: {join_err}"
+        ))),
+    };
+    match outcome {
         Ok(Outcome::Completed) => {
             let _ = ctx
                 .store
@@ -103,6 +113,103 @@ fn launchable(writer: bool, in_flight: usize, writer_running: bool, cap: usize) 
         in_flight == 0
     } else {
         !writer_running && in_flight < cap
+    }
+}
+
+/// Worktree setup progress, shared by every node that waits for it.
+#[derive(Clone)]
+enum SetupState {
+    Pending,
+    Done,
+    Failed(String),
+}
+
+/// Spawn the repo's worktree setup (e.g. `bun install`) off the critical path.
+/// Nodes wait on the returned receiver before their turn so a code node never
+/// runs against a tree missing its dependencies — but their sessions still
+/// appear immediately instead of the run sitting on a silent "Running" while a
+/// cold install blocks. The setup task signals the result once.
+fn spawn_worktree_setup(repo_path: &str, working_dir: &str) -> watch::Receiver<SetupState> {
+    let (tx, rx) = watch::channel(SetupState::Pending);
+    let repo = repo_path.to_string();
+    let worktree = working_dir.to_string();
+    tauri::async_runtime::spawn(async move {
+        let state = match git::setup::run_setup(Path::new(&repo), Path::new(&worktree)).await {
+            Ok(_) => SetupState::Done,
+            Err(reason) => {
+                log::warn!("workflow worktree setup failed (continuing): {reason}");
+                SetupState::Failed(reason)
+            }
+        };
+        let _ = tx.send(state);
+    });
+    rx
+}
+
+/// Persist a node session's setup state and push it to the UI (mirrors the
+/// regular-session setup chip).
+fn set_session_setup(
+    ctx: &RunContext,
+    session_id: &str,
+    status: Option<SetupStatus>,
+    error: Option<&str>,
+) {
+    if ctx
+        .store
+        .set_session_setup(session_id, status, error)
+        .is_ok()
+    {
+        if let Ok(updated) = ctx.store.get_session(session_id) {
+            emit_session(&ctx.app, &updated);
+        }
+    }
+}
+
+enum SetupWait {
+    Ready,
+    Canceled,
+}
+
+/// Block a node's turn until worktree setup finishes, reflecting it as the
+/// session's setup status so the wait is visible. A setup failure is surfaced
+/// but not fatal — the agent just finds a tree without deps, as with a normal
+/// session. Returns `Canceled` if the run is canceled mid-wait.
+async fn await_setup(
+    ctx: &RunContext,
+    session: &Session,
+    node_id: &str,
+    rx: watch::Receiver<SetupState>,
+) -> SetupWait {
+    // Setup already settled (a later wave): nothing to show or wait for.
+    if !matches!(*rx.borrow(), SetupState::Pending) {
+        return SetupWait::Ready;
+    }
+    set_session_setup(ctx, &session.id, Some(SetupStatus::Running), None);
+    loop {
+        if canceled(ctx) {
+            set_session_setup(ctx, &session.id, None, None);
+            let _ = set_node(
+                ctx,
+                node_id,
+                NodeRunStatus::Skipped,
+                Some(&session.id),
+                None,
+                None,
+            );
+            return SetupWait::Canceled;
+        }
+        match rx.borrow().clone() {
+            SetupState::Pending => {}
+            SetupState::Done => {
+                set_session_setup(ctx, &session.id, Some(SetupStatus::Done), None);
+                return SetupWait::Ready;
+            }
+            SetupState::Failed(reason) => {
+                set_session_setup(ctx, &session.id, Some(SetupStatus::Failed), Some(&reason));
+                return SetupWait::Ready;
+            }
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
     }
 }
 
@@ -142,32 +249,32 @@ async fn run_steps(ctx: &Arc<RunContext>) -> Result<Outcome> {
         .collect();
 
     // One worktree per run, shared by every node. Reuse the existing one on a
-    // resume (read from a prior node's session); otherwise provision it.
-    let dir = match node_session.values().next() {
-        Some(sid) => {
-            let s = ctx.store.get_session(sid)?;
-            ProvisionedDir {
-                working_dir: s.working_dir,
-                branch: s.branch,
-                base_sha: s.base_sha,
-                base_branch: s.base_branch,
-                is_isolated: s.is_isolated,
+    // resume (read from a prior node's session); otherwise provision it and kick
+    // off setup concurrently — nodes wait on `setup_rx` before their turn, so
+    // the run shows progress immediately instead of blocking on a cold install.
+    let (dir, setup_rx): (ProvisionedDir, Option<watch::Receiver<SetupState>>) =
+        match node_session.values().next() {
+            Some(sid) => {
+                let s = ctx.store.get_session(sid)?;
+                (
+                    ProvisionedDir {
+                        working_dir: s.working_dir,
+                        branch: s.branch,
+                        base_sha: s.base_sha,
+                        base_branch: s.base_branch,
+                        is_isolated: s.is_isolated,
+                    },
+                    None,
+                )
             }
-        }
-        None => {
-            let dir = provision_working_dir(&project, true, Some(&ctx.branch))?;
-            // Run repo setup before the first node so agents find a ready tree.
-            if dir.is_isolated {
-                if let Err(reason) =
-                    git::setup::run_setup(Path::new(&project.path), Path::new(&dir.working_dir))
-                        .await
-                {
-                    log::warn!("workflow worktree setup failed (continuing): {reason}");
-                }
+            None => {
+                let dir = provision_working_dir(&project, true, Some(&ctx.branch))?;
+                let rx = dir
+                    .is_isolated
+                    .then(|| spawn_worktree_setup(&project.path, &dir.working_dir));
+                (dir, rx)
             }
-            dir
-        }
-    };
+        };
     let dir = Arc::new(dir);
 
     // Inbound-edge map (only edges between known nodes count for readiness).
@@ -278,6 +385,7 @@ async fn run_steps(ctx: &Arc<RunContext>) -> Result<Outcome> {
                     writer,
                     parent_id,
                     sources,
+                    setup_rx.clone(),
                 ));
             }
 
@@ -339,8 +447,12 @@ async fn run_node(
     writer: bool,
     parent_id: Option<String>,
     sources: Vec<(String, Option<String>)>,
+    setup: Option<watch::Receiver<SetupState>>,
 ) -> NodeResult {
-    let outcome = execute_node(&ctx, &dir, &node_id, &label, &cfg, parent_id, &sources).await;
+    let outcome = execute_node(
+        &ctx, &dir, &node_id, &label, &cfg, parent_id, &sources, setup,
+    )
+    .await;
     NodeResult {
         node_id,
         writer,
@@ -348,6 +460,7 @@ async fn run_node(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn execute_node(
     ctx: &RunContext,
     dir: &ProvisionedDir,
@@ -356,6 +469,7 @@ async fn execute_node(
     cfg: &AgentTaskConfig,
     parent_id: Option<String>,
     sources: &[(String, Option<String>)],
+    setup: Option<watch::Receiver<SetupState>>,
 ) -> NodeOutcome {
     let session = match create_node_session(ctx, dir, label, cfg, parent_id, sources) {
         Ok(s) => s,
@@ -381,6 +495,15 @@ async fn execute_node(
         None,
     ) {
         return NodeOutcome::Failed(e);
+    }
+
+    // Wait for worktree setup (dependency install) before the turn so a code
+    // node never runs against a half-provisioned tree. The session already
+    // exists, so the wait shows as its setup status rather than a dead canvas.
+    if let Some(rx) = setup {
+        if let SetupWait::Canceled = await_setup(ctx, &session, node_id, rx).await {
+            return NodeOutcome::Canceled;
+        }
     }
 
     // Drive the turn, then wait for it to genuinely finish — pausing on an

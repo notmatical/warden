@@ -578,17 +578,6 @@ async resumeWorkflow(runId: string, approve: boolean) : Promise<Result<WorkflowR
 }
 },
 /**
- * A workflow's past runs, newest first (run history).
- */
-async listWorkflowRuns(workflowId: string, limit: number | null) : Promise<Result<WorkflowRun[], IpcError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("list_workflow_runs", { workflowId, limit }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
  * Retry a failed or canceled run: every node that didn't finish resets to
  * pending, then the executor re-enters — `done` nodes are skipped, so the run
  * picks up where it stopped, in its original worktree.
@@ -627,6 +616,17 @@ async getWorkflowRun(runId: string) : Promise<Result<WorkflowRunView, IpcError>>
 async getLatestWorkflowRun(workflowId: string) : Promise<Result<WorkflowRunView | null, IpcError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_latest_workflow_run", { workflowId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * A workflow's past runs, newest first (run history).
+ */
+async listWorkflowRuns(workflowId: string, limit: number | null) : Promise<Result<WorkflowRun[], IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("list_workflow_runs", { workflowId, limit }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -1101,7 +1101,8 @@ prompt?: string;
  */
 branchHint?: string | null; 
 /**
- * Mode override (mainly for `Custom`); otherwise derived from the intent.
+ * Mode override — only honored for `Custom`; other intents always run
+ * under their intent's mode so read-only nodes stay read-only.
  */
 permissionMode?: PermissionMode | null }
 /**
