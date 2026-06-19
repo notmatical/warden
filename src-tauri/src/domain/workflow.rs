@@ -146,15 +146,23 @@ pub struct AgentTaskConfig {
     /// Open the per-run worktree on a named branch; else `wf/<run>`.
     #[serde(default)]
     pub branch_hint: Option<String>,
-    /// Mode override (mainly for `Custom`); otherwise derived from the intent.
+    /// Mode override — only honored for `Custom`; other intents always run
+    /// under their intent's mode so read-only nodes stay read-only.
     #[serde(default)]
     pub permission_mode: Option<PermissionMode>,
 }
 
 impl AgentTaskConfig {
+    /// The mode the node actually runs under. Non-`Custom` intents ignore the
+    /// override: a stale `bypassPermissions` from a node's Custom days must not
+    /// let a Review/Plan node escape its read-only posture.
     pub fn effective_mode(&self) -> PermissionMode {
-        self.permission_mode
-            .unwrap_or_else(|| self.intent.permission_mode())
+        match self.intent {
+            Intent::Custom => self
+                .permission_mode
+                .unwrap_or_else(|| self.intent.permission_mode()),
+            _ => self.intent.permission_mode(),
+        }
     }
 
     pub fn writes_code(&self) -> bool {
@@ -288,5 +296,46 @@ impl NodeRunStatus {
             "awaitingInput" => NodeRunStatus::AwaitingInput,
             _ => return None,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn config(intent: Intent, mode: Option<PermissionMode>) -> AgentTaskConfig {
+        AgentTaskConfig {
+            intent,
+            model: "claude-opus-4-8".to_string(),
+            effort: EffortLevel::High,
+            prompt: String::new(),
+            branch_hint: None,
+            permission_mode: mode,
+        }
+    }
+
+    #[test]
+    fn mode_override_is_only_honored_for_custom() {
+        let bypass = Some(PermissionMode::BypassPermissions);
+        assert_eq!(
+            config(Intent::Review, bypass).effective_mode(),
+            PermissionMode::Plan
+        );
+        assert_eq!(
+            config(Intent::Plan, bypass).effective_mode(),
+            PermissionMode::Plan
+        );
+        assert_eq!(
+            config(Intent::Custom, bypass).effective_mode(),
+            PermissionMode::BypassPermissions
+        );
+    }
+
+    #[test]
+    fn custom_without_override_defaults_to_accept_edits() {
+        assert_eq!(
+            config(Intent::Custom, None).effective_mode(),
+            PermissionMode::AcceptEdits
+        );
     }
 }
