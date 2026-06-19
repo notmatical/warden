@@ -1,0 +1,23 @@
+[package]
+name = "warden-core"
+version = "0.1.11"
+edition = "2021"
+rust-version = "1.80"
+license = "MIT"
+
+[lib]
+name = "warden_core"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# Pinned to match the shell exactly so the `Type` derives unify into one specta
+# and tauri-specta accepts core types in the bindings builder.
+specta = { version = "=2.0.0-rc.22", features = ["derive", "serde_json"] }
+
+# Tauri is optional: the core compiles without it (a standing decoupling test and
+# a future CLI/server surface). The shell enables `features = ["tauri"]`.
+tauri = { version = "2.11.2", optional = true }
+
+[features]
+tauri = ["dep:tauri"]

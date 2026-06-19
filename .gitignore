@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Rust / Cargo workspace
+/target
+
 # Agent skill manager artifacts
 .agents
 skills-lock.json
