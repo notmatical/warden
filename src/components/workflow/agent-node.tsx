@@ -7,7 +7,7 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
-import { backendForModel, formatModelName } from "@/lib/models"
+import { backendForModel, baseModelId, MODELS } from "@/lib/models"
 import { PROVIDER_ICON } from "@/lib/provider-icons"
 import { cn } from "@/lib/utils"
 import { INTENT_META } from "@/lib/workflow-intents"
@@ -17,6 +17,8 @@ import type { AgentTaskConfig, NodeRunStatus } from "@/types/workflow"
 export interface AgentNodeData {
   label: string
   config: AgentTaskConfig
+  /** Owning workflow — run status only applies when the live run is its run. */
+  workflowId?: string
   [key: string]: unknown
 }
 
@@ -36,14 +38,17 @@ const HANDLE_CLASS =
 export function AgentNode({ id, data, selected }: NodeProps) {
   const node = data as AgentNodeData
   const { deleteElements } = useReactFlow()
-  const status = useAppStore(
-    (s) => s.workflowRun?.nodes.find((n) => n.nodeId === id)?.status
+  const status = useAppStore((s) =>
+    s.workflowRun?.run.workflowId === node.workflowId
+      ? s.workflowRun.nodes.find((n) => n.nodeId === id)?.status
+      : undefined
   )
   const cfg = node.config
   const meta = INTENT_META[cfg.intent]
   const Icon = meta.icon
   const ProviderIcon = PROVIDER_ICON[backendForModel(cfg.model)]
-  const model = formatModelName(cfg.model)
+  const model =
+    MODELS.find((m) => m.id === baseModelId(cfg.model))?.label ?? cfg.model
 
   return (
     <ContextMenu>

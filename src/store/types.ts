@@ -141,7 +141,11 @@ export interface AppState {
   runWorkflowById: (id: string) => Promise<void>
   cancelWorkflow: (id: string) => Promise<void>
   resumeRun: (approve: boolean, runId?: string) => Promise<void>
+  /** Retry a failed/canceled run: unfinished nodes re-run, done ones stay. */
+  retryRun: (runId: string) => Promise<void>
   loadWorkflowRun: (id: string) => Promise<void>
+  /** View a specific run (from history) on the canvas. */
+  loadRunById: (runId: string) => Promise<void>
   applyWorkflowRun: (view: WorkflowRunView) => void
 
   // ----- labels (per-project, GitHub-style) -----

@@ -11,7 +11,8 @@ export interface AgentTaskConfig {
   /** Feature description (plan/custom) or optional extra instructions. */
   prompt: string
   branchHint?: string | null
-  /** Mode override, mainly for custom; otherwise derived from intent. */
+  /** Mode override — only honored for custom; other intents always run under
+   *  their intent's mode. */
   permissionMode?: PermissionMode | null
 }
 
