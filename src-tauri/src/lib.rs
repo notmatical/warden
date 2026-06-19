@@ -93,9 +93,11 @@ pub fn run() {
         workflow::commands::delete_workflow,
         workflow::commands::run_workflow,
         workflow::commands::resume_workflow,
+        workflow::commands::retry_workflow_run,
         workflow::commands::cancel_workflow,
         workflow::commands::get_workflow_run,
         workflow::commands::get_latest_workflow_run,
+        workflow::commands::list_workflow_runs,
         workflow::commands::list_workflow_sessions,
         // mentions
         mentions::commands::list_files,
@@ -237,6 +239,12 @@ pub fn run() {
                 workflow_cancels: Default::default(),
                 focus: Default::default(),
             });
+
+            // Workflow executors don't survive a restart; settle their runs so
+            // the editor doesn't show a phantom active run.
+            if let Err(e) = store.fail_interrupted_workflow_runs() {
+                log::warn!("failed to settle interrupted workflow runs: {e}");
+            }
 
             // Reattach to agent processes that survived the previous app run
             // (or drain what they wrote before dying), and settle any session

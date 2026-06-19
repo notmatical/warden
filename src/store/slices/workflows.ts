@@ -5,6 +5,7 @@ import { copyText } from "@/lib/clipboard"
 import * as ipc from "@/lib/ipc"
 import { notifyFor, windowFocused } from "@/lib/notify"
 import { workflowTabId } from "@/lib/viewport"
+import { remapGraphIds } from "@/lib/workflow-graph"
 import { decodeWorkflow, encodeWorkflow } from "@/lib/workflow-share"
 import type { WorkflowRunView } from "@/types/workflow"
 
@@ -32,7 +33,9 @@ type WorkflowsSlice = Pick<
   | "runWorkflowById"
   | "cancelWorkflow"
   | "resumeRun"
+  | "retryRun"
   | "loadWorkflowRun"
+  | "loadRunById"
   | "applyWorkflowRun"
 >
 
@@ -123,6 +126,8 @@ export const createWorkflowsSlice: StateCreator<
   },
 
   saveWorkflowGraph: async (id, graph) => {
+    // A debounced/unmount save can land after the workflow was deleted.
+    if (!get().workflows[id]) return
     set((s) => {
       const wf = s.workflows[id]
       return wf ? { workflows: { ...s.workflows, [id]: { ...wf, graph } } } : {}
@@ -153,7 +158,7 @@ export const createWorkflowsSlice: StateCreator<
       const copy = await ipc.createWorkflow(
         wf.projectId,
         `${wf.name} copy`,
-        wf.graph
+        remapGraphIds(wf.graph)
       )
       set((s) => ({ workflows: { ...s.workflows, [copy.id]: copy } }))
       return copy
@@ -200,7 +205,7 @@ export const createWorkflowsSlice: StateCreator<
       const wf = await ipc.createWorkflow(
         projectId,
         decoded.name,
-        decoded.graph
+        remapGraphIds(decoded.graph)
       )
       set((s) => ({ workflows: { ...s.workflows, [wf.id]: wf } }))
       return wf
@@ -240,8 +245,18 @@ export const createWorkflowsSlice: StateCreator<
   },
 
   runWorkflowById: async (id) => {
+    // File the run into the active group only when that group actually
+    // contains the workflow's project; otherwise let the backend pick the
+    // project's own group.
+    const wf = get().workflows[id]
+    const activeGroupId = get().activeGroupId
+    const roots = activeGroupId ? get().rootsByGroup[activeGroupId] : undefined
+    const groupId =
+      wf && roots?.some((p) => p.id === wf.projectId)
+        ? (activeGroupId ?? undefined)
+        : undefined
     try {
-      const view = await ipc.runWorkflow(id, get().activeGroupId ?? undefined)
+      const view = await ipc.runWorkflow(id, groupId)
       set((s) => ({
         workflowRun: view,
         workflowRunStatusById: {
@@ -297,6 +312,24 @@ export const createWorkflowsSlice: StateCreator<
     }
   },
 
+  retryRun: async (runId) => {
+    try {
+      const view = await ipc.retryWorkflowRun(runId)
+      set((s) => ({
+        workflowRun:
+          s.workflowRun?.run.id === view.run.id ? view : s.workflowRun,
+        workflowRunStatusById: view.run.workflowId
+          ? {
+              ...s.workflowRunStatusById,
+              [view.run.workflowId]: view.run.status,
+            }
+          : s.workflowRunStatusById,
+      }))
+    } catch (error) {
+      reportError("Failed to retry workflow run", error)
+    }
+  },
+
   loadWorkflowRun: async (id) => {
     try {
       const view = await ipc.getLatestWorkflowRun(id)
@@ -306,6 +339,15 @@ export const createWorkflowsSlice: StateCreator<
           ? { ...s.workflowRunStatusById, [id]: view.run.status }
           : s.workflowRunStatusById,
       }))
+    } catch (error) {
+      reportError("Failed to load workflow run", error)
+    }
+  },
+
+  loadRunById: async (runId) => {
+    try {
+      const view = await ipc.getWorkflowRun(runId)
+      set({ workflowRun: view })
     } catch (error) {
       reportError("Failed to load workflow run", error)
     }

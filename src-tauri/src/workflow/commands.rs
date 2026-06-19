@@ -2,12 +2,35 @@
 
 use tauri::{AppHandle, State};
 
-use crate::domain::{NodeRunStatus, RunStatus, Workflow, WorkflowGraph, WorkflowNodeRun};
-use crate::error::CommandResult;
+use crate::domain::{
+    NodeKind, NodeRunStatus, RunStatus, Workflow, WorkflowGraph, WorkflowNodeRun, WorkflowRun,
+};
+use crate::error::{AppError, CommandResult};
 use crate::state::AppState;
 
 use super::events::WorkflowRunView;
 use super::executor::{self, RunContext};
+
+/// One branch per run: `wf/<workflow-slug>-<run-short>`. Shared by run and
+/// resume so a gate-first resume provisions the same branch a fresh run would.
+fn run_branch(workflow_name: &str, run_id: &str) -> String {
+    let slug: String = workflow_name
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() {
+                c.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    let slug = slug.trim_matches('-');
+    format!(
+        "wf/{}-{}",
+        if slug.is_empty() { "workflow" } else { slug },
+        &run_id[..8.min(run_id.len())]
+    )
+}
 
 #[tauri::command]
 #[specta::specta]
@@ -68,6 +91,23 @@ pub async fn run_workflow(
     group_id: Option<String>,
 ) -> CommandResult<WorkflowRunView> {
     let wf = state.store.get_workflow(&workflow_id)?;
+    if !wf
+        .graph
+        .nodes
+        .iter()
+        .any(|n| matches!(n.kind, NodeKind::AgentTask(_)))
+    {
+        return Err(AppError::Invalid("workflow has no agent nodes to run".to_string()).into());
+    }
+    // One active run per workflow; a second would race it in the same worktree.
+    if let Some(prev) = state.store.latest_workflow_run(&workflow_id)? {
+        if matches!(prev.status, RunStatus::Running | RunStatus::Paused) {
+            return Err(AppError::Invalid(
+                "workflow already has an active run; stop it first".to_string(),
+            )
+            .into());
+        }
+    }
     let project = state.store.get_project(&wf.project_id)?;
     let group_id = match group_id {
         Some(g) => g,
@@ -93,24 +133,7 @@ pub async fn run_workflow(
         })?;
     }
 
-    // One branch per run: wf/<workflow-slug>-<run-short>.
-    let slug: String = wf
-        .name
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() {
-                c.to_ascii_lowercase()
-            } else {
-                '-'
-            }
-        })
-        .collect();
-    let slug = slug.trim_matches('-');
-    let branch = format!(
-        "wf/{}-{}",
-        if slug.is_empty() { "workflow" } else { slug },
-        &run.id[..8.min(run.id.len())]
-    );
+    let branch = run_branch(&wf.name, &run.id);
 
     let ctx = RunContext {
         app: app.clone(),
@@ -196,25 +219,108 @@ pub async fn resume_workflow(
             error: None,
         })?;
         let run = state.store.get_workflow_run(&run_id)?;
-        let graph = state.store.get_workflow_run_graph(&run_id)?;
-        let ctx = RunContext {
-            app: app.clone(),
-            store: state.store.clone(),
-            manager: state.manager,
-            run_id: run_id.clone(),
-            project_id: run.project_id.clone(),
-            group_id: run.group_id.clone(),
-            graph,
-            branch: format!("wf/{}", &run_id[..8.min(run_id.len())]),
-            workflow_id: run.workflow_id.clone(),
-            cancel: state.workflow_cancels.clone(),
-        };
-        tauri::async_runtime::spawn(executor::drive(ctx));
+        respawn_run(&app, &state, &run)?;
     }
 
     let run = state.store.get_workflow_run(&run_id)?;
     let nodes = state.store.list_node_runs(&run_id)?;
     Ok(WorkflowRunView { run, nodes })
+}
+
+/// Re-enter the executor for an existing run (resume past a gate, or retry).
+/// The walk skips `done` nodes, so finished work is preserved.
+fn respawn_run(
+    app: &AppHandle,
+    state: &State<'_, AppState>,
+    run: &WorkflowRun,
+) -> CommandResult<()> {
+    let graph = state.store.get_workflow_run_graph(&run.id)?;
+    // The branch only matters when no node has provisioned the worktree yet;
+    // otherwise the executor reuses the existing one.
+    let branch = match run
+        .workflow_id
+        .as_deref()
+        .and_then(|id| state.store.get_workflow(id).ok())
+    {
+        Some(wf) => run_branch(&wf.name, &run.id),
+        None => run_branch("workflow", &run.id),
+    };
+    let ctx = RunContext {
+        app: app.clone(),
+        store: state.store.clone(),
+        manager: state.manager,
+        run_id: run.id.clone(),
+        project_id: run.project_id.clone(),
+        group_id: run.group_id.clone(),
+        graph,
+        branch,
+        workflow_id: run.workflow_id.clone(),
+        cancel: state.workflow_cancels.clone(),
+    };
+    tauri::async_runtime::spawn(executor::drive(ctx));
+    Ok(())
+}
+
+/// Retry a failed or canceled run: every node that didn't finish resets to
+/// pending, then the executor re-enters — `done` nodes are skipped, so the run
+/// picks up where it stopped, in its original worktree.
+#[tauri::command]
+#[specta::specta]
+pub async fn retry_workflow_run(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    run_id: String,
+) -> CommandResult<WorkflowRunView> {
+    let run = state.store.get_workflow_run(&run_id)?;
+    if !matches!(run.status, RunStatus::Failed | RunStatus::Canceled) {
+        return Err(
+            AppError::Invalid("only a failed or canceled run can be retried".to_string()).into(),
+        );
+    }
+    // Same one-active-run rule as `run_workflow`.
+    if let Some(wf_id) = run.workflow_id.as_deref() {
+        if let Some(latest) = state.store.latest_workflow_run(wf_id)? {
+            if matches!(latest.status, RunStatus::Running | RunStatus::Paused) {
+                return Err(AppError::Invalid(
+                    "workflow already has an active run; stop it first".to_string(),
+                )
+                .into());
+            }
+        }
+    }
+    for n in state.store.list_node_runs(&run_id)? {
+        if n.status != NodeRunStatus::Done {
+            // Keep `session_id`: the worktree is rediscovered through it.
+            state.store.upsert_node_run(&WorkflowNodeRun {
+                status: NodeRunStatus::Pending,
+                output: None,
+                error: None,
+                ..n
+            })?;
+        }
+    }
+    state
+        .store
+        .set_workflow_run_status(&run_id, RunStatus::Pending, None)?;
+    respawn_run(&app, &state, &run)?;
+
+    let run = state.store.get_workflow_run(&run_id)?;
+    let nodes = state.store.list_node_runs(&run_id)?;
+    Ok(WorkflowRunView { run, nodes })
+}
+
+/// A workflow's past runs, newest first (run history).
+#[tauri::command]
+#[specta::specta]
+pub async fn list_workflow_runs(
+    state: State<'_, AppState>,
+    workflow_id: String,
+    limit: Option<u32>,
+) -> CommandResult<Vec<WorkflowRun>> {
+    state
+        .store
+        .list_workflow_runs(&workflow_id, limit.unwrap_or(20))
+        .map_err(Into::into)
 }
 
 /// The workflow's most recent run (node statuses + sessions), or `None`.
@@ -251,14 +357,20 @@ pub async fn cancel_workflow(
         }
         // Kill the live node session(s) so their CLI process stops immediately;
         // the executor then settles the run to Canceled on its next check.
+        // Settle the unfinished nodes too — a gate at `paused` or a node at
+        // `running` would otherwise sit in that state forever.
         for n in state.store.list_node_runs(&run.id)? {
             if matches!(
                 n.status,
-                NodeRunStatus::Running | NodeRunStatus::AwaitingInput
+                NodeRunStatus::Running | NodeRunStatus::AwaitingInput | NodeRunStatus::Paused
             ) {
                 if let Some(sid) = &n.session_id {
                     state.manager.cancel(&app, &state.store, sid);
                 }
+                state.store.upsert_node_run(&WorkflowNodeRun {
+                    status: NodeRunStatus::Skipped,
+                    ..n
+                })?;
             }
         }
         state

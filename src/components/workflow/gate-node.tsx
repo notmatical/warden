@@ -12,9 +12,12 @@ import { cn } from "@/lib/utils"
 import { GATE_META } from "@/lib/workflow-intents"
 import { useAppStore } from "@/store/app-store"
 
-/** A gate carries no config — its name is fixed. The data slot stays an empty
- *  shape so React Flow's node-data API keeps working. */
-export type GateNodeData = Record<string, never>
+/** A gate carries no config — its name is fixed. The data slot only tags the
+ *  owning workflow so run status can't bleed in from another workflow's run. */
+export interface GateNodeData {
+  workflowId?: string
+  [key: string]: unknown
+}
 
 /** Canonical name. Don't make it editable — there's nothing to disambiguate
  *  between gates, they all do the same thing. */
@@ -23,10 +26,13 @@ const GATE_LABEL = "User Approval"
 const HANDLE_CLASS =
   "!size-2.5 !rounded-full !border-2 !border-card !bg-muted-foreground transition-colors hover:!bg-primary"
 
-export function GateNode({ id, selected }: NodeProps) {
+export function GateNode({ id, data, selected }: NodeProps) {
+  const node = data as GateNodeData
   const { deleteElements } = useReactFlow()
-  const status = useAppStore(
-    (s) => s.workflowRun?.nodes.find((n) => n.nodeId === id)?.status
+  const status = useAppStore((s) =>
+    s.workflowRun?.run.workflowId === node.workflowId
+      ? s.workflowRun.nodes.find((n) => n.nodeId === id)?.status
+      : undefined
   )
   const resumeRun = useAppStore((s) => s.resumeRun)
   const paused = status === "paused"

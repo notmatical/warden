@@ -578,6 +578,30 @@ async resumeWorkflow(runId: string, approve: boolean) : Promise<Result<WorkflowR
 }
 },
 /**
+ * A workflow's past runs, newest first (run history).
+ */
+async listWorkflowRuns(workflowId: string, limit: number | null) : Promise<Result<WorkflowRun[], IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("list_workflow_runs", { workflowId, limit }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Retry a failed or canceled run: every node that didn't finish resets to
+ * pending, then the executor re-enters — `done` nodes are skipped, so the run
+ * picks up where it stopped, in its original worktree.
+ */
+async retryWorkflowRun(runId: string) : Promise<Result<WorkflowRunView, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("retry_workflow_run", { runId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Cancel a workflow's latest run: signal the executor, stop the in-flight node
  * session, and settle the run to `Canceled`. No-op if there's no active run.
  */
