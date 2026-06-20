@@ -5,17 +5,15 @@
 //! shell builds), the global event sink emits to the webview; with it off, the
 //! crate still builds — a standing test that the logic stays decoupled.
 
-pub mod backend;
+pub mod agent;
 pub mod event;
 pub mod session;
-pub mod turn;
 pub mod workspace;
 
-pub use backend::Backend;
+pub use agent::{Backend, EffortLevel, PermissionMode};
 pub use event::{AgentEvent, EventRecord, TokenUsage, ToolDenial};
 pub use session::{
     CheckStatus, ContextSource, PrCheckCounts, Session, SessionContextSource, SessionKind,
     SessionRole, SessionStatus, SetupStatus,
 };
-pub use turn::{EffortLevel, PermissionMode};
 pub use workspace::{Group, Label, Project, ProjectLabels};
