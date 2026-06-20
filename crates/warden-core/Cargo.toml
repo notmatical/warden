@@ -28,6 +28,7 @@ specta = { version = "=2.0.0-rc.22", features = ["derive", "serde_json"] }
 # hand-rolled as_str/parse match arms).
 strum = { version = "0.26", features = ["derive"] }
 thiserror = "2"
+log = "0.4"
 # `AppError::Db` wraps rusqlite::Error; bundled SQLite avoids a system dep. The
 # store layer ports onto this next.
 rusqlite = { version = "0.32", features = ["bundled"] }

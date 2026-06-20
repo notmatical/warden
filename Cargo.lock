@@ -6280,6 +6280,7 @@ name = "warden-core"
 version = "0.1.11"
 dependencies = [
  "chrono",
+ "log",
  "rusqlite",
  "serde",
  "serde_json",

@@ -11,6 +11,7 @@ pub mod event;
 pub mod model_config;
 pub mod paths;
 pub mod platform;
+pub mod poll;
 pub mod session;
 pub mod util;
 pub mod workspace;
