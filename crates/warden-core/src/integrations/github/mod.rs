@@ -4,9 +4,7 @@
 
 pub mod issues;
 pub mod pr;
-// Lands with the engine tier: pr_content calls `agent::oneshot`, which isn't
-// ported yet. Re-enable once `agent/oneshot.rs` exists in warden-core.
-// pub mod pr_content;
+pub mod pr_content;
 mod token;
 
 use std::path::Path;

@@ -6240,20 +6240,11 @@ dependencies = [
 name = "warden"
 version = "0.1.11"
 dependencies = [
- "chrono",
- "flate2",
- "ignore",
- "keyring",
  "log",
- "portable-pty",
- "reqwest 0.12.28",
- "rusqlite",
  "serde",
  "serde_json",
- "sha2",
  "specta",
  "specta-typescript",
- "tar",
  "tauri",
  "tauri-build",
  "tauri-plugin-clipboard-manager",
@@ -6270,9 +6261,8 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
- "uuid",
+ "warden-core",
  "which",
- "zip 2.4.2",
 ]
 
 [[package]]

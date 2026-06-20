@@ -1,29 +1,20 @@
-mod agent;
-mod cli;
-mod core;
-mod domain;
-mod git;
-mod integrations;
-mod mentions;
-mod providers;
-mod session;
-mod store;
-mod terminal;
-mod workflow;
-mod workspace;
+//! The thin Tauri shell over `warden-core`. This crate owns only the desktop
+//! surface: plugin registration, the window/titlebar setup, the `tauri_specta`
+//! command registry, and the global event-sink wiring. Every command body is a
+//! 1–5 line wrapper in `commands/<domain>` that calls a `warden-core` service.
 
-// Keep the foundation modules reachable at their familiar crate-root paths
-// (`crate::error`, `crate::util`, …) while they live under `core/`.
-pub use core::{error, events, model_config, platform, state, util};
+mod commands;
+mod state;
 
 use tauri::Manager;
 #[cfg(target_os = "macos")]
 use tauri_plugin_decorum::WebviewWindowExt;
 use tauri_specta::{collect_commands, Builder};
 
-use agent::AgentManager;
+use warden_core::cli::{self, Source, Tool};
+use warden_core::{platform, AgentManager, Store};
+
 use state::AppState;
-use store::Store;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -32,119 +23,119 @@ pub fn run() {
 
     let specta_builder = Builder::<tauri::Wry>::new().commands(collect_commands![
         // workspace: projects + groups
-        workspace::commands::list_projects,
-        workspace::commands::open_project,
-        workspace::commands::list_sessions,
-        workspace::commands::list_groups,
-        workspace::commands::create_group,
-        workspace::commands::rename_group,
-        workspace::commands::delete_group,
-        workspace::commands::set_group_layout,
-        workspace::commands::list_group_roots,
-        workspace::commands::list_group_sessions,
-        workspace::commands::add_group_root,
-        workspace::commands::remove_group_root,
-        workspace::commands::list_session_roots,
-        workspace::commands::set_session_roots,
-        workspace::commands::get_worktree_config,
-        workspace::commands::update_worktree_config,
+        commands::workspace::list_projects,
+        commands::workspace::open_project,
+        commands::workspace::list_sessions,
+        commands::workspace::list_groups,
+        commands::workspace::create_group,
+        commands::workspace::rename_group,
+        commands::workspace::delete_group,
+        commands::workspace::set_group_layout,
+        commands::workspace::list_group_roots,
+        commands::workspace::list_group_sessions,
+        commands::workspace::add_group_root,
+        commands::workspace::remove_group_root,
+        commands::workspace::list_session_roots,
+        commands::workspace::set_session_roots,
+        commands::workspace::get_worktree_config,
+        commands::workspace::update_worktree_config,
         // sessions
-        session::commands::get_events,
-        session::commands::create_session,
-        session::commands::update_session,
-        session::commands::set_session_isolation,
-        session::commands::retry_worktree_setup,
-        session::commands::dismiss_setup_error,
-        session::commands::rename_session,
-        session::commands::set_session_pinned,
-        session::commands::load_project_labels,
-        session::commands::create_label,
-        session::commands::update_label,
-        session::commands::delete_label,
-        session::commands::set_session_labels,
-        session::commands::session_delete_check,
-        session::commands::delete_session,
-        session::commands::send_message,
-        session::commands::attach_to_session,
-        session::commands::cancel_session,
-        session::commands::approve_tools,
-        session::commands::reject_tools,
-        session::commands::approve_plan,
-        session::commands::list_context_sources,
-        session::commands::add_context_source,
-        session::commands::remove_context_source,
-        session::commands::set_context_source_enabled,
+        commands::session::get_events,
+        commands::session::create_session,
+        commands::session::update_session,
+        commands::session::set_session_isolation,
+        commands::session::retry_worktree_setup,
+        commands::session::dismiss_setup_error,
+        commands::session::rename_session,
+        commands::session::set_session_pinned,
+        commands::session::load_project_labels,
+        commands::session::create_label,
+        commands::session::update_label,
+        commands::session::delete_label,
+        commands::session::set_session_labels,
+        commands::session::session_delete_check,
+        commands::session::delete_session,
+        commands::session::send_message,
+        commands::session::attach_to_session,
+        commands::session::cancel_session,
+        commands::session::approve_tools,
+        commands::session::reject_tools,
+        commands::session::approve_plan,
+        commands::session::list_context_sources,
+        commands::session::add_context_source,
+        commands::session::remove_context_source,
+        commands::session::set_context_source_enabled,
         // git
-        git::commands::session_git_status,
-        git::commands::repo_browse_url,
-        git::commands::push_session,
-        git::commands::pull_session,
-        git::commands::get_session_diff,
-        git::commands::get_session_file_versions,
-        git::commands::get_session_commits,
-        git::commands::sync_worktree,
+        commands::git::session_git_status,
+        commands::git::repo_browse_url,
+        commands::git::push_session,
+        commands::git::pull_session,
+        commands::git::get_session_diff,
+        commands::git::get_session_file_versions,
+        commands::git::get_session_commits,
+        commands::git::sync_worktree,
         // agent recipes
-        agent::commands::run_plan_to_code,
+        commands::agent::run_plan_to_code,
         // workflows
-        workflow::commands::create_workflow,
-        workflow::commands::get_workflow,
-        workflow::commands::list_workflows,
-        workflow::commands::update_workflow,
-        workflow::commands::delete_workflow,
-        workflow::commands::run_workflow,
-        workflow::commands::resume_workflow,
-        workflow::commands::retry_workflow_run,
-        workflow::commands::cancel_workflow,
-        workflow::commands::get_workflow_run,
-        workflow::commands::get_latest_workflow_run,
-        workflow::commands::list_workflow_runs,
-        workflow::commands::list_workflow_sessions,
+        commands::workflow::create_workflow,
+        commands::workflow::get_workflow,
+        commands::workflow::list_workflows,
+        commands::workflow::update_workflow,
+        commands::workflow::delete_workflow,
+        commands::workflow::run_workflow,
+        commands::workflow::resume_workflow,
+        commands::workflow::retry_workflow_run,
+        commands::workflow::cancel_workflow,
+        commands::workflow::get_workflow_run,
+        commands::workflow::get_latest_workflow_run,
+        commands::workflow::list_workflow_runs,
+        commands::workflow::list_workflow_sessions,
         // mentions
-        mentions::commands::list_files,
-        mentions::commands::list_commands,
-        mentions::commands::list_repo_refs,
-        mentions::commands::fetch_repo_ref,
+        commands::mentions::list_files,
+        commands::mentions::list_commands,
+        commands::mentions::list_repo_refs,
+        commands::mentions::fetch_repo_ref,
         // external
-        core::external::open_in,
-        core::external::list_open_apps,
+        commands::external::open_in,
+        commands::external::list_open_apps,
         // providers
-        providers::commands::list_provider_status,
-        providers::commands::list_opencode_models,
-        providers::commands::install_provider,
-        providers::commands::update_provider,
-        providers::commands::set_provider_source,
+        commands::providers::list_provider_status,
+        commands::providers::list_opencode_models,
+        commands::providers::install_provider,
+        commands::providers::update_provider,
+        commands::providers::set_provider_source,
         // github cli
-        integrations::github::commands::github_status,
-        integrations::github::commands::install_github_cli,
-        integrations::github::commands::update_github_cli,
-        integrations::github::commands::set_github_source,
-        integrations::github::commands::open_pull_request,
-        integrations::github::commands::refresh_pr_status,
-        integrations::github::commands::pr_details,
-        integrations::github::commands::generate_pr_content,
-        integrations::github::commands::list_open_prs,
-        integrations::github::commands::checkout_pr,
-        integrations::github::commands::list_my_issues,
-        integrations::github::commands::github_issue_comments,
+        commands::github::github_status,
+        commands::github::install_github_cli,
+        commands::github::update_github_cli,
+        commands::github::set_github_source,
+        commands::github::open_pull_request,
+        commands::github::refresh_pr_status,
+        commands::github::pr_details,
+        commands::github::generate_pr_content,
+        commands::github::list_open_prs,
+        commands::github::checkout_pr,
+        commands::github::list_my_issues,
+        commands::github::github_issue_comments,
         // linear
-        integrations::linear::commands::linear_connect,
-        integrations::linear::commands::linear_disconnect,
-        integrations::linear::commands::linear_status,
-        integrations::linear::commands::linear_cached_issues,
-        integrations::linear::commands::linear_sync_now,
-        integrations::linear::commands::linear_issue_comments,
-        integrations::linear::commands::linear_start_issue,
-        integrations::linear::commands::linear_teams,
-        integrations::linear::commands::linear_binding,
-        integrations::linear::commands::linear_bindings,
-        integrations::linear::commands::linear_set_binding,
+        commands::linear::linear_connect,
+        commands::linear::linear_disconnect,
+        commands::linear::linear_status,
+        commands::linear::linear_cached_issues,
+        commands::linear::linear_sync_now,
+        commands::linear::linear_issue_comments,
+        commands::linear::linear_start_issue,
+        commands::linear::linear_teams,
+        commands::linear::linear_binding,
+        commands::linear::linear_bindings,
+        commands::linear::linear_set_binding,
         // core
-        core::poll_tier::set_app_focus_state,
+        commands::core::set_app_focus_state,
         // terminal
-        terminal::commands::start_terminal,
-        terminal::commands::terminal_write,
-        terminal::commands::terminal_resize,
-        terminal::commands::stop_terminal,
+        commands::terminal::start_terminal,
+        commands::terminal::terminal_write,
+        commands::terminal::terminal_resize,
+        commands::terminal::stop_terminal,
     ]);
 
     #[cfg(debug_assertions)]
@@ -201,31 +192,33 @@ pub fn run() {
             std::fs::create_dir_all(&data_dir)?;
             let store = Store::open(&data_dir.join("warden.db"))?;
 
-            // The managed-path lookups below need the app data dir first.
+            // Install the global event sink (so core can emit without an
+            // AppHandle) and seed both app-data slots before anything reads them.
+            warden_core::event::init(app.handle().clone());
+            warden_core::paths::set_app_data(data_dir.clone());
             cli::set_app_data(data_dir.clone());
 
             // Seed each tool's source preference, defaulting to Managed. Legacy
             // "auto"/unset entries are migrated once to a concrete choice: keep a
             // working system-only install, otherwise managed — and persisted so
             // it sticks.
-            let sources = cli::Tool::ALL
+            let sources = Tool::ALL
                 .iter()
                 .map(|&tool| {
                     let stored = store
-                        .get_setting(&cli::Source::setting_key(tool))
+                        .get_setting(&Source::setting_key(tool))
                         .ok()
                         .flatten()
-                        .and_then(|v| cli::Source::parse(&v));
+                        .and_then(|v| Source::parse(&v));
                     let source = stored.unwrap_or_else(|| {
                         let derived = if cli::managed_installed(tool).is_some()
                             || cli::system_binary(tool).is_none()
                         {
-                            cli::Source::Managed
+                            Source::Managed
                         } else {
-                            cli::Source::System
+                            Source::System
                         };
-                        let _ =
-                            store.set_setting(&cli::Source::setting_key(tool), derived.as_str());
+                        let _ = store.set_setting(&Source::setting_key(tool), derived.as_str());
                         derived
                     });
                     (tool, source)
@@ -236,7 +229,7 @@ pub fn run() {
             app.manage(AppState {
                 store: store.clone(),
                 manager: AgentManager::new(),
-                workflow_cancels: Default::default(),
+                workflow_cancels: warden_core::workflow::service::new_cancels(),
                 focus: Default::default(),
             });
 
@@ -248,12 +241,14 @@ pub fn run() {
 
             // Reattach to agent processes that survived the previous app run
             // (or drain what they wrote before dying), and settle any session
-            // left lying `Running` with nothing behind it.
-            agent::recover(app.handle().clone(), store);
+            // left lying `Running` with nothing behind it. Emits via the global
+            // sink installed above, so it needs no AppHandle.
+            warden_core::agent::recover(store);
 
-            // Keep open PRs' state + CI checks fresh in the background.
-            integrations::github::poll::spawn(app.handle().clone());
-            integrations::linear::poll::spawn(app.handle().clone());
+            // Keep open PRs' state + CI checks and the Linear inbox fresh in the
+            // background.
+            commands::github::poll::spawn(app.handle().clone());
+            commands::linear::poll::spawn(app.handle().clone());
             Ok(())
         })
         .invoke_handler(specta_builder.invoke_handler())
@@ -273,10 +268,10 @@ pub fn run() {
             // Tear down PTYs and the Codex app-server on exit. Claude session
             // processes survive on purpose: stdin EOF lets each finish its
             // in-flight turn into its output file, and the next launch
-            // reattaches (see agent::recover).
+            // reattaches (see warden_core::agent::recover).
             if matches!(event, tauri::RunEvent::Exit) {
-                terminal::kill_all();
-                agent::shutdown();
+                warden_core::terminal::kill_all();
+                warden_core::agent::shutdown();
             }
         });
 }
