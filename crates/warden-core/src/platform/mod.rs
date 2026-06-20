@@ -81,6 +81,33 @@ pub fn silent_command(cmd: &mut Command) -> &mut Command {
     cmd
 }
 
+/// Build a cross-platform shell command running a raw command line (an `&&`
+/// chain, a single command, anything the shell parses), configured for silent
+/// background use: no console flash on Windows, a login shell on Unix so
+/// user-managed tools (nvm, rustup, …) are on PATH, and `kill_on_drop` so a
+/// dropped future (e.g. a timeout) takes the child down with it. The caller sets
+/// `current_dir`/env/stdio. Shared by worktree setup and the workflow executor.
+pub fn shell_command(raw: &str) -> tokio::process::Command {
+    ensure_macos_path();
+    #[cfg(windows)]
+    let mut cmd = {
+        let mut c = tokio::process::Command::new("cmd");
+        // `raw_arg` hands the line to cmd.exe unquoted, so `&&` stays an operator.
+        c.arg("/C").raw_arg(raw);
+        c.creation_flags(CREATE_NO_WINDOW);
+        c
+    };
+    #[cfg(not(windows))]
+    let mut cmd = {
+        let mut c = tokio::process::Command::new("sh");
+        c.args(["-lc", raw]);
+        c
+    };
+    // A dropped future (timeout) must take the child down with it.
+    cmd.kill_on_drop(true);
+    cmd
+}
+
 /// Configure a session-agent command so the child can outlive this process:
 /// its own process group on Unix (no signal fan-out from ours), no console on
 /// Windows (children there survive parent death unless tied to a Job Object,

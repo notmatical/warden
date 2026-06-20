@@ -8,6 +8,7 @@
 pub mod agent;
 pub mod error;
 pub mod event;
+pub mod git;
 pub mod model_config;
 pub mod paths;
 pub mod platform;
