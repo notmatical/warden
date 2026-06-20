@@ -6279,17 +6279,25 @@ dependencies = [
 name = "warden-core"
 version = "0.1.11"
 dependencies = [
+ "async-trait",
  "chrono",
+ "flate2",
+ "keyring",
  "log",
+ "reqwest 0.12.28",
  "rusqlite",
  "serde",
  "serde_json",
+ "sha2",
  "specta",
  "strum",
+ "tar",
  "tauri",
  "thiserror 2.0.18",
  "tokio",
  "uuid",
+ "which",
+ "zip 2.4.2",
 ]
 
 [[package]]

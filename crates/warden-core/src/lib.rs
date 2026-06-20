@@ -6,13 +6,17 @@
 //! crate still builds — a standing test that the logic stays decoupled.
 
 pub mod agent;
+pub mod cli;
+pub mod dist;
 pub mod error;
 pub mod event;
 pub mod git;
 pub mod model_config;
+pub mod net;
 pub mod paths;
 pub mod platform;
 pub mod poll;
+pub mod secret;
 pub mod session;
 pub mod store;
 pub mod util;

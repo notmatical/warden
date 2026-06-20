@@ -33,6 +33,21 @@ log = "0.4"
 # store layer ports onto this next.
 rusqlite = { version = "0.32", features = ["bundled"] }
 
+# Managed-binary distribution toolkit (net + dist) and keychain (secret).
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+sha2 = "0.10"
+flate2 = "1"
+tar = "0.4"
+zip = "2"
+which = "7"
+async-trait = "0.1"
+keyring = { version = "3.6.3", features = [
+    "apple-native",
+    "windows-native",
+    "sync-secret-service",
+    "crypto-rust",
+] }
+
 # Tauri is optional: the core compiles without it (a standing decoupling test and
 # a future CLI/server surface). The shell enables `features = ["tauri"]`.
 tauri = { version = "2.11.2", optional = true }
