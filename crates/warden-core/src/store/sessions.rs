@@ -13,6 +13,8 @@ use crate::{
     SessionRole, SessionStatus, SetupStatus,
 };
 
+use crate::git::ProvisionedDir;
+
 use super::mappers::map_session;
 use super::{query_opt, query_vec, Store, SESSION_SELECT_ALL};
 
@@ -40,6 +42,50 @@ pub struct NewSession {
     pub parent_id: Option<String>,
     pub workflow_id: Option<String>,
     pub linear_issue_id: Option<String>,
+}
+
+impl NewSession {
+    /// Build an agent session that runs in an already-provisioned worktree,
+    /// varying only the per-role fields. Collapses the 15-field session-create
+    /// boilerplate shared by workflow nodes and the plan→code recipe. The
+    /// backend is derived from the model, each session gets a fresh agent
+    /// conversation id, and role-labeled sessions aren't auto-renamed.
+    #[allow(clippy::too_many_arguments)]
+    pub fn agent_in_dir(
+        group_id: &str,
+        project_id: &str,
+        title: String,
+        model: String,
+        permission_mode: PermissionMode,
+        effort: EffortLevel,
+        role: SessionRole,
+        parent_id: Option<String>,
+        workflow_id: Option<String>,
+        dir: &ProvisionedDir,
+    ) -> Self {
+        NewSession {
+            group_id: group_id.to_string(),
+            project_id: project_id.to_string(),
+            title,
+            kind: SessionKind::Agent,
+            backend: Backend::for_model(&model),
+            model,
+            permission_mode,
+            effort,
+            role,
+            auto_named: false,
+            agent_session_id: uuid(),
+            terminal_command: None,
+            working_dir: dir.working_dir.clone(),
+            branch: dir.branch.clone(),
+            base_sha: dir.base_sha.clone(),
+            base_branch: dir.base_branch.clone(),
+            is_isolated: dir.is_isolated,
+            parent_id,
+            workflow_id,
+            linear_issue_id: None,
+        }
+    }
 }
 
 impl Store {

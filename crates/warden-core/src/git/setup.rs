@@ -55,6 +55,12 @@ impl SetupHandle {
         SetupHandle { rx }
     }
 
+    /// Wrap an existing receiver — for callers that spawn their own setup task
+    /// (e.g. the workflow executor's shared per-run worktree).
+    pub fn from_receiver(rx: watch::Receiver<SetupState>) -> Self {
+        SetupHandle { rx }
+    }
+
     /// The latest known state.
     pub fn current(&self) -> SetupState {
         self.rx.borrow().clone()

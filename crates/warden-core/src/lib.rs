@@ -37,7 +37,8 @@ pub use session::{
 };
 pub use store::{AgentProc, LinearIssueRow, NewSession, Store};
 pub use workflow::{
-    AgentTaskConfig, Intent, NodeKind, NodeRunStatus, RunStatus, Workflow, WorkflowEdge,
-    WorkflowGraph, WorkflowNode, WorkflowNodeRun, WorkflowRun,
+    AgentTaskConfig, Intent, NodeKind, NodeRunStatus, PlanToCodeResult, RunStatus, Workflow,
+    WorkflowCancels, WorkflowEdge, WorkflowGraph, WorkflowNode, WorkflowNodeRun, WorkflowRun,
+    WorkflowRunView,
 };
 pub use workspace::{Group, Label, Project, ProjectLabels};
