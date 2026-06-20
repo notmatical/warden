@@ -6,11 +6,13 @@
 //! crate still builds — a standing test that the logic stays decoupled.
 
 pub mod agent;
+pub mod error;
 pub mod event;
 pub mod session;
 pub mod workspace;
 
 pub use agent::{Backend, EffortLevel, PermissionMode};
+pub use error::{AppError, CommandResult, ErrorKind, IpcError};
 pub use event::{AgentEvent, EventRecord, TokenUsage, ToolDenial};
 pub use session::{
     CheckStatus, ContextSource, PrCheckCounts, Session, SessionContextSource, SessionKind,

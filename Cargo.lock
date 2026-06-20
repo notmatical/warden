@@ -6279,11 +6279,13 @@ dependencies = [
 name = "warden-core"
 version = "0.1.11"
 dependencies = [
+ "rusqlite",
  "serde",
  "serde_json",
  "specta",
  "strum",
  "tauri",
+ "thiserror 2.0.18",
 ]
 
 [[package]]

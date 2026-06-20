@@ -243,6 +243,12 @@ file-by-file. Listed here as the catalog of what to clean and where it applies.
   `FromRow` helper) to kill manual column→field mapping, and `rusqlite_migration` to
   replace the hand-rolled `migrations.rs` runner with a tested one. Pairs with the
   enum `ToSql`/`FromSql` work above.
+- **ErrorKind taxonomy + error source chains** — structured `IpcError { kind, message }`
+  shipped with a 7-kind first cut (infra collapses to `Internal`). Revisit in the
+  overhaul: confirm the kinds match what the UI actually branches on, preserve
+  `#[source]`/`#[from]` chains, split `Integration` by provider, add `Network`
+  (reqwest) / `NeedsAuth` as those error sources gain structure. `TODO(revise later)`
+  marked in `error.rs`.
 - **`Session` struct decomposition** — 40 flat fields mixing identity + terminal +
   PR/CI + Linear + workflow clusters. Candidate: fold `pr_*` into an optional
   nested `PrStatus` (like `PrCheckCounts` already is) and `terminal_*` into
