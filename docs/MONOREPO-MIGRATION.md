@@ -245,5 +245,7 @@ file-by-file. Listed here as the catalog of what to clean and where it applies.
   enum `ToSql`/`FromSql` work above.
 - **`Session` struct decomposition** — 40 flat fields mixing identity + terminal +
   PR/CI + Linear + workflow clusters. Candidate: fold `pr_*` into an optional
-  nested `PrStatus` (like `PrCheckCounts` already is). Reshapes `bindings.ts` + the
-  frontend, so it's its own conversation well after the split.
+  nested `PrStatus` (like `PrCheckCounts` already is) and `terminal_*` into
+  `TerminalState`. Reshapes the store row mapping + `bindings.ts` + the frontend, so
+  it's its own conversation. **Confirmed deferred** — `Session` is ported flat with a
+  `TODO(revise later)` marker on the struct in `session/types.rs`.
