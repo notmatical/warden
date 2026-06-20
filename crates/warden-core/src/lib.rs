@@ -11,6 +11,7 @@ pub mod dist;
 pub mod error;
 pub mod event;
 pub mod git;
+pub mod integrations;
 pub mod model_config;
 pub mod net;
 pub mod paths;

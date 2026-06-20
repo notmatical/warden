@@ -2,6 +2,7 @@
 //! and credential-free: GitHub tokens are always passed in, never resolved here.
 
 pub mod archive;
+pub mod graphql;
 pub mod http;
 pub mod version;
 

@@ -40,6 +40,22 @@ impl Backend {
     pub fn parse(s: &str) -> Option<Self> {
         s.parse().ok()
     }
+
+    /// The backend that runs a given model id: OpenCode for `opencode/...`, Codex
+    /// for `gpt*`/`codex*`, Claude otherwise. Mirrors `backendForModel` in
+    /// `src/lib/models.ts`.
+    // TODO(revise later): becomes registry-driven (`Provider::handles_model`) once
+    // the provider registry lands — see docs/MONOREPO-MIGRATION.md.
+    pub fn for_model(model: &str) -> Self {
+        let id = model.to_ascii_lowercase();
+        if id.starts_with("opencode") {
+            Backend::Opencode
+        } else if id.starts_with("gpt") || id.starts_with("codex") {
+            Backend::Codex
+        } else {
+            Backend::Claude
+        }
+    }
 }
 
 #[cfg(test)]
