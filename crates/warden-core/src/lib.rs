@@ -8,7 +8,11 @@
 pub mod agent;
 pub mod error;
 pub mod event;
+pub mod model_config;
+pub mod paths;
+pub mod platform;
 pub mod session;
+pub mod util;
 pub mod workspace;
 
 pub use agent::{Backend, EffortLevel, PermissionMode};

@@ -6279,6 +6279,7 @@ dependencies = [
 name = "warden-core"
 version = "0.1.11"
 dependencies = [
+ "chrono",
  "rusqlite",
  "serde",
  "serde_json",
@@ -6286,6 +6287,8 @@ dependencies = [
  "strum",
  "tauri",
  "thiserror 2.0.18",
+ "tokio",
+ "uuid",
 ]
 
 [[package]]
