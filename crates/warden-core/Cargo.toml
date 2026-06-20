@@ -39,3 +39,6 @@ tauri = { version = "2.11.2", optional = true }
 
 [features]
 tauri = ["dep:tauri"]
+# Enables the destructive schema-fingerprint rebuild in `store::migrations`
+# (dev-only; in its absence, drift on a populated DB refuses loudly).
+dev-migrations = []
