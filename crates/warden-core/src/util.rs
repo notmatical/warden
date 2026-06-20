@@ -39,3 +39,35 @@ pub fn same_path(a: &str, b: &str) -> bool {
 pub fn short_id(id: &str, len: usize) -> String {
     id.chars().take(len).collect()
 }
+
+/// Decode the valid UTF-8 prefix of `pending`, leaving any incomplete trailing
+/// bytes for the next read. Invalid sequences become a replacement char. Used by
+/// the PTY reader to turn a byte stream into incremental, boundary-safe text.
+pub fn drain_utf8(pending: &mut Vec<u8>) -> String {
+    match std::str::from_utf8(pending) {
+        Ok(s) => {
+            let out = s.to_string();
+            pending.clear();
+            out
+        }
+        Err(e) => {
+            let valid = e.valid_up_to();
+            let mut out = String::new();
+            if valid > 0 {
+                // Safe: `valid` is a UTF-8 boundary per `valid_up_to`.
+                out.push_str(unsafe { std::str::from_utf8_unchecked(&pending[..valid]) });
+            }
+            match e.error_len() {
+                Some(bad) => {
+                    out.push('\u{FFFD}');
+                    pending.drain(..valid + bad);
+                    out.push_str(&drain_utf8(pending));
+                }
+                None => {
+                    pending.drain(..valid);
+                }
+            }
+            out
+        }
+    }
+}

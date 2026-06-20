@@ -4,7 +4,7 @@ use strum::{EnumString, IntoStaticStr, VariantArray};
 
 /// Which agent backend powers a session — the serializable *identity* of a
 /// provider. Provider *behavior* (run, auth, install, model resolution) lives
-/// behind the `Provider` trait + registry (ported with `crate::providers`) and
+/// behind the `Provider` trait + registry (in `crate::provider`) and
 /// is keyed by this enum. Adding a backend is: a variant here + an adapter that
 /// implements `Provider` + one registration — nothing else dispatches on it.
 #[derive(

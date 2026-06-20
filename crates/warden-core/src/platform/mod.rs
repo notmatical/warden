@@ -54,7 +54,10 @@ pub fn ensure_macos_path() {
     static INIT: Once = Once::new();
     INIT.call_once(|| {
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
-        if let Ok(output) = Command::new(&shell).args(["-l", "-c", "echo $PATH"]).output() {
+        if let Ok(output) = Command::new(&shell)
+            .args(["-l", "-c", "echo $PATH"])
+            .output()
+        {
             if output.status.success() {
                 let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
                 if !path.is_empty() {

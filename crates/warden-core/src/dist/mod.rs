@@ -211,7 +211,11 @@ impl ToolDistribution for GithubReleaseDist {
                         .map(|a| a.browser_download_url)
                 })
                 .ok_or_else(|| {
-                    AppError::Integration(format!("{} asset {} not found", self.tool.name(), asset.name))
+                    AppError::Integration(format!(
+                        "{} asset {} not found",
+                        self.tool.name(),
+                        asset.name
+                    ))
                 })?,
             ReleaseStrategy::ConstructUrl { tag_prefix } => format!(
                 "https://github.com/{}/{}/releases/download/{tag_prefix}{version}/{}",

@@ -23,7 +23,10 @@ pub fn kill_process_tree(pid: u32) {
     #[cfg(unix)]
     {
         fn kill_recursive(pid: u32) {
-            if let Ok(out) = Command::new("pgrep").args(["-P", &pid.to_string()]).output() {
+            if let Ok(out) = Command::new("pgrep")
+                .args(["-P", &pid.to_string()])
+                .output()
+            {
                 for child in String::from_utf8_lossy(&out.stdout).split_whitespace() {
                     if let Ok(child_pid) = child.parse::<u32>() {
                         kill_recursive(child_pid);

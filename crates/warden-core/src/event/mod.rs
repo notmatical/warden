@@ -14,4 +14,4 @@ pub use emit::{
 };
 pub use payloads::{InstallProgress, Notification, NotifyTarget};
 pub use state::init;
-pub use types::{AgentEvent, EventRecord, TokenUsage, ToolDenial};
+pub use types::{AgentEvent, EventRecord, TokenUsage, TokenUsageKeys, ToolDenial};

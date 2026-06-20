@@ -12,21 +12,25 @@ pub mod error;
 pub mod event;
 pub mod git;
 pub mod integrations;
+pub mod mentions;
 pub mod model_config;
 pub mod net;
 pub mod paths;
 pub mod platform;
 pub mod poll;
+pub mod provider;
 pub mod secret;
 pub mod session;
 pub mod store;
+pub mod terminal;
 pub mod util;
 pub mod workflow;
 pub mod workspace;
 
-pub use agent::{Backend, EffortLevel, PermissionMode};
+pub use agent::{AgentManager, Backend, EffortLevel, PermissionMode, TurnOutput};
 pub use error::{AppError, CommandResult, ErrorKind, IpcError};
 pub use event::{AgentEvent, EventRecord, TokenUsage, ToolDenial};
+pub use provider::Provider;
 pub use session::{
     CheckStatus, ContextSource, PrCheckCounts, Session, SessionContextSource, SessionKind,
     SessionRole, SessionStatus, SetupStatus,

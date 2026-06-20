@@ -20,6 +20,7 @@ tokio = { version = "1", features = [
     "sync",
     "rt-multi-thread",
     "time",
+    "fs",
 ] }
 # Pinned to match the shell exactly so the `Type` derives unify into one specta
 # and tauri-specta accepts core types in the bindings builder.
@@ -29,6 +30,10 @@ specta = { version = "=2.0.0-rc.22", features = ["derive", "serde_json"] }
 strum = { version = "0.26", features = ["derive"] }
 thiserror = "2"
 log = "0.4"
+# Native PTY for interactive terminal sessions (runs the real `claude` TUI).
+portable-pty = "0.8"
+# Gitignore-aware filesystem walking for @-mention file listing.
+ignore = "0.4"
 # `AppError::Db` wraps rusqlite::Error; bundled SQLite avoids a system dep. The
 # store layer ports onto this next.
 rusqlite = { version = "0.32", features = ["bundled"] }
@@ -51,6 +56,9 @@ keyring = { version = "3.6.3", features = [
 # Tauri is optional: the core compiles without it (a standing decoupling test and
 # a future CLI/server surface). The shell enables `features = ["tauri"]`.
 tauri = { version = "2.11.2", optional = true }
+
+[dev-dependencies]
+tempfile = "3"
 
 [features]
 tauri = ["dep:tauri"]

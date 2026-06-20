@@ -11,6 +11,17 @@ pub struct ToolDenial {
     pub input: serde_json::Value,
 }
 
+/// The four [`TokenUsage`] fields and the candidate JSON keys each may appear
+/// under, in priority order — passed to [`TokenUsage::from_keys`]. Lets one
+/// parser serve every backend's naming (Claude `snake_case`, Codex `camelCase`
+/// with a distinct cached-input key, …).
+pub struct TokenUsageKeys<'a> {
+    pub input: &'a [&'a str],
+    pub output: &'a [&'a str],
+    pub cache_read: &'a [&'a str],
+    pub cache_creation: &'a [&'a str],
+}
+
 /// Token accounting for a turn, mirrored from the model's `usage` report. The
 /// input side plus cache reads/writes approximates the context-window fill.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, Type)]
@@ -21,6 +32,28 @@ pub struct TokenUsage {
     pub cache_read_input_tokens: u64,
     #[serde(default)]
     pub cache_creation_input_tokens: u64,
+}
+
+impl TokenUsage {
+    /// Read a usage object into [`TokenUsage`], trying each field's candidate
+    /// keys in order (first present wins). Returns `None` when every field reads
+    /// zero, so the context gauge stays hidden rather than showing an empty turn.
+    /// Replaces the per-backend `parse_usage`/`codex_usage`/`step_usage` triplets.
+    pub fn from_keys(obj: &serde_json::Value, keys: &TokenUsageKeys<'_>) -> Option<Self> {
+        let get = |candidates: &[&str]| {
+            candidates
+                .iter()
+                .find_map(|k| obj.get(k).and_then(serde_json::Value::as_u64))
+                .unwrap_or(0)
+        };
+        let usage = TokenUsage {
+            input_tokens: get(keys.input),
+            output_tokens: get(keys.output),
+            cache_read_input_tokens: get(keys.cache_read),
+            cache_creation_input_tokens: get(keys.cache_creation),
+        };
+        (usage != TokenUsage::default()).then_some(usage)
+    }
 }
 
 /// A normalized agent event — the single contract the whole UI renders against,

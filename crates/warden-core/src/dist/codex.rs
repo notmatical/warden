@@ -22,7 +22,10 @@ fn asset(host: HostTarget, _version: &str) -> Result<Asset> {
     let target = target(host);
     let is_zip = cfg!(windows);
     let (name, entry) = if is_zip {
-        (format!("codex-{target}.exe.zip"), format!("codex-{target}.exe"))
+        (
+            format!("codex-{target}.exe.zip"),
+            format!("codex-{target}.exe"),
+        )
     } else {
         (format!("codex-{target}.tar.gz"), format!("codex-{target}"))
     };

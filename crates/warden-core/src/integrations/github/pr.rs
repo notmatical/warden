@@ -17,16 +17,7 @@ use super::{author_login, bool_field, gh_command, gh_json, i64_field, str_field}
 /// GitHub's pull-request state. Parsed from gh's `state` (which is uppercase),
 /// so the rest of the code branches on a variant instead of comparing strings.
 #[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Serialize,
-    Type,
-    EnumString,
-    IntoStaticStr,
-    VariantArray,
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Type, EnumString, IntoStaticStr, VariantArray,
 )]
 #[serde(rename_all = "UPPERCASE")]
 #[strum(serialize_all = "UPPERCASE", ascii_case_insensitive)]

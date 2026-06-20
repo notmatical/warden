@@ -42,7 +42,12 @@ pub async fn fetch_assigned_issues(key: &str) -> Result<Vec<LinearIssue>> {
             let vars = serde_json::json!({ "first": 100, "after": after, "filter": filter });
             let data: IssuesData = request(key, ISSUES_QUERY, vars).await?;
             Ok(Page {
-                items: data.issues.nodes.into_iter().map(LinearIssue::from).collect(),
+                items: data
+                    .issues
+                    .nodes
+                    .into_iter()
+                    .map(LinearIssue::from)
+                    .collect(),
                 next: data.issues.page_info.next(),
             })
         }

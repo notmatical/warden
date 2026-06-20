@@ -38,7 +38,12 @@ pub async fn install(tool: Tool, version: Option<String>) -> Result<()> {
     // The distribution emits the download/extract/verify stages it knows about.
     let binary = dist.fetch(&version).await?;
 
-    emit_progress(tool, "installing", &format!("Installing {}…", tool.name()), 70);
+    emit_progress(
+        tool,
+        "installing",
+        &format!("Installing {}…", tool.name()),
+        70,
+    );
     crate::platform::install::write_binary_file(&binary_path, &binary)?;
 
     emit_progress(tool, "verifying", "Verifying installation…", 90);
