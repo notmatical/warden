@@ -6,8 +6,8 @@
   "build": {
     "frontendDist": "../desktop-frontend/dist",
     "devUrl": "http://localhost:1420",
-    "beforeDevCommand": "bun --filter @warden/desktop-frontend run dev:web",
-    "beforeBuildCommand": "bun --filter @warden/desktop-frontend run build:web"
+    "beforeDevCommand": "bun --filter @warden/desktop-frontend dev:web",
+    "beforeBuildCommand": "bun --filter @warden/desktop-frontend build:web"
   },
   "app": {
     "macOSPrivateApi": true,
