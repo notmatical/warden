@@ -62,7 +62,7 @@ pub async fn set_provider_source(
 
 /// The managed CLI tool a provider id maps to, via the provider registry.
 fn provider_tool(id: &str) -> Result<Tool> {
-    let backend = Backend::parse(id)
-        .ok_or_else(|| AppError::Invalid(format!("unknown provider: {id}")))?;
+    let backend =
+        Backend::parse(id).ok_or_else(|| AppError::Invalid(format!("unknown provider: {id}")))?;
     Ok(provider::provider(backend).cli_tool())
 }

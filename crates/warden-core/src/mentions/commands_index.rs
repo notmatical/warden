@@ -49,7 +49,12 @@ pub fn list_commands(project_claude: &Path, user_claude: Option<&Path>) -> Vec<S
         &mut seen,
     );
     if let Some(user) = user_claude {
-        collect_commands(user.join("commands"), CommandScope::User, &mut out, &mut seen);
+        collect_commands(
+            user.join("commands"),
+            CommandScope::User,
+            &mut out,
+            &mut seen,
+        );
     }
     collect_skills(project_claude.join("skills"), &mut out, &mut seen);
     if let Some(user) = user_claude {

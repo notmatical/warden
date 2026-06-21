@@ -51,10 +51,10 @@ jobs:
           targets: x86_64-pc-windows-msvc
       - uses: swatinem/rust-cache@v2
         with:
-          workspaces: "./src-tauri -> target"
+          workspaces: ". -> target"
       - name: rustfmt
-        run: cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
+        run: cargo fmt --all -- --check
       - name: clippy (linux)
-        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets -- -D warnings
       - name: clippy (windows target, check only)
-        run: cargo clippy --manifest-path src-tauri/Cargo.toml --target x86_64-pc-windows-msvc --all-targets -- -D warnings
+        run: cargo clippy --workspace --target x86_64-pc-windows-msvc --all-targets -- -D warnings

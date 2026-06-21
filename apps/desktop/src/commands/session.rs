@@ -324,10 +324,7 @@ pub async fn session_delete_check(
 /// only paths under warden's own worktrees root are ever removed.
 #[tauri::command]
 #[specta::specta]
-pub async fn delete_session(
-    state: State<'_, AppState>,
-    session_id: String,
-) -> CommandResult<()> {
+pub async fn delete_session(state: State<'_, AppState>, session_id: String) -> CommandResult<()> {
     let session = state.store.get_session(&session_id)?;
     state.manager.cancel(&state.store, &session_id);
     warden_core::terminal::kill(&session_id);
@@ -493,8 +490,7 @@ pub async fn send_message(
     if let Some((backend, working_dir, message)) = naming_ctx {
         let store = state.store.clone();
         tauri::async_runtime::spawn(async move {
-            let Some(title) =
-                agent::generate_session_title(backend, &working_dir, &message).await
+            let Some(title) = agent::generate_session_title(backend, &working_dir, &message).await
             else {
                 return;
             };
@@ -518,10 +514,7 @@ pub async fn send_message(
 
 #[tauri::command]
 #[specta::specta]
-pub async fn cancel_session(
-    state: State<'_, AppState>,
-    session_id: String,
-) -> CommandResult<()> {
+pub async fn cancel_session(state: State<'_, AppState>, session_id: String) -> CommandResult<()> {
     state.manager.cancel(&state.store, &session_id);
     Ok(())
 }
@@ -567,10 +560,7 @@ pub async fn reject_tools(state: State<'_, AppState>, session_id: String) -> Com
 /// `resume_with`, so it respawns with the new permission mode.
 #[tauri::command]
 #[specta::specta]
-pub async fn approve_plan(
-    state: State<'_, AppState>,
-    session_id: String,
-) -> CommandResult<()> {
+pub async fn approve_plan(state: State<'_, AppState>, session_id: String) -> CommandResult<()> {
     let session = state.store.get_session(&session_id)?;
     state.store.update_session_settings(
         &session_id,

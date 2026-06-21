@@ -9,7 +9,9 @@ use warden_core::cli::{self, Source, Tool, ToolStatus};
 use warden_core::event::emit_session;
 use warden_core::integrations::github::issues::{self, GhIssue, GhIssueComment};
 use warden_core::integrations::github::pr::{self, PrDetails, PrInfo, PrSummary};
-use warden_core::integrations::github::pr_content::{generate_pr_content as gen_pr_content, PrContent};
+use warden_core::integrations::github::pr_content::{
+    generate_pr_content as gen_pr_content, PrContent,
+};
 use warden_core::integrations::{github, linear};
 use warden_core::store::NewSession;
 use warden_core::util::uuid;

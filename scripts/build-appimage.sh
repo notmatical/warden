@@ -19,7 +19,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-BUNDLE_DIR="$ROOT/src-tauri/target/release/bundle/appimage"
+BUNDLE_DIR="$ROOT/target/release/bundle/appimage"
 APPRUN="$ROOT/scripts/appimage-apprun.sh"
 MACHINE="$(uname -m)"
 
@@ -58,7 +58,7 @@ echo "==> repackaging with replacement AppRun"
     NO_STRIP=1 ARCH="$MACHINE" "$PLUGIN" --appdir "$(basename "$APPDIR")"
 )
 
-VERSION="$(jq -r .version "$ROOT/src-tauri/tauri.conf.json")"
+VERSION="$(jq -r .version "$ROOT/apps/desktop/tauri.conf.json")"
 case "$MACHINE" in
     x86_64) ARCH_LABEL="amd64" ;;
     aarch64) ARCH_LABEL="arm64" ;;
