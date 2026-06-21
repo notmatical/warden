@@ -243,7 +243,9 @@ pub fn run() {
             // (or drain what they wrote before dying), and settle any session
             // left lying `Running` with nothing behind it. Emits via the global
             // sink installed above, so it needs no AppHandle.
-            warden_core::agent::recover(store);
+            tauri::async_runtime::spawn(async move {
+                warden_core::agent::recover(store).await;
+            });
 
             // Keep open PRs' state + CI checks and the Linear inbox fresh in the
             // background.

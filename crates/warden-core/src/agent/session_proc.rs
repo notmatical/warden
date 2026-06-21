@@ -468,68 +468,66 @@ fn plausible_agent(name: &str) -> bool {
 /// survived the previous app run, drain the output of ones that died (their
 /// turn may have completed offline), and settle any session left lying
 /// `Running` with nothing behind it.
-pub fn recover(store: Store) {
-    tokio::spawn(async move {
-        let procs = store.list_agent_procs().unwrap_or_default();
-        let mut tracked: HashSet<String> = HashSet::new();
-        for row in procs {
-            tracked.insert(row.session_id.clone());
-            let Ok(session) = store.get_session(&row.session_id) else {
-                let _ = store.delete_agent_proc(&row.session_id, &row.proc_id);
-                continue;
-            };
-            let alive = crate::platform::process::process_name(row.pid)
-                .map(|name| plausible_agent(&name))
-                .unwrap_or(false);
-            // A survivor we can't message (its stdin died with the previous app
-            // run) is only worth keeping while it finishes a turn; an idle one
-            // is reaped so a respawn can't collide on the session lock.
-            let liveness = if alive && session.status == SessionStatus::Running {
-                Liveness::Pid(row.pid)
-            } else {
-                if alive {
-                    crate::platform::process::kill_process_tree(row.pid);
-                }
-                Liveness::Dead
-            };
-            log::info!(
-                "recovering agent proc for session {}: pid {} ({})",
-                row.session_id,
-                row.pid,
-                match liveness {
-                    Liveness::Pid(_) => "alive, re-tailing",
-                    _ => "gone, draining output",
-                }
-            );
-            tokio::spawn(tail_session(Tail {
-                store: store.clone(),
-                session_id: row.session_id,
-                proc_id: row.proc_id,
-                out_path: PathBuf::from(row.out_file),
-                err_path: PathBuf::from(row.err_file),
-                offset: row.out_offset,
-                liveness,
-                recovered: true,
-            }));
-        }
+pub async fn recover(store: Store) {
+    let procs = store.list_agent_procs().unwrap_or_default();
+    let mut tracked: HashSet<String> = HashSet::new();
+    for row in procs {
+        tracked.insert(row.session_id.clone());
+        let Ok(session) = store.get_session(&row.session_id) else {
+            let _ = store.delete_agent_proc(&row.session_id, &row.proc_id);
+            continue;
+        };
+        let alive = crate::platform::process::process_name(row.pid)
+            .map(|name| plausible_agent(&name))
+            .unwrap_or(false);
+        // A survivor we can't message (its stdin died with the previous app
+        // run) is only worth keeping while it finishes a turn; an idle one
+        // is reaped so a respawn can't collide on the session lock.
+        let liveness = if alive && session.status == SessionStatus::Running {
+            Liveness::Pid(row.pid)
+        } else {
+            if alive {
+                crate::platform::process::kill_process_tree(row.pid);
+            }
+            Liveness::Dead
+        };
+        log::info!(
+            "recovering agent proc for session {}: pid {} ({})",
+            row.session_id,
+            row.pid,
+            match liveness {
+                Liveness::Pid(_) => "alive, re-tailing",
+                _ => "gone, draining output",
+            }
+        );
+        tokio::spawn(tail_session(Tail {
+            store: store.clone(),
+            session_id: row.session_id,
+            proc_id: row.proc_id,
+            out_path: PathBuf::from(row.out_file),
+            err_path: PathBuf::from(row.err_file),
+            offset: row.out_offset,
+            liveness,
+            recovered: true,
+        }));
+    }
 
-        // Sessions stuck `Running` with no proc row: Codex turns (the shared
-        // app-server died with the app), one-shot recipe runs, or pre-registry
-        // rows. Nothing to drain — settle them honestly.
-        for session in store.list_running_sessions().unwrap_or_default() {
-            if tracked.contains(&session.id) {
-                continue;
-            }
-            let _ = store.append_event(
-                &session.id,
-                &AgentEvent::Notice {
-                    text: INTERRUPTED_NOTICE.to_string(),
-                },
-            );
-            let _ = store.set_session_status(&session.id, SessionStatus::Idle);
-            if let Ok(updated) = store.get_session(&session.id) {
-                emit_session(&updated);
-            }
+    // Sessions stuck `Running` with no proc row: Codex turns (the shared
+    // app-server died with the app), one-shot recipe runs, or pre-registry
+    // rows. Nothing to drain — settle them honestly.
+    for session in store.list_running_sessions().unwrap_or_default() {
+        if tracked.contains(&session.id) {
+            continue;
         }
-    });
+        let _ = store.append_event(
+            &session.id,
+            &AgentEvent::Notice {
+                text: INTERRUPTED_NOTICE.to_string(),
+            },
+        );
+        let _ = store.set_session_status(&session.id, SessionStatus::Idle);
+        if let Ok(updated) = store.get_session(&session.id) {
+            emit_session(&updated);
+        }
+    }
 }
