@@ -6,6 +6,11 @@
 @import "./syntax.css";
 @import "./markdown.css";
 
+/* @warden/ui (coss/Base-UI) components live in packages/ui — symlinked into
+   node_modules, which Tailwind v4 ignores by default. Source it so their unique
+   utility classes (masks, shadows, etc.) actually get generated. */
+@source "../../../../packages/ui/src";
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
