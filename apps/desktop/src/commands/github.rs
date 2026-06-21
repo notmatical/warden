@@ -291,7 +291,7 @@ pub mod poll {
 
     use tauri::{AppHandle, Manager};
 
-    use warden_core::event::{emit_session, Notification, NotifyTarget};
+    use warden_core::event::{emit_session, Notification, NotifyEvent, NotifyTarget};
     use warden_core::integrations::{github::pr, linear};
     use warden_core::poll::{run_focus_tiered_poll, TierIntervals};
     use warden_core::{event, git, Store};
@@ -370,7 +370,7 @@ pub mod poll {
                 event::emit_notification(&Notification {
                     title: format!("PR #{} merged", info.number),
                     body: Some(format!("{} was retired.", session.title)),
-                    event: Some("prChecks".into()),
+                    event: Some(NotifyEvent::PrChecks),
                     tone: None,
                     sound: None,
                     target: Some(NotifyTarget::Session {
