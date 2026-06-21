@@ -4,10 +4,10 @@
   "version": "0.1.11",
   "identifier": "com.warden.app",
   "build": {
-    "frontendDist": "../dist",
+    "frontendDist": "../desktop-frontend/dist",
     "devUrl": "http://localhost:1420",
-    "beforeDevCommand": "bun run dev:web",
-    "beforeBuildCommand": "bun run build:web"
+    "beforeDevCommand": "bun --filter @warden/desktop-frontend run dev:web",
+    "beforeBuildCommand": "bun --filter @warden/desktop-frontend run build:web"
   },
   "app": {
     "macOSPrivateApi": true,

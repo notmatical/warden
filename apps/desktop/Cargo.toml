@@ -19,7 +19,7 @@ tauri-build = { version = "2.6.2", features = [] }
 # All domain logic — persistence, git, providers, agent engine, workflows,
 # integrations — lives in warden-core. The shell enables its `tauri` feature so
 # the global event sink emits to this webview.
-warden-core = { path = "../crates/warden-core", features = ["tauri"] }
+warden-core = { path = "../../crates/warden-core", features = ["tauri"] }
 
 tauri = { version = "2.11.2", features = ["protocol-asset", "macos-private-api"] }
 tauri-plugin-log = "2"

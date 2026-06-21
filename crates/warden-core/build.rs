@@ -6,7 +6,7 @@ use std::path::Path;
 
 fn main() {
     let manifest = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR");
-    let src = Path::new(&manifest).join("../../src/config/models.json");
+    let src = Path::new(&manifest).join("../../apps/desktop-frontend/src/config/models.json");
     let out = Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR")).join("models.json");
     std::fs::copy(&src, &out)
         .unwrap_or_else(|e| panic!("copy {} -> {}: {e}", src.display(), out.display()));
