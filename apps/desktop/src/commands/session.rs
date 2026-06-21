@@ -9,7 +9,7 @@ use tauri::State;
 use warden_core::agent::attachments::{self, Attachment};
 use warden_core::event::emit_session;
 use warden_core::git::{self, provision_working_dir, setup};
-use warden_core::provider::opencode;
+use warden_core::provider::{backend_for_model, opencode};
 use warden_core::store::NewSession;
 use warden_core::util::uuid;
 use warden_core::{
@@ -125,7 +125,7 @@ pub async fn create_session(
         .backend
         .as_deref()
         .and_then(Backend::parse)
-        .unwrap_or_else(|| Backend::for_model(&model));
+        .unwrap_or_else(|| backend_for_model(&model));
     let effort = clamp_effort(backend, effort);
 
     let session = state.store.create_session(NewSession {
@@ -170,7 +170,7 @@ pub async fn update_session(
     let session = state.store.get_session(&session_id)?;
 
     let model = model.unwrap_or(session.model);
-    let backend = Backend::for_model(&model);
+    let backend = backend_for_model(&model);
     let permission_mode = permission_mode
         .as_deref()
         .and_then(PermissionMode::parse)

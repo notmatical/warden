@@ -13,11 +13,11 @@ use warden_core::integrations::github::pr_content::{
     generate_pr_content as gen_pr_content, PrContent,
 };
 use warden_core::integrations::{github, linear};
+use warden_core::provider::backend_for_model;
 use warden_core::store::NewSession;
 use warden_core::util::uuid;
 use warden_core::{
-    git, AppError, Backend, CommandResult, EffortLevel, PermissionMode, Session, SessionKind,
-    SessionRole,
+    git, AppError, CommandResult, EffortLevel, PermissionMode, Session, SessionKind, SessionRole,
 };
 
 use crate::state::AppState;
@@ -245,7 +245,7 @@ pub async fn checkout_pr(
         .store
         .ensure_group_for_project(&project_id, &project.name)?;
 
-    let backend = Backend::for_model(&model);
+    let backend = backend_for_model(&model);
     let working_dir = dir.working_dir.clone();
     let session = state.store.create_session(NewSession {
         group_id,

@@ -68,7 +68,7 @@ impl NewSession {
             project_id: project_id.to_string(),
             title,
             kind: SessionKind::Agent,
-            backend: Backend::for_model(&model),
+            backend: crate::provider::backend_for_model(&model),
             model,
             permission_mode,
             effort,
