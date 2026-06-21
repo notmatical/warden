@@ -11,9 +11,9 @@ import { toast } from "sonner"
 import { AgentToolbar } from "@/components/agent-panel"
 import { AttachmentRow } from "@/components/attachment-row"
 import { ContextMeter } from "@/components/context-meter"
-import { EffortMenu } from "@/components/controls/effort-menu"
-import { ModeMenu } from "@/components/controls/mode-menu"
-import { ModelMenu } from "@/components/controls/model-menu"
+import { EffortSelector } from "@/components/selectors/effort-selector"
+import { ModeSelector } from "@/components/selectors/mode-selector"
+import { ModelSelector } from "@/components/selectors/model-selector"
 import { GitStatusChips } from "@/components/git-status-chips"
 import { MentionHighlight } from "@/components/mention-highlight"
 import { MentionPopover } from "@/components/mention-popover"
@@ -284,7 +284,7 @@ export function Composer({ sessionId }: { sessionId: string }) {
 
         {/* Attached settings panel — tucked behind the card, tinted. */}
         <div className="-mt-3 flex items-center gap-1 rounded-b-xl bg-muted/40 px-2 pt-5 pb-1.5">
-          <ModelMenu
+          <ModelSelector
             value={session.model}
             backend={session.backend}
             started={started}
@@ -292,14 +292,14 @@ export function Composer({ sessionId }: { sessionId: string }) {
             {...menuProps("model")}
           />
           <div className="mx-0.5 h-4 w-px bg-border/60" />
-          <ModeMenu
+          <ModeSelector
             value={session.permissionMode}
             onChange={(permissionMode) =>
               void updateSession(sessionId, { permissionMode })
             }
             {...menuProps("mode")}
           />
-          <EffortMenu
+          <EffortSelector
             value={session.effort}
             onChange={(effort) => void updateSession(sessionId, { effort })}
             backend={session.backend}
