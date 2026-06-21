@@ -355,10 +355,8 @@ fn respawn_run(
 
 // ----- plan → code recipe --------------------------------------------------
 //
-// TODO(revise later): fold this into the workflow graph engine — a built-in
-// "plan → code" graph (a Plan AgentTask edged to a Code AgentTask) run through
-// `run_workflow`, instead of a bespoke two-session orchestration. Left as a
-// standalone service fn for now; only the Tauri coupling is removed here. See
-// docs/MONOREPO-MIGRATION.md.
+// NOTE: plan→code overlaps the graph engine (a `Plan`→`Code` graph), but
+// unifying it changes the command's contract + frontend — a feature change, not a
+// cleanup. Kept as a standalone service fn; see the rationale on `recipes`.
 
 pub use super::recipes::{run_plan_to_code, PlanToCodeResult};

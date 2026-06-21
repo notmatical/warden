@@ -69,9 +69,10 @@ pub type Result<T> = std::result::Result<T, AppError>;
 /// about it*, not by the internal error source — so the infra variants share
 /// `Internal`. Additive: new kinds append, existing ones never change meaning.
 ///
-/// TODO(revise later): first-cut taxonomy — refine against the UI's actual
-/// branches in the file-by-file overhaul (may add `NeedsAuth`/`Network`, split
-/// `Integration` by provider). See docs/MONOREPO-MIGRATION.md.
+/// Audited against the frontend: commands surface `message` (caught and toasted)
+/// and nothing branches on `kind` yet, so the taxonomy stays minimal rather than
+/// speculatively adding `NeedsAuth`/`Network` or splitting `Integration` by
+/// provider. Add a kind only when a real UI branch needs to distinguish it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub enum ErrorKind {

@@ -1,12 +1,14 @@
 //! Multi-agent recipes. Today: plan → code, where a planner session drafts an
 //! implementation plan and a coder session executes it in the same worktree.
 //!
-//! TODO(revise later): this predates the workflow graph engine and overlaps it
-//! conceptually — plan→code is just a Plan AgentTask edged to a Code AgentTask.
-//! The intended direction is to express it as a built-in workflow graph run
-//! through `service::run_workflow` and delete this bespoke orchestration. For
-//! now it stays a standalone, Tauri-free service fn. See
-//! docs/MONOREPO-MIGRATION.md.
+//! NOTE: this overlaps the workflow graph engine conceptually — plan→code is a
+//! `Plan` node edged to a `Code` node, which the engine already runs (the edge
+//! injects the plan as the coder's context). But folding it in would turn this
+//! from "create two linked sessions and return them up front" into "return a
+//! workflow run", reshaping the `run_plan_to_code` command and its frontend — a
+//! feature/UX change, not a mechanical cleanup. So the bespoke fn stays until
+//! plan→code is deliberately reworked as a first-class workflow (or more recipes
+//! make the unification pay off). See docs/MONOREPO-MIGRATION.md.
 
 use serde::{Deserialize, Serialize};
 use specta::Type;
