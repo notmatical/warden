@@ -20,7 +20,11 @@ import { StreamingStatus } from "@/components/streaming-status"
 import { ToolActivity } from "@/components/tool-activity"
 import { Markdown } from "@/components/ui/markdown"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { isSpecialTool, resolvePlanContent } from "@/lib/agent-tools"
+import {
+  hasPendingQuestion,
+  isSpecialTool,
+  resolvePlanContent,
+} from "@/lib/agent-tools"
 import { copyText } from "@/lib/clipboard"
 import { relativeTime } from "@/lib/time"
 import { cn } from "@/lib/utils"
@@ -348,15 +352,7 @@ export function Transcript({
   // An AskUserQuestion is awaiting a reply: the agent sometimes keeps narrating
   // afterwards, which would stream in and then vanish when its finalized text is
   // suppressed. Hide the live stream too so it never flickers.
-  const pendingQuestion = useMemo(() => {
-    if (!events) return false
-    for (let i = events.length - 1; i >= 0; i--) {
-      const e = events[i]
-      if (e.type === "user_message") return false
-      if (e.type === "tool_use" && e.name === "AskUserQuestion") return true
-    }
-    return false
-  }, [events])
+  const pendingQuestion = useMemo(() => hasPendingQuestion(events), [events])
 
   const viewportRef = useRef<HTMLDivElement>(null)
   const pinnedRef = useRef(true)

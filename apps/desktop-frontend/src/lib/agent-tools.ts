@@ -1,3 +1,5 @@
+import type { EventRecord } from "@/types"
+
 /** Tools lifted out of the activity accordion into their own interactive widget
  *  (a question prompt, a plan-approval card) rather than rendered as raw calls. */
 export const SPECIAL_TOOLS = new Set<string>([
@@ -31,4 +33,19 @@ export function resolvePlanContent(input: unknown): string {
  *  calls carry a `parent_tool_use_id` pointing back at one of these. */
 export function isAgentTool(name: string): boolean {
   return name === "Task" || name === "Agent"
+}
+
+/** Whether the session is blocked on an unanswered AskUserQuestion. The agent
+ *  sometimes keeps narrating after asking, so the session status stays "running"
+ *  even though it is really waiting on the user. Callers gate the live "working"
+ *  spinner on this. Scans newest-first: a later user message means it was
+ *  answered. */
+export function hasPendingQuestion(events: EventRecord[] | undefined): boolean {
+  if (!events) return false
+  for (let i = events.length - 1; i >= 0; i--) {
+    const e = events[i]
+    if (e.type === "user_message") return false
+    if (e.type === "tool_use" && e.name === "AskUserQuestion") return true
+  }
+  return false
 }
