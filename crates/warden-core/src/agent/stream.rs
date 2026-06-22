@@ -254,11 +254,19 @@ fn parse_result(value: &Value) -> ParsedLine {
         usage: value.get("usage").and_then(parse_usage),
     }];
 
-    // Tools the CLI denied this turn become an approval request.
+    // Tools the CLI denied this turn become an approval request. AskUserQuestion
+    // is excluded: the transcript surfaces it as its own Q&A widget (a headless
+    // CLI reports it as "denied" because it can't run an interactive prompt, but
+    // it is not a permission gate).
     let denials: Vec<ToolDenial> = value
         .get("permission_denials")
         .and_then(Value::as_array)
-        .map(|arr| arr.iter().filter_map(parse_denial).collect())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(parse_denial)
+                .filter(|d| d.tool_name != "AskUserQuestion")
+                .collect()
+        })
         .unwrap_or_default();
     if !denials.is_empty() {
         events.push(AgentEvent::PermissionRequest { denials });
