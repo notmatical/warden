@@ -151,7 +151,7 @@ export function LinearTasksView() {
   }
 
   return (
-    <div className="flex h-full flex-col gap-4 p-6">
+    <div className="flex h-full flex-col gap-4 px-6 pb-6">
       <IssueList
         issues={issues}
         syncing={syncing}
@@ -159,8 +159,7 @@ export function LinearTasksView() {
         onSelect={(issue) => setPeekId(issue.id)}
         leading={
           <span className="flex items-center gap-2.5">
-            <ListTodo className="size-4 shrink-0 text-muted-foreground" />
-            <h1 className="font-semibold text-foreground">Tasks</h1>
+            <h1 className="font-semibold text-foreground">Issues</h1>
             <CountChip>{issues.length}</CountChip>
           </span>
         }

@@ -4,7 +4,6 @@ import {
   FolderGit2,
   FolderPlus,
   Layers,
-  ListTodo,
   Pencil,
   Plus,
   Settings2,
@@ -59,12 +58,7 @@ import {
 import { UpdateBanner } from "@/components/update-banner"
 import { DEFAULT_CHAT_MODEL } from "@/lib/models"
 import { cn } from "@/lib/utils"
-import {
-  folderTabId,
-  ISSUES_TAB_ID,
-  TASKS_TAB_ID,
-  WORKFLOWS_TAB_ID,
-} from "@/lib/viewport"
+import { folderTabId, ISSUES_TAB_ID, WORKFLOWS_TAB_ID } from "@/lib/viewport"
 import { useAppStore } from "@/store/app-store"
 import type { Group, Project, SessionKind } from "@/types"
 
@@ -414,7 +408,6 @@ function CollapsedGroupRow({
 
 const PRIMARY_NAV = [
   { id: WORKFLOWS_TAB_ID, label: "Workflows", icon: WorkflowIcon },
-  { id: TASKS_TAB_ID, label: "Tasks", icon: ListTodo },
   { id: ISSUES_TAB_ID, label: "Issues", icon: CircleDot },
 ] as const
 
