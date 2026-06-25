@@ -22,6 +22,20 @@ async fn resolve_state(
         .min_by(|a, b| a.position.total_cmp(&b.position)))
 }
 
+/// Move an issue to its team's primary state of `state_type` (e.g. "started",
+/// "completed", "unstarted"), resolving the team live. The fallible variant for
+/// callers — the MCP server — that surface failures back to the agent rather
+/// than swallowing them like [`start_issue`]/[`complete_issue`].
+pub async fn transition_issue(key: &str, issue_id: &str, state_type: &str) -> Result<()> {
+    let team_id = client::fetch_issue_team_id(key, issue_id).await?;
+    match resolve_state(key, &team_id, state_type).await? {
+        Some(state) => client::update_issue_state(key, issue_id, &state.id).await,
+        None => Err(crate::error::AppError::Integration(format!(
+            "team has no {state_type} state"
+        ))),
+    }
+}
+
 /// Move an issue to its team's primary "started" state.
 pub async fn start_issue(key: &str, issue_id: &str, team_id: &str) -> Result<()> {
     match resolve_state(key, team_id, "started").await? {

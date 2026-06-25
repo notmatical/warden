@@ -129,6 +129,9 @@ pub fn run() {
         commands::linear::linear_binding,
         commands::linear::linear_bindings,
         commands::linear::linear_set_binding,
+        // mcp
+        commands::mcp::warden_mcp_enabled,
+        commands::mcp::set_warden_mcp_enabled,
         // core
         commands::core::set_app_focus_state,
         // terminal

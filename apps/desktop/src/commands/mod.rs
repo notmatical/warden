@@ -8,6 +8,7 @@ pub mod external;
 pub mod git;
 pub mod github;
 pub mod linear;
+pub mod mcp;
 pub mod mentions;
 pub mod providers;
 pub mod session;

@@ -267,6 +267,16 @@ export function getEvents(sessionId: string): Promise<EventRecord[]> {
   return invoke("get_events", { sessionId })
 }
 
+/** Whether agents are given Warden's MCP tools (create/comment/status on
+ *  connected integrations). Default on. */
+export function wardenMcpEnabled(): Promise<boolean> {
+  return invoke("warden_mcp_enabled")
+}
+
+export function setWardenMcpEnabled(enabled: boolean): Promise<void> {
+  return invoke("set_warden_mcp_enabled", { enabled })
+}
+
 export interface CreateSessionInput {
   projectId: string
   /** Group to create the session in. Omitted → backend resolves/creates one. */
