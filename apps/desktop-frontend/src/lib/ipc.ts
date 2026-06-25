@@ -247,14 +247,6 @@ export function listOpenPrs(projectId: string): Promise<PrSummary[]> {
   return invoke("list_open_prs", { projectId })
 }
 
-export function checkoutPr(
-  projectId: string,
-  number: number,
-  model: string
-): Promise<Session> {
-  return invoke("checkout_pr", { projectId, number, model })
-}
-
 export function refreshPrStatus(sessionId: string): Promise<PrInfo | null> {
   return invoke("refresh_pr_status", { sessionId })
 }

@@ -114,7 +114,6 @@ pub fn run() {
         commands::github::pr_details,
         commands::github::generate_pr_content,
         commands::github::list_open_prs,
-        commands::github::checkout_pr,
         commands::github::list_my_issues,
         commands::github::github_issue_comments,
         // linear

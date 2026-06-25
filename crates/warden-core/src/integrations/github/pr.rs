@@ -148,16 +148,6 @@ pub fn list_prs(repo: &Path) -> Vec<PrSummary> {
         .unwrap_or_default()
 }
 
-/// The base branch a PR targets (e.g. `main`), via `gh pr view`.
-pub fn pr_base_ref(repo: &Path, number: i64) -> Option<String> {
-    let value = gh_json(
-        repo,
-        &["pr", "view", &number.to_string(), "--json", "baseRefName"],
-    )
-    .ok()??;
-    str_field(&value, "baseRefName")
-}
-
 /// Classify one `statusCheckRollup` item — the single source of truth for what a
 /// check's verdict means. CheckRuns carry `name`/`status`/`conclusion`;
 /// StatusContexts carry `context`/`state`. Returns `None` for an item with no
