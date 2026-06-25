@@ -72,8 +72,20 @@ pub fn create_worktree(repo: &Path, dest: &Path, branch: &str, base: &str) -> Re
 /// best-effort since orphaned worktrees are recoverable via `prune`.
 pub fn remove_worktree(repo: &Path, dest: &Path) -> Result<()> {
     let dest = dest.to_string_lossy();
-    run(repo, &["worktree", "remove", "--force", &dest])?;
-    Ok(())
+    // Windows briefly locks just-used files (antivirus, the search indexer, a
+    // lingering child process), so `worktree remove` can hit a transient
+    // "permission denied". Retry with a short backoff before giving up.
+    let mut last: Result<()> = Ok(());
+    for attempt in 0..4u64 {
+        if attempt > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(200 * attempt));
+        }
+        last = run(repo, &["worktree", "remove", "--force", &dest]).map(|_| ());
+        if last.is_ok() {
+            return Ok(());
+        }
+    }
+    last
 }
 
 /// Add a worktree at `dest` checked out to an existing `branch`.
