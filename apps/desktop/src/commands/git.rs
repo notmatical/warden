@@ -1,0 +1,220 @@
+//! Git command wrappers: per-root status, diffs, commits, push/pull/sync. The
+//! git logic lives in `warden_core::git`.
+
+use std::path::Path;
+
+use serde::Serialize;
+use specta::Type;
+use tauri::State;
+
+use warden_core::git::{self, diff};
+use warden_core::{AppError, CommandResult};
+
+use crate::state::AppState;
+
+/// Branch and divergence summary for one of a session's repo roots.
+#[derive(Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct RepoStatus {
+    pub project_id: String,
+    pub name: String,
+    pub path: String,
+    pub is_primary: bool,
+    pub is_git: bool,
+    pub branch: Option<String>,
+    pub ahead: u32,
+    pub behind: u32,
+    /// Lines changed: everything since the session's base for the primary root
+    /// (committed + uncommitted), uncommitted-only for other roots.
+    pub added: u32,
+    pub removed: u32,
+    /// Whether this root's repo has a remote — i.e. a PR can be opened from it.
+    pub has_remote: bool,
+}
+
+/// Git status for every root of a session. The primary root reads from the
+/// session's `working_dir` (which may be an isolated worktree); other roots read
+/// from their project path. Non-git roots come back zeroed rather than erroring.
+#[tauri::command]
+#[specta::specta]
+pub async fn session_git_status(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> CommandResult<Vec<RepoStatus>> {
+    let session = state.store.get_session(&session_id)?;
+    let projects = state.store.list_session_root_projects(&session_id)?;
+
+    let mut out = Vec::with_capacity(projects.len());
+    for project in projects {
+        let is_primary = project.id == session.project_id;
+        let cwd = if is_primary {
+            session.working_dir.clone()
+        } else {
+            project.path.clone()
+        };
+        let dir = Path::new(&cwd);
+
+        let mut status = RepoStatus {
+            project_id: project.id,
+            name: project.name,
+            path: project.path,
+            is_primary,
+            is_git: false,
+            branch: None,
+            ahead: 0,
+            behind: 0,
+            added: 0,
+            removed: 0,
+            has_remote: false,
+        };
+
+        if git::is_repo(dir) {
+            // The primary root counts everything the session changed since it
+            // forked (committed + uncommitted) — this number is the doorway to
+            // the diff view. Other roots fall back to uncommitted changes.
+            let (added, removed) = match session.base_sha.as_deref().filter(|_| is_primary) {
+                Some(base) => diff::lines_vs_base(dir, base),
+                None => git::uncommitted_lines(dir),
+            };
+            let (ahead, behind) = git::ahead_behind(dir);
+            status.is_git = true;
+            status.branch = git::current_branch(dir);
+            status.ahead = ahead;
+            status.behind = behind;
+            status.added = added;
+            status.removed = removed;
+            status.has_remote = git::has_remote(dir);
+        }
+
+        out.push(status);
+    }
+
+    Ok(out)
+}
+
+/// Every change a session has made since it forked, for the diff view. Empty
+/// when the session has no base commit (non-git or merged).
+#[tauri::command]
+#[specta::specta]
+pub async fn get_session_diff(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> CommandResult<Vec<diff::DiffFile>> {
+    let session = state.store.get_session(&session_id)?;
+    let Some(base) = session.base_sha.as_deref() else {
+        return Ok(Vec::new());
+    };
+    diff::worktree_diff(Path::new(&session.working_dir), base).map_err(Into::into)
+}
+
+/// Full before/after contents of one changed file, for the diff tab's
+/// side-by-side rendering.
+#[tauri::command]
+#[specta::specta]
+pub async fn get_session_file_versions(
+    state: State<'_, AppState>,
+    session_id: String,
+    path: String,
+) -> CommandResult<diff::FileVersions> {
+    let session = state.store.get_session(&session_id)?;
+    let Some(base) = session.base_sha.as_deref() else {
+        return Err(AppError::Invalid("session has no diff base".to_string()).into());
+    };
+    Ok(diff::file_versions(
+        Path::new(&session.working_dir),
+        base,
+        &path,
+    ))
+}
+
+/// The commits a session has made on its branch since it forked from base.
+#[tauri::command]
+#[specta::specta]
+pub async fn get_session_commits(
+    state: State<'_, AppState>,
+    session_id: String,
+    limit: Option<u32>,
+) -> CommandResult<Vec<diff::Commit>> {
+    let session = state.store.get_session(&session_id)?;
+    let Some(base) = session.base_sha.as_deref() else {
+        return Ok(Vec::new());
+    };
+    diff::commits_since(Path::new(&session.working_dir), base, limit.unwrap_or(100))
+        .map_err(Into::into)
+}
+
+/// Result of syncing a worktree with its base branch.
+#[derive(Serialize, Type)]
+#[serde(tag = "status", rename_all = "camelCase")]
+pub enum SyncOutcome {
+    Synced,
+    Conflict { files: Vec<String> },
+}
+
+/// Bring a session's worktree up to date with the latest base branch (fetch +
+/// rebase by default). Aborts cleanly and reports files on conflict.
+#[tauri::command]
+#[specta::specta]
+pub async fn sync_worktree(
+    state: State<'_, AppState>,
+    session_id: String,
+    mode: Option<String>,
+) -> CommandResult<SyncOutcome> {
+    let session = state.store.get_session(&session_id)?;
+    if session.merged_at.is_some() {
+        return Err(AppError::Invalid("session is already merged".to_string()).into());
+    }
+    if !session.is_isolated {
+        return Err(
+            AppError::Invalid("only isolated worktree sessions can sync".to_string()).into(),
+        );
+    }
+    let base = session
+        .base_branch
+        .clone()
+        .ok_or_else(|| AppError::Invalid("session has no base branch".to_string()))?;
+    let worktree = Path::new(&session.working_dir);
+    let mode = mode
+        .as_deref()
+        .and_then(git::MergeMode::parse)
+        .unwrap_or(git::MergeMode::Rebase);
+
+    git::fetch_origin(worktree, &base);
+    match git::sync_onto_base(worktree, &base, mode)? {
+        git::MergeOutcome::Conflict(files) => Ok(SyncOutcome::Conflict { files }),
+        git::MergeOutcome::Merged => Ok(SyncOutcome::Synced),
+    }
+}
+
+/// Push the session's worktree branch to its origin remote (publishing or
+/// updating the upstream tracking branch).
+#[tauri::command]
+#[specta::specta]
+pub async fn push_session(state: State<'_, AppState>, session_id: String) -> CommandResult<()> {
+    let session = state.store.get_session(&session_id)?;
+    git::push_branch(Path::new(&session.working_dir)).map_err(Into::into)
+}
+
+/// Pull the latest upstream commits onto the session's branch (fetch + merge).
+/// Reports clashing files on conflict, like `sync_worktree`.
+#[tauri::command]
+#[specta::specta]
+pub async fn pull_session(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> CommandResult<SyncOutcome> {
+    let session = state.store.get_session(&session_id)?;
+    let worktree = Path::new(&session.working_dir);
+    match git::pull_upstream(worktree, git::MergeMode::MergeCommit)? {
+        git::MergeOutcome::Conflict(files) => Ok(SyncOutcome::Conflict { files }),
+        git::MergeOutcome::Merged => Ok(SyncOutcome::Synced),
+    }
+}
+
+/// The browsable `https` URL for a repo path's `origin` remote, or `None` when
+/// there's no recognizable remote. Powers the header's "open repo" button.
+#[tauri::command]
+#[specta::specta]
+pub async fn repo_browse_url(path: String) -> CommandResult<Option<String>> {
+    Ok(git::remote_browse_url(Path::new(&path)))
+}

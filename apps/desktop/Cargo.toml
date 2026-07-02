@@ -1,0 +1,63 @@
+[package]
+name = "warden"
+version = "0.1.11"
+description = "A browser for your AI agent sessions"
+authors = ["Warden"]
+license = "MIT"
+repository = ""
+edition = "2021"
+rust-version = "1.80"
+
+[lib]
+name = "warden_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.2", features = [] }
+
+[dependencies]
+# All domain logic — persistence, git, providers, agent engine, workflows,
+# integrations — lives in warden-core. The shell enables its `tauri` feature so
+# the global event sink emits to this webview.
+warden-core = { path = "../../crates/warden-core", features = ["tauri"] }
+
+tauri = { version = "2.11.2", features = ["protocol-asset", "macos-private-api"] }
+tauri-plugin-log = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-os = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-clipboard-manager = "2"
+tauri-plugin-process = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-window-state = "2"
+tauri-plugin-decorum = "1.1.1"
+
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2"
+log = "0.4"
+
+tokio = { version = "1", features = [
+    "process",
+    "io-util",
+    "macros",
+    "sync",
+    "rt-multi-thread",
+    "time",
+] }
+
+# Resolves editor/terminal CLIs on PATH for the "open in…" launcher (the one
+# shell-resident bit of glue), including Windows `.cmd` shims std::process misses.
+which = "7"
+
+specta = { version = "=2.0.0-rc.22", features = ["derive", "serde_json"] }
+specta-typescript = "=0.0.9"
+tauri-specta = { version = "=2.0.0-rc.21", features = ["derive", "typescript"] }
+
+[dev-dependencies]
+tempfile = "3"
+
+[features]
+# This feature is used for production builds or when a dev server is not specified, DO NOT REMOVE!!
+custom-protocol = ["tauri/custom-protocol"]
