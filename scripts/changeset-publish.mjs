@@ -6,13 +6,13 @@
 import { execSync } from "node:child_process"
 import { readFileSync } from "node:fs"
 
-const { name, version } = JSON.parse(readFileSync("package.json", "utf8"))
-const tag = `${name}-v${version}`
+const { version } = JSON.parse(readFileSync("apps/desktop/package.json", "utf8"))
+const tag = `warden-v${version}`
 
 try {
   execSync(`git rev-parse -q --verify "refs/tags/${tag}"`, { stdio: "ignore" })
   console.log(`Tag ${tag} already exists — nothing to release.`)
 } catch {
   // No tag yet → signal the action (and thus the build job) to cut a release.
-  console.log(`New tag: ${name}@${version}`)
+  console.log(`New tag: warden@${version}`)
 }
