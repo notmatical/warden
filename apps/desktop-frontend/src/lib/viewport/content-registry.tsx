@@ -2,7 +2,6 @@ import {
   CircleDot,
   FileDiff,
   FolderGit2,
-  ListTodo,
   type LucideIcon,
   Settings2,
   SquareTerminal,
@@ -17,7 +16,6 @@ import { SessionPane } from "@/components/session-view"
 import { SettingsPanel } from "@/components/settings/settings-panel"
 import { WorkflowEditor } from "@/components/workflow/workflow-editor"
 import { WorkflowsView } from "@/components/workflows-view"
-import { LinearTasksView } from "@/integrations/linear/components/linear-tasks-view"
 import type { AppState } from "@/store/types"
 import {
   type ContentKind,
@@ -71,11 +69,6 @@ const REGISTRY: Partial<Record<ContentKind, Entry>> = {
     icon: Settings2,
     View: () => <SettingsPanel />,
     title: () => "Settings",
-  },
-  tasks: {
-    icon: ListTodo,
-    View: () => <LinearTasksView />,
-    title: () => "Tasks",
   },
   issues: {
     icon: CircleDot,

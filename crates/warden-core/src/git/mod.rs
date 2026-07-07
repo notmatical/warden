@@ -11,6 +11,4 @@ mod worktree;
 pub use cli::*;
 pub use merge::{pull_upstream, sync_onto_base, MergeMode, MergeOutcome};
 pub use remote::{normalize_remote_url, remote_browse_url, resolve_ssh_host};
-pub use worktree::{
-    is_managed_worktree, provision_pr_worktree, provision_working_dir, ProvisionedDir,
-};
+pub use worktree::{is_managed_worktree, provision_working_dir, ProvisionedDir};

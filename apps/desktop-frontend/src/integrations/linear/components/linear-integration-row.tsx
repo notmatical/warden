@@ -6,6 +6,8 @@ import { LinearIcon } from "@/components/icons/brand"
 import { ToolListRow } from "@/components/settings/tool-list"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
+import { setWardenMcpEnabled, wardenMcpEnabled } from "@/lib/ipc"
 
 import { linearConnect, linearDisconnect, linearStatus } from "../ipc"
 
@@ -17,6 +19,7 @@ export function LinearIntegrationRow() {
   const [phase, setPhase] = useState<Phase>("loading")
   const [keyInput, setKeyInput] = useState("")
   const [busy, setBusy] = useState(false)
+  const [agentTools, setAgentTools] = useState(true)
 
   useEffect(() => {
     linearStatus()
@@ -25,6 +28,21 @@ export function LinearIntegrationRow() {
       )
       .catch(() => setPhase("disconnected"))
   }, [])
+
+  useEffect(() => {
+    if (phase !== "connected") return
+    wardenMcpEnabled()
+      .then(setAgentTools)
+      .catch(() => {})
+  }, [phase])
+
+  const toggleAgentTools = (next: boolean) => {
+    setAgentTools(next) // optimistic; the setting read on next spawn is source of truth
+    void setWardenMcpEnabled(next).catch(() => {
+      setAgentTools(!next)
+      toast.error("Couldn't update agent access")
+    })
+  }
 
   const handleConnect = async (e: FormEvent) => {
     e.preventDefault()
@@ -66,6 +84,22 @@ export function LinearIntegrationRow() {
           : { kind: "off", label: "Not connected" }
       }
       description="Triage your assigned issues in Tasks and send them to agents."
+      band={
+        phase === "connected" ? (
+          <div className="flex items-center justify-between gap-3 border-border/60 border-t bg-muted/20 px-4 py-2.5">
+            <div className="min-w-0">
+              <p className="font-medium text-foreground text-xs">
+                Let agents manage issues
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                Agents can create issues, comment, and update status during a
+                session.
+              </p>
+            </div>
+            <Switch checked={agentTools} onCheckedChange={toggleAgentTools} />
+          </div>
+        ) : undefined
+      }
       actions={
         phase === "connected" ? (
           <Button
