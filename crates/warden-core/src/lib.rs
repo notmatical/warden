@@ -12,6 +12,7 @@ pub mod error;
 pub mod event;
 pub mod git;
 pub mod integrations;
+pub mod mcp;
 pub mod mentions;
 pub mod model_config;
 pub mod net;

@@ -114,7 +114,6 @@ pub fn run() {
         commands::github::pr_details,
         commands::github::generate_pr_content,
         commands::github::list_open_prs,
-        commands::github::checkout_pr,
         commands::github::list_my_issues,
         commands::github::github_issue_comments,
         // linear
@@ -129,6 +128,9 @@ pub fn run() {
         commands::linear::linear_binding,
         commands::linear::linear_bindings,
         commands::linear::linear_set_binding,
+        // mcp
+        commands::mcp::warden_mcp_enabled,
+        commands::mcp::set_warden_mcp_enabled,
         // core
         commands::core::set_app_focus_state,
         // terminal

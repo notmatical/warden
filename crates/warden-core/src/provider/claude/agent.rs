@@ -147,6 +147,7 @@ pub fn session_args(
     session: &Session,
     add_dirs: &[String],
     context_file: Option<&str>,
+    mcp_config: Option<&str>,
     resume: bool,
 ) -> Vec<String> {
     let (model, fast) = split_fast(&session.model);
@@ -180,6 +181,13 @@ pub fn session_args(
         args.push(path.to_string());
     }
 
+    // Warden's own MCP server, so the agent can act on connected integrations
+    // (create a Linear issue, comment, set status) without a second login.
+    if let Some(path) = mcp_config {
+        args.push("--mcp-config".to_string());
+        args.push(path.to_string());
+    }
+
     // User-approved tool patterns. `--allowedTools` is variadic; the following
     // `--session-id`/`--resume` flag terminates it.
     if !session.allowed_tools.is_empty() {
@@ -200,6 +208,39 @@ pub fn session_args(
     args
 }
 
+/// Path to a `--mcp-config` file wiring Claude to Warden's own MCP server
+/// (`warden mcp` over stdio), or `None` when disabled, when no integration is
+/// connected (so we don't attach an empty server), or when anything fails —
+/// this must never break session launch. A file path is used over inline JSON
+/// since every `claude` build accepts it. Gated on Linear today; widens as
+/// GitHub/Codex tools land.
+pub(crate) fn warden_mcp_config(enabled: bool) -> Option<String> {
+    if !enabled {
+        return None;
+    }
+    // Attach only when an integration the tools can use is present: a Linear key
+    // (cheap keychain read) or the GitHub CLI on PATH. Both checks are sync.
+    let linear = matches!(crate::integrations::linear::key::load(), Ok(Some(_)));
+    let github = which::which("gh").is_ok();
+    if !linear && !github {
+        return None;
+    }
+    let exe = std::env::current_exe().ok()?;
+    let config = serde_json::json!({
+        "mcpServers": {
+            "warden": {
+                "type": "stdio",
+                "command": exe.to_string_lossy(),
+                "args": ["mcp"],
+            }
+        }
+    });
+    // Content is stable (same exe + args), so one shared file is fine to reuse.
+    let path = std::env::temp_dir().join("warden-mcp-config.json");
+    std::fs::write(&path, config.to_string()).ok()?;
+    Some(path.to_string_lossy().into_owned())
+}
+
 /// Build the persistent session command with stdin piped. The caller redirects
 /// stdout/stderr (to per-session files, so the process can outlive the app) and
 /// deliberately does NOT set `kill_on_drop` — survival is the point.
@@ -207,13 +248,20 @@ pub fn session_command(
     session: &Session,
     add_dirs: &[String],
     context_file: Option<&str>,
+    mcp_config: Option<&str>,
     resume: bool,
 ) -> Result<Command> {
     let bin = resolve_claude();
     let mut cmd = Command::new(bin);
-    cmd.args(session_args(session, add_dirs, context_file, resume))
-        .current_dir(&session.working_dir)
-        .stdin(Stdio::piped());
+    cmd.args(session_args(
+        session,
+        add_dirs,
+        context_file,
+        mcp_config,
+        resume,
+    ))
+    .current_dir(&session.working_dir)
+    .stdin(Stdio::piped());
     apply_gh_env(&mut cmd);
     Ok(cmd)
 }

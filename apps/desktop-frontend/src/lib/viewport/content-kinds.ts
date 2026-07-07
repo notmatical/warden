@@ -12,7 +12,6 @@ export type ContentKind =
   | "workflows"
   | "folder"
   | "settings"
-  | "tasks"
   | "issues"
   | "diff"
 
@@ -23,8 +22,9 @@ const DIFF_PREFIX = "diff:"
 /** Singleton destination ids — there's only ever one tab of each. */
 export const SETTINGS_TAB_ID = "settings"
 export const WORKFLOWS_TAB_ID = "workflows"
-export const TASKS_TAB_ID = "tasks"
 export const ISSUES_TAB_ID = "issues"
+/** Legacy ref for the old Linear-only "Tasks" tab, now folded into Issues. */
+const LEGACY_TASKS_TAB_ID = "tasks"
 
 export function workflowTabId(workflowId: string): string {
   return WORKFLOW_PREFIX + workflowId
@@ -107,12 +107,6 @@ const META: Record<ContentKind, KindMeta> = {
     loadsEvents: false,
     persistsWithoutRecord: true,
   },
-  tasks: {
-    kind: "tasks",
-    singleton: true,
-    loadsEvents: false,
-    persistsWithoutRecord: true,
-  },
   issues: {
     kind: "issues",
     singleton: true,
@@ -131,8 +125,7 @@ const META: Record<ContentKind, KindMeta> = {
 export function kindOf(ref: string): ContentKind {
   if (ref === SETTINGS_TAB_ID) return "settings"
   if (ref === WORKFLOWS_TAB_ID) return "workflows"
-  if (ref === TASKS_TAB_ID) return "tasks"
-  if (ref === ISSUES_TAB_ID) return "issues"
+  if (ref === ISSUES_TAB_ID || ref === LEGACY_TASKS_TAB_ID) return "issues"
   if (isFolderTab(ref)) return "folder"
   if (isWorkflowTab(ref)) return "workflow"
   if (isDiffTab(ref)) return "diff"

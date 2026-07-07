@@ -72,15 +72,20 @@ pub fn create_worktree(repo: &Path, dest: &Path, branch: &str, base: &str) -> Re
 /// best-effort since orphaned worktrees are recoverable via `prune`.
 pub fn remove_worktree(repo: &Path, dest: &Path) -> Result<()> {
     let dest = dest.to_string_lossy();
-    run(repo, &["worktree", "remove", "--force", &dest])?;
-    Ok(())
-}
-
-/// Add a worktree at `dest` checked out to an existing `branch`.
-pub fn add_worktree(repo: &Path, dest: &Path, branch: &str) -> Result<()> {
-    let _ = run(repo, &["worktree", "prune"]);
-    run(repo, &["worktree", "add", &dest.to_string_lossy(), branch])?;
-    Ok(())
+    // Windows briefly locks just-used files (antivirus, the search indexer, a
+    // lingering child process), so `worktree remove` can hit a transient
+    // "permission denied". Retry with a short backoff before giving up.
+    let mut last: Result<()> = Ok(());
+    for attempt in 0..4u64 {
+        if attempt > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(200 * attempt));
+        }
+        last = run(repo, &["worktree", "remove", "--force", &dest]).map(|_| ());
+        if last.is_ok() {
+            return Ok(());
+        }
+    }
+    last
 }
 
 /// The current branch name of a working tree, or `None` on a detached HEAD.
@@ -181,29 +186,6 @@ pub fn stage_and_commit(worktree: &Path, message: &str) -> Result<bool> {
 pub fn delete_branch(repo: &Path, branch: &str) -> Result<()> {
     run(repo, &["branch", "-D", branch])?;
     Ok(())
-}
-
-/// Fetch a pull request's head commit into a local `branch` (forced, so a
-/// re-checkout picks up new pushes to the PR).
-pub fn fetch_pr(repo: &Path, number: i64, branch: &str) -> Result<()> {
-    run(
-        repo,
-        &[
-            "fetch",
-            "origin",
-            &format!("pull/{number}/head:{branch}"),
-            "--force",
-        ],
-    )?;
-    Ok(())
-}
-
-/// The commit a ref currently points at, if it resolves.
-pub fn rev_parse(repo: &Path, rev: &str) -> Option<String> {
-    run(repo, &["rev-parse", rev])
-        .ok()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
 }
 
 /// The full textual diff of a worktree against `base` (a sha or branch) —

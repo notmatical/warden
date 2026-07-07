@@ -13,12 +13,7 @@ use warden_core::integrations::github::pr_content::{
     generate_pr_content as gen_pr_content, PrContent,
 };
 use warden_core::integrations::{github, linear};
-use warden_core::provider::backend_for_model;
-use warden_core::store::NewSession;
-use warden_core::util::uuid;
-use warden_core::{
-    git, AppError, CommandResult, EffortLevel, PermissionMode, Session, SessionKind, SessionRole,
-};
+use warden_core::{git, AppError, CommandResult};
 
 use crate::state::AppState;
 
@@ -222,62 +217,6 @@ pub async fn list_open_prs(
 ) -> CommandResult<Vec<PrSummary>> {
     let project = state.store.get_project(&project_id)?;
     Ok(pr::list_prs(Path::new(&project.path)))
-}
-
-/// Check out an existing PR into a fresh isolated worktree and open a session on
-/// it, for reviewing/running the PR locally.
-#[tauri::command]
-#[specta::specta]
-pub async fn checkout_pr(
-    state: State<'_, AppState>,
-    project_id: String,
-    number: i64,
-    model: String,
-) -> CommandResult<Session> {
-    let project = state.store.get_project(&project_id)?;
-    let repo = Path::new(&project.path);
-    if !git::has_remote(repo) {
-        return Err(AppError::Invalid("this repository has no git remote".to_string()).into());
-    }
-    let base = pr::pr_base_ref(repo, number).unwrap_or_else(|| "main".to_string());
-    let dir = git::provision_pr_worktree(&project, number, &base)?;
-    let group_id = state
-        .store
-        .ensure_group_for_project(&project_id, &project.name)?;
-
-    let backend = backend_for_model(&model);
-    let working_dir = dir.working_dir.clone();
-    let session = state.store.create_session(NewSession {
-        group_id,
-        project_id,
-        title: format!("Review PR #{number}"),
-        kind: SessionKind::Agent,
-        backend,
-        model,
-        permission_mode: PermissionMode::BypassPermissions,
-        effort: EffortLevel::High,
-        role: SessionRole::Chat,
-        auto_named: false,
-        agent_session_id: uuid(),
-        terminal_command: None,
-        working_dir: dir.working_dir,
-        branch: dir.branch,
-        base_sha: dir.base_sha,
-        base_branch: dir.base_branch,
-        is_isolated: dir.is_isolated,
-        parent_id: None,
-        workflow_id: None,
-        linear_issue_id: None,
-    })?;
-
-    // Light up the PR chip + merge controls for the reviewed PR.
-    if let Ok(Some(info)) = pr::status(Path::new(&working_dir)) {
-        let _ = persist_pr(&state.store, &session.id, &info);
-    }
-    let session = state.store.get_session(&session.id)?;
-    emit_session(&session);
-    git::setup::spawn_session_setup(&state.store, &session, &project.path);
-    Ok(session)
 }
 
 pub mod poll {
