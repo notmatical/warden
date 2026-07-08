@@ -14,5 +14,7 @@ try {
   console.log(`Tag ${tag} already exists — nothing to release.`)
 } catch {
   // No tag yet → signal the action (and thus the build job) to cut a release.
-  console.log(`New tag: warden@${version}`)
+  // Must name a real workspace package (@warden/desktop) — the action looks it
+  // up to mark it "published"; the bare root name "warden" isn't a package.
+  console.log(`New tag: @warden/desktop@${version}`)
 }
