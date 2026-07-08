@@ -27,7 +27,7 @@ type ViewportSlice = Pick<
   | "assignToPane"
   | "splitPane"
   | "setDragging"
-  | "reorderTab"
+  | "moveTab"
   | "saveView"
   | "openSession"
   | "openTab"
@@ -124,14 +124,15 @@ export const createViewportSlice: StateCreator<
 
   setDragging: (sessionId) => set({ draggingSessionId: sessionId }),
 
-  reorderTab: (draggedId, targetId) => {
-    if (draggedId === targetId) return
+  // arrayMove semantics (remove, then insert at the target's pre-removal
+  // index) so the drop lands exactly where dnd-kit's sortable preview showed.
+  moveTab: (id, toIndex) => {
     set((state) => {
+      const from = state.openTabs.indexOf(id)
+      if (from === -1 || from === toIndex) return {}
       const tabs = [...state.openTabs]
-      const from = tabs.indexOf(draggedId)
-      if (from === -1 || !tabs.includes(targetId)) return {}
       tabs.splice(from, 1)
-      tabs.splice(tabs.indexOf(targetId), 0, draggedId)
+      tabs.splice(toIndex, 0, id)
       return { openTabs: tabs }
     })
     get().saveView()

@@ -657,8 +657,8 @@ async listFiles(workingDir: string, max: number | null) : Promise<Result<FileEnt
 },
 /**
  * List `/`-invocable items: custom commands from `.claude/commands` and skills
- * from `.claude/skills`, both project- and user-level. Names are deduped, with
- * project entries winning over user entries.
+ * from `.claude/skills`, both project- and user-level. The shell resolves the
+ * user's home `.claude`; core walks the directories.
  */
 async listCommands(workingDir: string) : Promise<Result<SlashCommand[], IpcError>> {
     try {
@@ -870,18 +870,6 @@ async listOpenPrs(projectId: string) : Promise<Result<PrSummary[], IpcError>> {
 }
 },
 /**
- * Check out an existing PR into a fresh isolated worktree and open a session on
- * it, for reviewing/running the PR locally.
- */
-async checkoutPr(projectId: string, number: number, model: string) : Promise<Result<Session, IpcError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("checkout_pr", { projectId, number, model }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
  * Open issues assigned to the user in one repo. Soft-fails to empty (no
  * remote / unauthenticated) so multi-repo aggregation degrades per repo.
  */
@@ -1031,6 +1019,28 @@ async linearSetBinding(projectId: string, binding: LinearBinding | null) : Promi
 }
 },
 /**
+ * Whether agents are given Warden's MCP tools (default on when connected).
+ */
+async wardenMcpEnabled() : Promise<Result<boolean, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("warden_mcp_enabled") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Turn the agent MCP tools on or off.
+ */
+async setWardenMcpEnabled(enabled: boolean) : Promise<Result<null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_warden_mcp_enabled", { enabled }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Frontend focus reporting: window focus/blur events land here.
  */
 async setAppFocusState(focused: boolean) : Promise<Result<null, IpcError>> {
@@ -1114,8 +1124,11 @@ export type Attachment = { id: string; name: string;
  */
 path: string; isImage: boolean; isDir: boolean }
 /**
- * Which agent backend powers a session. This enum is the seam where providers
- * plug in; each variant has an adapter under `crate::providers`.
+ * Which agent backend powers a session — the serializable *identity* of a
+ * provider. Provider *behavior* (run, auth, install, model resolution) lives
+ * behind the `Provider` trait + registry (in `crate::provider`) and
+ * is keyed by this enum. Adding a backend is: a variant here + an adapter that
+ * implements `Provider` + one registration — nothing else dispatches on it.
  */
 export type Backend = "claude" | "codex" | "opencode"
 /**
@@ -1123,6 +1136,11 @@ export type Backend = "claude" | "codex" | "opencode"
  * `statusCheckRollup`. Absent when the PR has no checks.
  */
 export type CheckStatus = "success" | "failure" | "pending"
+/**
+ * Where a slash command came from. Project entries win over user entries when
+ * names collide; skills are their own bucket.
+ */
+export type CommandScope = "project" | "user" | "skill"
 /**
  * A commit made on the session's branch since it forked from base.
  */
@@ -1192,11 +1210,51 @@ sharedSessions: number }
  */
 export type DiffFile = { path: string; added: number; removed: number; binary: boolean; patch: string }
 /**
- * Reasoning effort for a session. `low..max` are `claude --effort` tokens;
- * `Ultracode` is a Claude Code session setting on top (xhigh effort plus
- * workflow orchestration) — each adapter maps it to what its CLI accepts.
+ * Reasoning effort for a session. `low..max` are `--effort` tokens; `Ultracode`
+ * is a Claude Code session setting (xhigh effort + workflow orchestration) that
+ * each adapter maps to what its CLI accepts — it is *not* itself an `--effort`
+ * token.
  */
 export type EffortLevel = "low" | "medium" | "high" | "xhigh" | "max" | "ultracode"
+/**
+ * A stable discriminant the frontend switches on. Driven by *what the UI does
+ * about it*, not by the internal error source — so the infra variants share
+ * `Internal`. Additive: new kinds append, existing ones never change meaning.
+ * 
+ * Audited against the frontend: commands surface `message` (caught and toasted)
+ * and nothing branches on `kind` yet, so the taxonomy stays minimal rather than
+ * speculatively adding `NeedsAuth`/`Network` or splitting `Integration` by
+ * provider. Add a kind only when a real UI branch needs to distinguish it.
+ */
+export type ErrorKind = 
+/**
+ * A turn is already running for the session.
+ */
+"busy" | 
+/**
+ * The requested entity does not exist.
+ */
+"notFound" | 
+/**
+ * The request was malformed or rejected by validation.
+ */
+"invalid" | 
+/**
+ * A git operation failed.
+ */
+"git" | 
+/**
+ * An agent process failed.
+ */
+"agent" | 
+/**
+ * A GitHub/Linear integration call failed.
+ */
+"integration" | 
+/**
+ * An internal failure (db/io/serialization/platform) — surface the message.
+ */
+"internal"
 /**
  * A persisted, ordered event in a session's append-only log. The transcript
  * you render today and the cross-agent thread you render later are both just
@@ -1311,10 +1369,10 @@ export type Intent =
  */
 "custom"
 /**
- * Serializable error for the Tauri IPC boundary. Commands return this so
- * specta can generate the TypeScript type; internally we use AppError.
+ * The error commands return across the IPC boundary. `kind` is machine-readable
+ * for the frontend to branch on; `message` is the human-readable display string.
  */
-export type IpcError = string
+export type IpcError = { kind: ErrorKind; message: string }
 export type JsonValue = null | boolean | number | string | JsonValue[] | Partial<{ [key in string]: JsonValue }>
 /**
  * A per-project label (GitHub-style) that can be attached to sessions.
@@ -1419,24 +1477,16 @@ export type PrContent = { title: string; body: string }
  * Richer PR state for the hover card: review decision, diff stats, and the
  * individual CI checks behind the aggregate glyph.
  */
-export type PrDetails = { number: number; url: string; 
+export type PrDetails = { number: number; url: string; state: PrState; title: string; isDraft: boolean; 
 /**
- * GitHub's PR state: `OPEN`, `MERGED`, or `CLOSED`.
- */
-state: string; title: string; isDraft: boolean; 
-/**
- * `APPROVED`, `CHANGES_REQUESTED`, or `REVIEW_REQUIRED` (empty when the
+ * `APPROVED`, `CHANGES_REQUESTED`, or `REVIEW_REQUIRED` (absent when the
  * repo requires no review).
  */
 reviewDecision: string | null; additions: number; deletions: number; updatedAt: string | null; checks: PrCheck[] }
 /**
  * A pull request's identity and state, as surfaced to the UI.
  */
-export type PrInfo = { number: number; url: string; 
-/**
- * GitHub's PR state: `OPEN`, `MERGED`, or `CLOSED`.
- */
-state: string; title: string; isDraft: boolean; 
+export type PrInfo = { number: number; url: string; state: PrState; title: string; isDraft: boolean; 
 /**
  * `APPROVED`, `CHANGES_REQUESTED`, or `REVIEW_REQUIRED` (absent when the
  * repo requires no review).
@@ -1450,6 +1500,11 @@ checkStatus: CheckStatus | null;
  * Per-state CI check tallies, `None` when the PR has no checks.
  */
 checkCounts: PrCheckCounts | null }
+/**
+ * GitHub's pull-request state. Parsed from gh's `state` (which is uppercase),
+ * so the rest of the code branches on a variant instead of comparing strings.
+ */
+export type PrState = "OPEN" | "MERGED" | "CLOSED"
 /**
  * An open PR in a repo, for the review-checkout picker.
  */
@@ -1465,12 +1520,13 @@ export type Project = { id: string; name: string; path: string; isGit: boolean; 
  */
 export type ProjectLabels = { labels: Label[]; assignments: Partial<{ [key in string]: string[] }> }
 export type ProjectLinearBinding = { projectId: string; binding: LinearBinding }
-export type RepoComment = { author: string; body: string }
-export type RepoRef = { number: number; title: string; 
 /**
- * "issue" or "pr".
+ * Whether a `#`-reference points at an issue or a pull request. Drives which
+ * `gh` subcommand to call.
  */
-kind: string }
+export type RefKind = "issue" | "pr"
+export type RepoComment = { author: string; body: string }
+export type RepoRef = { number: number; title: string; kind: RefKind }
 export type RepoRefBody = { title: string; body: string; comments: RepoComment[] }
 /**
  * Branch and divergence summary for one of a session's repo roots.
@@ -1489,6 +1545,10 @@ export type RunStatus = "pending" | "running" | "paused" | "completed" | "failed
 /**
  * A single agent session — one tab in the browser. Carries everything needed
  * to resume the underlying CLI conversation and to render its state.
+ * 
+ * TODO(revise later): decompose the flat `pr_*` / `terminal_*` clusters into
+ * nested `PrStatus` / `TerminalState` structs. Deferred — it reshapes the store
+ * row mapping, `bindings.ts`, and the frontend. Tracked in docs/MONOREPO-MIGRATION.md.
  */
 export type Session = { id: string; groupId: string; 
 /**
@@ -1609,18 +1669,15 @@ export type SessionStatus = "idle" | "running" | "error"
  * repo configures none.
  */
 export type SetupStatus = "running" | "failed" | "done"
-export type SlashCommand = { name: string; description: string | null; 
-/**
- * "project" or "user".
- */
-scope: string }
+export type SlashCommand = { name: string; description: string | null; scope: CommandScope }
 /**
  * Result of syncing a worktree with its base branch.
  */
 export type SyncOutcome = { status: "synced" } | { status: "conflict"; files: string[] }
 export type TAURI_CHANNEL<TSend> = null
 /**
- * Streamed from a terminal's PTY to the frontend over a Tauri channel.
+ * Streamed from a terminal's PTY to the frontend. A plain serde payload — the
+ * shell carries it over a Tauri channel; core only fills it.
  */
 export type TerminalEvent = { event: "output"; data: string } | { event: "exit"; code: number | null }
 /**
@@ -1672,6 +1729,9 @@ export type WorkflowNodeRun = { runId: string; nodeId: string; status: NodeRunSt
  * A single execution of a workflow.
  */
 export type WorkflowRun = { id: string; workflowId: string | null; projectId: string; groupId: string; status: RunStatus; error: string | null; createdAt: string; updatedAt: string }
+/**
+ * A run plus its per-node state — the DTO pushed to the UI on every change.
+ */
 export type WorkflowRunView = { run: WorkflowRun; nodes: WorkflowNodeRun[] }
 /**
  * The `worktrees` section: lifecycle commands for isolated worktrees.

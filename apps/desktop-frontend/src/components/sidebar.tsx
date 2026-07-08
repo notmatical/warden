@@ -1,4 +1,17 @@
 import {
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
+  Sidebar as SidebarRoot,
+  useSidebar,
+} from "@warden/ui/components/sidebar"
+import {
   ChevronRight,
   CircleDot,
   FolderGit2,
@@ -12,7 +25,6 @@ import {
   Workflow as WorkflowIcon,
 } from "lucide-react"
 import { type KeyboardEvent, type ReactNode, useEffect, useState } from "react"
-
 import { AgentProvidersIcon } from "@/components/agent-providers-icon"
 import { NativeCliSub } from "@/components/common/native-cli-sub"
 import { useConfirm } from "@/components/confirm-dialog"
@@ -37,19 +49,6 @@ import {
   HoverCardTrigger,
 } from "@/components/ui/hover-card"
 import { Input } from "@/components/ui/input"
-import {
-  SidebarContent,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
-  Sidebar as SidebarRoot,
-  useSidebar,
-} from "@/components/ui/sidebar"
 import {
   Tooltip,
   TooltipContent,
@@ -124,18 +123,18 @@ function RootRow({ groupId, project }: { groupId: string; project: Project }) {
       <ContextMenu>
         <ContextMenuTrigger asChild>
           <SidebarMenuSubButton
-            asChild
+            render={
+              <button
+                type="button"
+                onClick={() => openTab(folderTabId(project.id))}
+                title={project.path}
+              />
+            }
             isActive={active}
             className="w-full cursor-default text-left text-sidebar-foreground/70 hover:bg-transparent hover:text-sidebar-foreground active:bg-transparent data-[active=true]:bg-transparent data-[active=true]:font-medium data-[active=true]:text-sidebar-foreground"
           >
-            <button
-              type="button"
-              onClick={() => openTab(folderTabId(project.id))}
-              title={project.path}
-            >
-              <FolderGit2 className="opacity-70" />
-              <span className="min-w-0 flex-1 truncate">{project.name}</span>
-            </button>
+            <FolderGit2 className="opacity-70" />
+            <span className="min-w-0 flex-1 truncate">{project.name}</span>
           </SidebarMenuSubButton>
         </ContextMenuTrigger>
         <ContextMenuContent className="w-44">
@@ -524,7 +523,7 @@ export function Sidebar() {
   }
 
   return (
-    <SidebarRoot variant="floating" collapsible="icon">
+    <SidebarRoot variant="inset" collapsible="icon">
       <SidebarContent className="gap-0 overflow-hidden">
         {/* Primary destinations — pinned above the scrolling groups tree. */}
         <SidebarGroup className="shrink-0 p-2 pb-2">

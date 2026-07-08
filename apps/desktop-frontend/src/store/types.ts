@@ -202,8 +202,8 @@ export interface AppState {
     sessionId: string
   ) => void
   setDragging: (sessionId: string | null) => void
-  /** Move an open tab to just before another in the strip. */
-  reorderTab: (draggedId: string, targetId: string) => void
+  /** Move an open tab to an index in the strip (arrayMove semantics). */
+  moveTab: (id: string, toIndex: number) => void
   /** Persist the global view-state (layout + open tabs + active tab). */
   saveView: () => void
   createSession: (opts: CreateSessionOptions) => Promise<Session | null>

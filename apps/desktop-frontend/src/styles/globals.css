@@ -84,7 +84,8 @@
     --chart-3: oklch(0.439 0 0);
     --chart-4: oklch(0.371 0 0);
     --chart-5: oklch(0.269 0 0);
-    --sidebar: oklch(0.985 0 0);
+    /* Inset frame: the window frame sits a step below the content card. */
+    --sidebar: oklch(0.97 0 0);
     --sidebar-foreground: oklch(0.145 0 0);
     --sidebar-primary: oklch(0.205 0 0);
     --sidebar-primary-foreground: oklch(0.985 0 0);
@@ -119,7 +120,8 @@
     --chart-3: oklch(0.5 0.009 75);
     --chart-4: oklch(0.4 0.008 75);
     --chart-5: oklch(0.3 0.007 75);
-    --sidebar: oklch(0.2 0.006 75);
+    /* Inset frame: darker than --background so the content card floats. */
+    --sidebar: oklch(0.15 0.006 75);
     --sidebar-foreground: oklch(0.95 0.011 85);
     --sidebar-primary: oklch(0.488 0.243 264.376);
     --sidebar-primary-foreground: oklch(0.95 0.011 85);
