@@ -1,5 +1,6 @@
 {
   "name": "@warden/ui",
+  "license": "MIT",
   "version": "0.1.11",
   "private": true,
   "type": "module",
