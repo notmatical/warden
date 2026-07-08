@@ -40,7 +40,7 @@ export function AgentNode({ id, data, selected }: NodeProps) {
   const { updateNodeData, deleteElements } = useReactFlow()
   const nodeRun = useAppStore((s) =>
     s.workflowRun?.run.workflowId === node.workflowId
-      ? s.workflowRun.nodes.find((n) => n.nodeId === id)
+      ? s.workflowRun?.nodes.find((n) => n.nodeId === id)
       : undefined
   )
   const openSession = useAppStore((s) => s.openSession)
