@@ -1,5 +1,6 @@
 {
   "name": "@warden/desktop-frontend",
+  "license": "MIT",
   "private": true,
   "version": "0.1.11",
   "type": "module",
