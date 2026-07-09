@@ -9,12 +9,22 @@ import {
 } from "@warden/ui/components/select"
 import { Slider } from "@warden/ui/components/slider"
 import { Switch } from "@warden/ui/components/switch"
-import { Volume2 } from "lucide-react"
+import {
+  BellRing,
+  CircleCheck,
+  GitPullRequest,
+  Inbox,
+  type LucideIcon,
+  Play,
+  Volume2,
+  Workflow,
+} from "lucide-react"
+import type { ComponentType, ReactNode } from "react"
 
 import { SettingsSection } from "@/components/settings/settings-section"
-import { ToolList } from "@/components/settings/tool-list"
 import {
   NOTIFY_EVENTS,
+  type NotifyEvent,
   notifyTest,
   setNotifyEnabled,
   setNotifySound,
@@ -22,6 +32,51 @@ import {
   useNotifyPrefs,
 } from "@/lib/notify"
 import { playSound, SOUND_OPTIONS, type SoundName } from "@/lib/sounds"
+
+const EVENT_ICON: Record<NotifyEvent, LucideIcon> = {
+  sessionDone: CircleCheck,
+  workflowDone: Workflow,
+  prChecks: GitPullRequest,
+  linearAssigned: Inbox,
+}
+
+/** A settings row: an icon tile (echoing the card tiles) + title/hint on the
+ *  left, controls on the right. */
+function SettingRow({
+  icon: Icon,
+  title,
+  hint,
+  htmlFor,
+  children,
+}: {
+  icon: ComponentType<{ className?: string }>
+  title: string
+  hint: string
+  htmlFor?: string
+  children: ReactNode
+}) {
+  return (
+    <div className="flex items-center gap-3.5 px-4 py-3">
+      <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted/50 text-muted-foreground ring-1 ring-inset ring-border/60">
+        <Icon className="size-4" />
+      </div>
+      <div className="min-w-0 flex-1">
+        {htmlFor ? (
+          <Label
+            htmlFor={htmlFor}
+            className="font-medium text-foreground text-sm"
+          >
+            {title}
+          </Label>
+        ) : (
+          <p className="font-medium text-foreground text-sm">{title}</p>
+        )}
+        <p className="mt-0.5 text-muted-foreground text-xs">{hint}</p>
+      </div>
+      <div className="flex shrink-0 items-center gap-2.5">{children}</div>
+    </div>
+  )
+}
 
 export function NotificationsSection() {
   const prefs = useNotifyPrefs()
@@ -31,17 +86,15 @@ export function NotificationsSection() {
       title="Notifications"
       description="Popup notifications shown while the window is in the background."
     >
-      <ToolList>
-        <div className="flex items-center gap-3.5 px-4 py-3.5">
-          <div className="min-w-0 flex-1">
-            <p className="font-medium text-foreground text-sm">Sound volume</p>
-            <p className="mt-0.5 text-muted-foreground text-xs">
-              Applies to every notification sound.
-            </p>
-          </div>
+      <div className="divide-y divide-border/60 overflow-hidden rounded-xl border border-border/60 bg-card shadow-xs">
+        <SettingRow
+          icon={Volume2}
+          title="Sound volume"
+          hint="Applies to every notification sound."
+        >
           {/* Fixed-width wrapper + control min-width override: coss's Slider
               defaults to w-full / min-w-44, which would swamp the row. */}
-          <div className="w-36 shrink-0">
+          <div className="w-36">
             <Slider
               aria-label="Sound volume"
               className="[&_[data-slot=slider-control]]:!min-w-0"
@@ -61,23 +114,20 @@ export function NotificationsSection() {
             size="icon-sm"
             variant="ghost"
           >
-            <Volume2 />
+            <Play />
           </Button>
-        </div>
+        </SettingRow>
 
         {NOTIFY_EVENTS.map(({ event, label, hint }) => {
           const pref = prefs.events[event]
           return (
-            <div key={event} className="flex items-center gap-3.5 px-4 py-3.5">
-              <div className="min-w-0 flex-1">
-                <Label
-                  htmlFor={`notify-${event}`}
-                  className="font-medium text-foreground text-sm"
-                >
-                  {label}
-                </Label>
-                <p className="mt-0.5 text-muted-foreground text-xs">{hint}</p>
-              </div>
+            <SettingRow
+              key={event}
+              icon={EVENT_ICON[event]}
+              title={label}
+              hint={hint}
+              htmlFor={`notify-${event}`}
+            >
               <Select
                 value={pref.sound}
                 disabled={!pref.enabled}
@@ -112,24 +162,20 @@ export function NotificationsSection() {
                 checked={pref.enabled}
                 onCheckedChange={(on) => setNotifyEnabled(event, on)}
               />
-            </div>
+            </SettingRow>
           )
         })}
 
-        <div className="flex items-center gap-3.5 px-4 py-3.5">
-          <div className="min-w-0 flex-1">
-            <p className="font-medium text-foreground text-sm">
-              Test notification
-            </p>
-            <p className="mt-0.5 text-muted-foreground text-xs">
-              Send a sample popup to check the look and sound.
-            </p>
-          </div>
+        <SettingRow
+          icon={BellRing}
+          title="Test notification"
+          hint="Send a sample popup to check the look and sound."
+        >
           <Button onClick={notifyTest} variant="secondary" size="sm">
             Send test
           </Button>
-        </div>
-      </ToolList>
+        </SettingRow>
+      </div>
     </SettingsSection>
   )
 }
