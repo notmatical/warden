@@ -55,7 +55,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { UpdateBanner } from "@/components/update-banner"
-import { DEFAULT_CHAT_MODEL } from "@/lib/models"
+import { defaultChatModel } from "@/lib/models"
 import { cn } from "@/lib/utils"
 import { folderTabId, ISSUES_TAB_ID, WORKFLOWS_TAB_ID } from "@/lib/viewport"
 import { useAppStore } from "@/store/app-store"
@@ -111,7 +111,7 @@ function RootRow({ groupId, project }: { groupId: string; project: Project }) {
     await createSession({
       projectId: project.id,
       title: kind === "terminal" ? "Terminal" : "New session",
-      model: DEFAULT_CHAT_MODEL,
+      model: defaultChatModel(),
       permissionMode: "bypassPermissions",
       role: "chat",
       kind,
