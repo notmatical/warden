@@ -175,6 +175,8 @@ export function ToolRow({
   onUpdate,
   onSetSource,
   onSignIn,
+  installable = true,
+  installHint,
 }: {
   status: ProviderStatus
   icon: ComponentType<{ className?: string }>
@@ -183,12 +185,18 @@ export function ToolRow({
   onUpdate: () => Promise<void>
   onSetSource: (source: ProviderSource) => void
   onSignIn?: () => void
+  /** Whether warden can install this tool here (false ⇒ no Install button). */
+  installable?: boolean
+  /** Shown in place of the Install button when uninstalled and not installable
+   *  (e.g. Cursor on Windows). */
+  installHint?: string
 }) {
   const { busy, progress, action, runUpdate } = useToolInstall({
     status,
     onInstall,
     onUpdate,
     onSignIn,
+    installable,
   })
 
   // Update gets the band; Install / Sign in stay row actions (they are the
@@ -196,6 +204,11 @@ export function ToolRow({
   const updatePending = status.installed && status.updateAvailable
   const rowAction =
     action && action.label !== "Update" && !progress ? action : null
+  // When we can't install here, a muted hint stands in for the Install button.
+  const hint =
+    !status.installed && !installable && installHint && !progress
+      ? installHint
+      : null
 
   const band = progress ? (
     <div className="flex flex-col gap-1.5 border-border/60 border-t bg-muted/30 px-4 py-2.5">
@@ -249,7 +262,11 @@ export function ToolRow({
       actions={
         <>
           <SourcePicker status={status} onSetSource={onSetSource} />
-          {rowAction ? (
+          {hint ? (
+            <span className="shrink-0 text-[11px] text-muted-foreground">
+              {hint}
+            </span>
+          ) : rowAction ? (
             <Button
               variant="ghost"
               size="xs"

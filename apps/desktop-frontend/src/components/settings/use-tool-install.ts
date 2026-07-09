@@ -22,6 +22,9 @@ export interface UseToolInstallOptions {
   onUpdate: () => Promise<void>
   /** When the tool is unauthenticated, a "Sign in" action shows. */
   onSignIn?: () => void
+  /** Whether warden can install this tool on this platform. False suppresses the
+   *  Install action (e.g. Cursor on Windows, which needs WSL). Defaults to true. */
+  installable?: boolean
 }
 
 /** Shared install/update/sign-in state for a CLI-backed tool. Subscribes to the
@@ -31,6 +34,7 @@ export function useToolInstall({
   onInstall,
   onUpdate,
   onSignIn,
+  installable = true,
 }: UseToolInstallOptions) {
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState<InstallProgress | null>(null)
@@ -54,7 +58,9 @@ export function useToolInstall({
 
   let action: ToolAction | null = null
   if (!status.installed) {
-    action = { label: "Install", primary: true, onClick: () => void run(onInstall) }
+    action = installable
+      ? { label: "Install", primary: true, onClick: () => void run(onInstall) }
+      : null
   } else if (!status.authed && onSignIn) {
     action = { label: "Sign in", primary: true, onClick: onSignIn }
   } else if (status.updateAvailable) {
