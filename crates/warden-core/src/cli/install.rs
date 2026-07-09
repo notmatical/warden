@@ -44,10 +44,12 @@ pub async fn install(tool: Tool, version: Option<String>) -> Result<Installed> {
                 )));
             }
         }
-        // A vendor installer may write to a PATH entry the running process
-        // hasn't picked up yet — don't hard-fail when the installer itself
-        // succeeded; the next status refresh (or an app restart) resolves it.
-        Installed::System => {}
+        // A vendor installer adds the binary to a PATH entry the running
+        // process captured at launch. Re-read PATH so the tool resolves on the
+        // next status refresh without an app restart. Don't hard-fail if it's
+        // still not visible (some installers need a full re-login) — the
+        // installer itself succeeded.
+        Installed::System => crate::platform::refresh_path(),
     }
 
     emit_progress(tool, "complete", "Installation complete", 100);
