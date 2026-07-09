@@ -5,7 +5,7 @@ import { type FormEvent, useEffect, useState } from "react"
 import { toast } from "sonner"
 
 import { LinearIcon } from "@/components/icons/brand"
-import { ToolListRow } from "@/components/settings/tool-list"
+import { StatusPill, ToolListRow } from "@/components/settings/tool-list"
 import { setWardenMcpEnabled, wardenMcpEnabled } from "@/lib/ipc"
 import { errorMessage } from "@/store/shared"
 
@@ -80,11 +80,6 @@ export function LinearIntegrationRow() {
       icon={LinearIcon}
       name="Linear"
       ghost={phase !== "connected"}
-      state={
-        phase === "connected"
-          ? { kind: "ok", label: "Connected" }
-          : { kind: "off", label: "Not connected" }
-      }
       description="Triage your assigned issues in Tasks and send them to agents."
       band={
         phase === "connected" ? (
@@ -104,15 +99,18 @@ export function LinearIntegrationRow() {
       }
       actions={
         phase === "connected" ? (
-          <Button
-            variant="ghost"
-            size="xs"
-            onClick={() => void handleDisconnect()}
-            loading={busy}
-            className="text-destructive-foreground hover:bg-destructive/10"
-          >
-            Disconnect
-          </Button>
+          <>
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() => void handleDisconnect()}
+              loading={busy}
+              className="text-destructive-foreground opacity-0 transition-opacity hover:bg-destructive/10 group-hover:opacity-100 group-focus-within:opacity-100"
+            >
+              Disconnect
+            </Button>
+            <StatusPill kind="ok" label="Connected" />
+          </>
         ) : (
           <form onSubmit={handleConnect} className="flex items-center gap-2">
             <Input

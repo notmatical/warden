@@ -22,31 +22,59 @@ const SOURCES: { value: ProviderSource; label: string; hint: string }[] = [
 
 export type ToolStateKind = "ok" | "warn" | "off"
 
-const STATE: Record<ToolStateKind, { dot: string; text: string }> = {
-  ok: { dot: "bg-emerald-500", text: "text-emerald-600 dark:text-emerald-500" },
-  warn: { dot: "bg-amber-500", text: "text-amber-600 dark:text-amber-500" },
-  off: { dot: "bg-muted-foreground/40", text: "text-muted-foreground" },
+const PILL: Record<ToolStateKind, string> = {
+  ok: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  warn: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  off: "bg-muted text-muted-foreground",
+}
+
+const DOT: Record<ToolStateKind, string> = {
+  ok: "bg-emerald-500",
+  warn: "bg-amber-500",
+  off: "bg-muted-foreground/40",
+}
+
+/** A small status badge — dot + label in a tinted pill. Callers place it in a
+ *  row's action slot so status sits with the controls, not buried in the copy. */
+export function StatusPill({
+  kind,
+  label,
+}: {
+  kind: ToolStateKind
+  label: string
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-1 font-medium text-[11px]",
+        PILL[kind]
+      )}
+    >
+      <span className={cn("size-1.5 rounded-full", DOT[kind])} />
+      {label}
+    </span>
+  )
 }
 
 /** One bordered container for a section's tool rows — the settings-list
  *  pattern (one surface, hairline-divided rows) instead of floating cards. */
 export function ToolList({ children }: { children: ReactNode }) {
   return (
-    <div className="divide-y divide-border/60 overflow-hidden rounded-xl bg-card shadow-xs ring-1 ring-foreground/10">
+    <div className="divide-y divide-border/50 overflow-hidden rounded-xl bg-card shadow-xs ring-1 ring-foreground/10">
       {children}
     </div>
   )
 }
 
-/** A tool row: brand tile, identity + live status line, right-aligned
- *  controls, and an optional attached band underneath (update offer, install
- *  progress). The tile goes ghost (dashed) when the tool isn't present. */
+/** A tool row: brand tile, a clean two-line identity (name + version, then
+ *  description), a right-aligned action cluster, and an optional attached band
+ *  underneath (update offer, install progress, a detail toggle). The row is a
+ *  `group` so secondary controls can reveal on hover. */
 export function ToolListRow({
   icon: Icon,
   name,
   version,
   ghost = false,
-  state,
   description,
   actions,
   band,
@@ -55,27 +83,26 @@ export function ToolListRow({
   name: string
   /** Mono version tag after the name. */
   version?: string | null
-  /** Dashed ghost treatment for the brand tile (tool not present). */
+  /** Softer tile treatment when the tool isn't present. */
   ghost?: boolean
-  state: { kind: ToolStateKind; label: string }
   description: string
-  /** Right-aligned controls (source picker, action buttons, forms). */
+  /** Right-aligned controls (status pill, source picker, action buttons). */
   actions?: ReactNode
-  /** Full-width attached band under the row (update offer, progress). */
+  /** Full-width attached band under the row (update offer, progress, toggle). */
   band?: ReactNode
 }) {
   return (
     <div>
-      <div className="flex items-center gap-3.5 px-4 py-3.5">
+      <div className="group flex items-center gap-3.5 px-4 py-3 transition-colors hover:bg-muted/25">
         <div
           className={cn(
-            "flex size-10 shrink-0 items-center justify-center rounded-xl transition-colors",
+            "flex size-9 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset transition-colors",
             ghost
-              ? "border border-border border-dashed text-muted-foreground/50"
-              : "bg-muted/60 text-foreground ring-1 ring-border/50"
+              ? "bg-muted/30 text-muted-foreground/50 ring-border/50"
+              : "bg-gradient-to-b from-muted/50 to-muted text-foreground ring-border/60"
           )}
         >
-          <Icon className="size-5" />
+          <Icon className="size-[18px]" />
         </div>
 
         <div className="min-w-0 flex-1">
@@ -84,30 +111,18 @@ export function ToolListRow({
               {name}
             </span>
             {version ? (
-              <span className="shrink-0 font-mono text-[11px] text-muted-foreground tabular-nums">
+              <span className="shrink-0 font-mono text-[11px] text-muted-foreground/70 tabular-nums">
                 v{version.replace(/^v/, "")}
               </span>
             ) : null}
           </div>
-          <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs">
-            <span
-              className={cn(
-                "size-1.5 shrink-0 rounded-full",
-                STATE[state.kind].dot
-              )}
-            />
-            <span className={cn("shrink-0", STATE[state.kind].text)}>
-              {state.label}
-            </span>
-            <span className="shrink-0 text-muted-foreground/40">·</span>
-            <span className="truncate text-muted-foreground">
-              {description}
-            </span>
-          </div>
+          <p className="mt-0.5 truncate text-muted-foreground text-xs">
+            {description}
+          </p>
         </div>
 
         {actions ? (
-          <div className="flex shrink-0 items-center gap-2">{actions}</div>
+          <div className="flex shrink-0 items-center gap-2.5">{actions}</div>
         ) : null}
       </div>
       {band}
@@ -115,8 +130,8 @@ export function ToolListRow({
   )
 }
 
-/** Compact two-state source picker: a segmented control. Each option's hint is a
- *  tooltip, so implications are visible *before* picking, not after. */
+/** Compact two-state source picker: a segmented control. Reveals on row hover so
+ *  rows stay calm at rest; each option's hint is a tooltip. */
 function SourcePicker({
   status,
   onSetSource,
@@ -125,7 +140,7 @@ function SourcePicker({
   onSetSource: (source: ProviderSource) => void
 }) {
   return (
-    <div className="flex w-fit shrink-0 rounded-lg bg-muted p-0.5">
+    <div className="flex w-fit shrink-0 rounded-lg bg-muted/70 p-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 has-[:focus-visible]:opacity-100">
       {SOURCES.map((opt) => {
         const active = status.source === opt.value
         // Managed is always selectable (selecting it offers Install);
@@ -164,9 +179,9 @@ function toolState(status: ProviderStatus): {
   return { kind: "ok", label: "Connected" }
 }
 
-/** A managed-CLI row (providers, GitHub CLI). Pending updates surface as a
- *  tinted attached band with the version delta and a real button — not a
- *  label you have to squint for. */
+/** A managed-CLI row (providers, GitHub CLI). At rest it shows a status pill or
+ *  the one action that matters (Install / Sign in); the source picker reveals on
+ *  hover. Pending updates and install progress attach as a band underneath. */
 export function ToolRow({
   status,
   icon,
@@ -193,12 +208,13 @@ export function ToolRow({
 
   // Update gets the band; Install / Sign in stay row actions (they are the
   // row's only possible action in those states).
+  const state = toolState(status)
   const updatePending = status.installed && status.updateAvailable
   const rowAction =
     action && action.label !== "Update" && !progress ? action : null
 
   const band = progress ? (
-    <div className="flex flex-col gap-1.5 border-border/60 border-t bg-muted/30 px-4 py-2.5">
+    <div className="flex flex-col gap-1.5 border-border/50 border-t bg-muted/30 px-4 py-2.5">
       <div className="flex items-center justify-between gap-2">
         <span className="truncate font-mono text-[10px] text-muted-foreground">
           {progress.message}
@@ -215,23 +231,18 @@ export function ToolRow({
       </div>
     </div>
   ) : updatePending ? (
-    <div className="flex items-center gap-2.5 border-primary/20 border-t bg-primary/8 px-4 py-2">
+    <div className="flex items-center gap-2.5 border-primary/15 border-t bg-primary/6 px-4 py-2">
       <ArrowUpCircle className="size-4 shrink-0 text-primary" />
       <span className="min-w-0 flex-1 truncate text-primary text-xs">
         Update available
         {status.version && status.latestVersion ? (
-          <span className="ml-1.5 font-mono text-[11px] tabular-nums opacity-80">
+          <span className="ml-1.5 font-mono text-[11px] tabular-nums opacity-70">
             v{status.version.replace(/^v/, "")} → v
             {status.latestVersion.replace(/^v/, "")}
           </span>
         ) : null}
       </span>
-      <Button
-        size="xs"
-        onClick={runUpdate}
-        loading={busy}
-        className="shrink-0"
-      >
+      <Button size="xs" onClick={runUpdate} loading={busy} className="shrink-0">
         Update
       </Button>
     </div>
@@ -243,7 +254,6 @@ export function ToolRow({
       name={status.name}
       version={status.version}
       ghost={!status.installed}
-      state={toolState(status)}
       description={description}
       band={band}
       actions={
@@ -251,7 +261,7 @@ export function ToolRow({
           <SourcePicker status={status} onSetSource={onSetSource} />
           {rowAction ? (
             <Button
-              variant={rowAction.primary ? "default" : "ghost"}
+              variant={rowAction.primary ? "default" : "outline"}
               size="xs"
               onClick={rowAction.onClick}
               loading={busy}
@@ -259,7 +269,9 @@ export function ToolRow({
             >
               {rowAction.label}
             </Button>
-          ) : null}
+          ) : (
+            <StatusPill kind={state.kind} label={state.label} />
+          )}
         </>
       }
     />
