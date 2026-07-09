@@ -101,11 +101,27 @@ pub struct IpcError {
     pub message: String,
 }
 
+impl AppError {
+    /// The human-facing message, without the internal `<kind>:` Display prefix
+    /// (`kind` already carries that machine-readably). The message-carrying
+    /// variants surface their payload verbatim; the rest fall back to Display.
+    pub fn message(&self) -> String {
+        match self {
+            AppError::Git(s)
+            | AppError::NotFound(s)
+            | AppError::Invalid(s)
+            | AppError::Agent(s)
+            | AppError::Integration(s) => s.clone(),
+            other => other.to_string(),
+        }
+    }
+}
+
 impl From<AppError> for IpcError {
     fn from(e: AppError) -> Self {
         IpcError {
             kind: e.kind(),
-            message: e.to_string(),
+            message: e.message(),
         }
     }
 }
@@ -124,9 +140,11 @@ mod tests {
         assert_eq!(ipc.kind, ErrorKind::Busy);
         assert!(!ipc.message.is_empty());
 
+        // The message drops the internal `<kind>:` Display prefix — `kind`
+        // already carries that for any UI that needs to branch.
         let ipc: IpcError = AppError::NotFound("session 7".into()).into();
         assert_eq!(ipc.kind, ErrorKind::NotFound);
-        assert_eq!(ipc.message, "not found: session 7");
+        assert_eq!(ipc.message, "session 7");
 
         let ipc: IpcError = AppError::Io(std::io::Error::other("disk")).into();
         assert_eq!(ipc.kind, ErrorKind::Internal);
