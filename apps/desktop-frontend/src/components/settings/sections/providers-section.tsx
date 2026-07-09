@@ -1,16 +1,9 @@
 import { SettingsSection } from "@/components/settings/settings-section"
 import { ToolList, ToolRow } from "@/components/settings/tool-list"
 import { runInLoginTerminal, shellBin } from "@/lib/cli-login"
-import { isWindows } from "@/lib/platform"
 import { PROVIDER_ICON } from "@/lib/provider-icons"
 import { useAppStore } from "@/store/app-store"
 import type { Provider, ProviderStatus } from "@/types"
-
-/** Cursor Agent has no native-Windows installer (it runs under WSL), so warden
- *  can't install it there — the row shows a hint instead of an Install button. */
-function canInstall(id: Provider): boolean {
-  return !(isWindows && id === "cursor")
-}
 
 const PROVIDER_DESCRIPTION: Record<Provider, string> = {
   claude: "Runs your Claude model sessions.",
@@ -60,8 +53,6 @@ export function ProvidersSection() {
               onUpdate={() => updateProvider(status.id)}
               onSetSource={(source) => setProviderSource(status.id, source)}
               onSignIn={() => signInProvider(status)}
-              installable={canInstall(status.id)}
-              installHint="Requires WSL on Windows"
             />
           ))}
         </ToolList>
