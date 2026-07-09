@@ -1,5 +1,5 @@
+import { ProviderCard } from "@/components/settings/provider-card"
 import { SettingsSection } from "@/components/settings/settings-section"
-import { ToolList, ToolRow } from "@/components/settings/tool-list"
 import { runInLoginTerminal, shellBin } from "@/lib/cli-login"
 import { PROVIDER_ICON } from "@/lib/provider-icons"
 import { useAppStore } from "@/store/app-store"
@@ -42,9 +42,9 @@ export function ProvidersSection() {
       {providers.length === 0 ? (
         <p className="text-muted-foreground text-xs">No providers detected.</p>
       ) : (
-        <ToolList>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {providers.map((status) => (
-            <ToolRow
+            <ProviderCard
               key={status.id}
               status={status}
               icon={PROVIDER_ICON[status.id]}
@@ -55,7 +55,7 @@ export function ProvidersSection() {
               onSignIn={() => signInProvider(status)}
             />
           ))}
-        </ToolList>
+        </div>
       )}
     </SettingsSection>
   )
