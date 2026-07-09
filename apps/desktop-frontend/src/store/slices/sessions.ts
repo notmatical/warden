@@ -1,7 +1,7 @@
 import type { StateCreator } from "zustand"
 import { refreshGitStatus } from "@/hooks/use-git-status"
 import * as ipc from "@/lib/ipc"
-import { backendForModel, DEFAULT_MODEL_BY_BACKEND } from "@/lib/models"
+import { backendForModel, defaultModelFor } from "@/lib/models"
 import { notifyFor, windowFocused } from "@/lib/notify"
 import * as terminals from "@/lib/terminal-instances"
 import { detachRef, diffTabId, firstLeaf } from "@/lib/viewport"
@@ -100,7 +100,7 @@ export const createSessionsSlice: StateCreator<
     await get().createSession({
       projectId,
       title: NATIVE_TITLE[provider],
-      model: DEFAULT_MODEL_BY_BACKEND[provider],
+      model: defaultModelFor(provider),
       permissionMode: "bypassPermissions",
       role: "chat",
       kind: "terminal",

@@ -50,7 +50,7 @@ import { linearCachedIssues, linearStatus } from "@/integrations/linear/ipc"
 import type { LinearComment, LinearIssue } from "@/integrations/linear/types"
 import { resolveCombo, subscribeUiCommand } from "@/lib/commands"
 import { comboLabel } from "@/lib/keybindings"
-import { DEFAULT_CHAT_MODEL } from "@/lib/models"
+import { defaultChatModel } from "@/lib/models"
 import { isMac } from "@/lib/platform"
 import {
   diffTabId,
@@ -295,7 +295,7 @@ export function CommandPalette() {
           projectId,
           groupId,
           title: intent === "terminal" ? "Terminal" : "New session",
-          model: DEFAULT_CHAT_MODEL,
+          model: defaultChatModel(),
           permissionMode: "bypassPermissions",
           role: "chat",
           kind: intent,

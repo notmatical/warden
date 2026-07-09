@@ -22,7 +22,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import * as ipc from "@/lib/ipc"
-import { DEFAULT_CHAT_MODEL } from "@/lib/models"
+import { defaultChatModel } from "@/lib/models"
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store/app-store"
 
@@ -70,7 +70,7 @@ export function WorktreeIdentity({
     void createSession({
       projectId: session.projectId,
       title: "Terminal",
-      model: DEFAULT_CHAT_MODEL,
+      model: defaultChatModel(),
       permissionMode: "bypassPermissions",
       role: "chat",
       kind: "terminal",

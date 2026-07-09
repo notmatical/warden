@@ -22,6 +22,8 @@ struct FastWorkflows {
     claude: String,
     codex: String,
     opencode: String,
+    cursor: String,
+    grok: String,
 }
 
 fn config() -> &'static ModelConfig {
@@ -36,5 +38,27 @@ pub fn fast_workflow_model(backend: Backend) -> &'static str {
         Backend::Claude => &config().fast_workflows.claude,
         Backend::Codex => &config().fast_workflows.codex,
         Backend::Opencode => &config().fast_workflows.opencode,
+        Backend::Cursor => &config().fast_workflows.cursor,
+        Backend::Grok => &config().fast_workflows.grok,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The embedded models.json parses lazily at first use — exercise it here
+    /// so a bad edit fails in CI instead of panicking in the running app.
+    #[test]
+    fn embedded_config_parses() {
+        for backend in [
+            Backend::Claude,
+            Backend::Codex,
+            Backend::Opencode,
+            Backend::Cursor,
+            Backend::Grok,
+        ] {
+            assert!(!fast_workflow_model(backend).is_empty());
+        }
     }
 }

@@ -1,32 +1,62 @@
-import modelConfig from "@/config/models.json"
+import { useSyncExternalStore } from "react"
+
+import {
+  type CatalogModel,
+  getModelCatalog,
+  subscribeModelCatalog,
+} from "@/lib/model-catalog"
 import type { Backend, EffortLevel } from "@/types"
 
-export interface ModelOption {
-  id: string
-  label: string
-  /** Display grouping (vendor name). The {@link Backend} that runs the model
-   *  is derived from its id by {@link backendForModel}. */
-  provider: string
-}
+/** A picker entry. Alias of the catalog model shape — the catalog (bundled or
+ *  remotely refreshed, see src/lib/model-catalog.ts) is the source of truth. */
+export type ModelOption = CatalogModel
 
 /**
- * Selectable models, grouped by provider, from the shared models config
- * (src/config/models.json — also read by the Rust backend). Standard-context
- * models come first and are the defaults; the `[1m]` suffix enables the
- * 1M-token context window (which requires paid usage credits), so those are
- * explicit opt-ins. The fast service tier is a per-model toggle (see
- * {@link withFast}), not a list entry.
+ * Selectable models, grouped by provider. Standard-context models come first
+ * and are the defaults; the `[1m]` suffix enables the 1M-token context window
+ * (which requires paid usage credits), so those are explicit opt-ins. The fast
+ * service tier is a per-model toggle (see {@link withFast}), not a list entry.
+ * Hidden models are excluded; deprecated ones sort last within the list.
  */
-export const MODELS: ModelOption[] = modelConfig.models
+export function getModels(): ModelOption[] {
+  const visible = getModelCatalog().models.filter((m) => !m.hidden)
+  return [
+    ...visible.filter((m) => !m.deprecated),
+    ...visible.filter((m) => m.deprecated),
+  ]
+}
+
+// Memoized per snapshot so useSyncExternalStore subscribers don't re-render on
+// every store notification with a fresh array identity.
+let modelsSnapshot: { source: CatalogModel[]; models: ModelOption[] } | null =
+  null
+
+function getModelsCached(): ModelOption[] {
+  const source = getModelCatalog().models
+  if (modelsSnapshot?.source !== source) {
+    modelsSnapshot = { source, models: getModels() }
+  }
+  return modelsSnapshot.models
+}
+
+/** Reactive picker list — updates when the remote catalog refreshes. */
+export function useModels(): ModelOption[] {
+  return useSyncExternalStore(subscribeModelCatalog, getModelsCached)
+}
 
 /**
  * The agent backend that runs a model id, mirroring the backend's own rule
  * (`opencode/...` ids → OpenCode; `gpt`/`codex` prefixes → Codex; everything
  * else → Claude). Keep this in sync with `Backend::for_model` in
- * src-tauri/src/domain/session.rs.
+ * crates/warden-core (the catalog can add models, not backends — new ids must
+ * follow these prefixes).
  */
 export function backendForModel(id: string): Backend {
   const lower = baseModelId(id).toLowerCase()
+  // Prefixed ids route first, before the gpt/codex → codex fallback and the
+  // Claude catch-all. Keep in sync with each provider's `handles_model` in Rust.
+  if (lower.startsWith("cursor/")) return "cursor"
+  if (lower.startsWith("grok/")) return "grok"
   if (lower.startsWith("opencode")) return "opencode"
   return lower.startsWith("gpt") || lower.startsWith("codex")
     ? "codex"
@@ -34,12 +64,14 @@ export function backendForModel(id: string): Backend {
 }
 
 /** Each backend's provider display name, for picker grouping of models that
- *  aren't in the static list (dynamic OpenCode entries, resumed sessions on
+ *  aren't in the catalog (dynamic OpenCode entries, resumed sessions on
  *  retired ids). */
 export const BACKEND_PROVIDER_NAME: Record<Backend, string> = {
   claude: "Anthropic",
   codex: "OpenAI",
   opencode: "OpenCode",
+  cursor: "Cursor",
+  grok: "Grok",
 }
 
 /** Provider rail entries for a picker model list: display names in first-seen
@@ -56,48 +88,71 @@ export function providerEntries(
 
 const FAST_SUFFIX = "-fast"
 
-/**
- * Base model id → its fast (priority service tier) variant. Fast is a per-model
- * service tier exposed via the picker's toggle, not a standalone list entry.
- * Codex tags its fast tier with the same `-fast` suffix the backend expects.
- */
-const FAST_VARIANTS: Record<string, string> = modelConfig.fastVariants
-
-/** Whether a model id selects the fast service tier. */
-export function isFastModel(id: string): boolean {
-  return id.endsWith(FAST_SUFFIX)
+/** The catalog's fast (priority service tier) variant for a base id, if any. */
+function fastVariantOf(base: string): string | undefined {
+  return getModelCatalog().models.find((m) => m.id === base)?.fastId
 }
 
-/** The id with any fast suffix stripped. */
+/**
+ * Whether a model id is a warden fast-tier variant. True only when the id is
+ * exactly some catalog model's `fastId` — i.e. stripping the `-fast` suffix
+ * yields a base whose `fastId` is this id. Native ids that merely end in
+ * `-fast` (Grok's `grok/grok-composer-2.5-fast`, Cursor's
+ * `cursor/composer-2.5-fast`) are the real models the CLIs advertise, not
+ * warden variants, so they return false and show no zap indicator.
+ */
+export function isFastModel(id: string): boolean {
+  if (!id.endsWith(FAST_SUFFIX)) return false
+  return fastVariantOf(id.slice(0, -FAST_SUFFIX.length)) === id
+}
+
+/** The id with a warden fast-tier suffix stripped; native `-fast` ids (which
+ *  are not catalog fast variants) pass through unchanged. */
 export function baseModelId(id: string): string {
   return isFastModel(id) ? id.slice(0, -FAST_SUFFIX.length) : id
 }
 
 /** Whether a model has a fast variant available. */
 export function supportsFast(id: string): boolean {
-  return baseModelId(id) in FAST_VARIANTS
+  return fastVariantOf(baseModelId(id)) !== undefined
 }
 
 /** Toggle the fast tier on a model id, returning the appropriate variant. */
 export function withFast(id: string, fast: boolean): string {
   const base = baseModelId(id)
-  return fast && base in FAST_VARIANTS ? FAST_VARIANTS[base] : base
+  return (fast ? fastVariantOf(base) : undefined) ?? base
 }
 
-export const DEFAULT_CHAT_MODEL = modelConfig.defaults.chat
-export const DEFAULT_PLANNER_MODEL = modelConfig.defaults.planner
-export const DEFAULT_CODER_MODEL = modelConfig.defaults.coder
-/** Default model shown for Codex sessions (Codex's current default). */
-export const DEFAULT_CODEX_MODEL = modelConfig.defaults.codexChat
-/** Default model shown for OpenCode sessions. */
-export const DEFAULT_OPENCODE_MODEL = modelConfig.defaults.opencodeChat
+/** The default model for new chat sessions. Resolved at call time so a
+ *  catalog refresh applies to the next session, never an existing one. */
+export function defaultChatModel(): string {
+  return getModelCatalog().defaults.chat
+}
+
+export function defaultPlannerModel(): string {
+  return getModelCatalog().defaults.planner
+}
+
+export function defaultCoderModel(): string {
+  return getModelCatalog().defaults.coder
+}
 
 /** Each backend's default chat model — what a new session of that provider
  *  starts on. */
-export const DEFAULT_MODEL_BY_BACKEND: Record<Backend, string> = {
-  claude: DEFAULT_CHAT_MODEL,
-  codex: DEFAULT_CODEX_MODEL,
-  opencode: DEFAULT_OPENCODE_MODEL,
+export function defaultModelFor(backend: Backend): string {
+  const { defaults } = getModelCatalog()
+  switch (backend) {
+    case "codex":
+      return defaults.codexChat
+    case "opencode":
+      return defaults.opencodeChat
+    case "cursor":
+      return defaults.cursorChat
+    case "grok":
+      return defaults.grokChat
+    default:
+      return defaults.chat
+  }
 }
 
 const MODEL_ALIASES: Record<string, string> = {
@@ -110,13 +165,14 @@ const MODEL_ALIASES: Record<string, string> = {
  * Render a model id as a clean display name. The fast tier is shown separately
  * (a ⚡ glyph), so it's stripped here. Known models use their label; unknown ids
  * are parsed from their shape — `claude-opus-4-8[1m]` → "Opus 4.8 (1M)" — so
- * resumed sessions never show a raw id.
+ * resumed sessions never show a raw id. Hidden models resolve too — retiring
+ * a model from the picker must not break sessions already on it.
  */
 export function formatModelName(id: string): string {
   if (!id) return "Model"
 
   let base = baseModelId(id)
-  const known = MODELS.find((m) => m.id === base)
+  const known = getModelCatalog().models.find((m) => m.id === base)
   if (known) return known.label
 
   // Dynamic OpenCode ids carry a provider path (`opencode/anthropic/<model>`);
@@ -160,8 +216,15 @@ export const EFFORT_OPTIONS: EffortOption[] = [
   { value: "ultracode", label: "Ultracode" },
 ]
 
-/** The effort tiers a backend actually offers — Ultracode is Claude-only. */
+const GROK_EFFORTS: EffortLevel[] = ["low", "medium", "high"]
+
+/** The effort tiers a backend actually offers. Cursor has no effort control (the
+ *  picker hides it); Grok exposes low/medium/high; Ultracode is Claude-only. */
 export function effortOptionsFor(backend?: Backend): EffortOption[] {
+  if (backend === "cursor") return []
+  if (backend === "grok") {
+    return EFFORT_OPTIONS.filter((o) => GROK_EFFORTS.includes(o.value))
+  }
   return backend === "claude" || backend === undefined
     ? EFFORT_OPTIONS
     : EFFORT_OPTIONS.filter((o) => o.value !== "ultracode")

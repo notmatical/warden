@@ -1,7 +1,7 @@
 import { toast } from "sonner"
 
 import * as ipc from "@/lib/ipc"
-import { DEFAULT_CHAT_MODEL } from "@/lib/models"
+import { defaultChatModel } from "@/lib/models"
 import { useAppStore } from "@/store/app-store"
 
 /** Quote a resolved binary path for the shell; falls back to the bare name. */
@@ -31,7 +31,7 @@ export async function runInLoginTerminal(
   const session = await store.createSession({
     projectId,
     title,
-    model: DEFAULT_CHAT_MODEL,
+    model: defaultChatModel(),
     permissionMode: "bypassPermissions",
     role: "chat",
     kind: "terminal",
