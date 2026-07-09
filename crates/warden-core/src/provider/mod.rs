@@ -8,6 +8,8 @@
 pub mod claude;
 pub mod codex;
 pub mod context;
+pub mod cursor;
+pub mod grok;
 pub mod jsonrpc;
 pub mod opencode;
 
@@ -89,6 +91,8 @@ static PROVIDERS: LazyLock<HashMap<Backend, Box<dyn Provider>>> = LazyLock::new(
         Box::new(claude::ClaudeProvider),
         Box::new(codex::CodexProvider),
         Box::new(opencode::OpencodeProvider),
+        Box::new(cursor::CursorProvider),
+        Box::new(grok::GrokProvider),
     ];
     providers.into_iter().map(|p| (p.backend(), p)).collect()
 });
@@ -149,6 +153,8 @@ mod tests {
         assert_eq!(provider(Backend::Claude).cli_tool(), Tool::Claude);
         assert_eq!(provider(Backend::Codex).cli_tool(), Tool::Codex);
         assert_eq!(provider(Backend::Opencode).cli_tool(), Tool::Opencode);
+        assert_eq!(provider(Backend::Cursor).cli_tool(), Tool::Cursor);
+        assert_eq!(provider(Backend::Grok).cli_tool(), Tool::Grok);
     }
 
     #[test]
@@ -156,5 +162,10 @@ mod tests {
         assert_eq!(backend_for_model("claude-opus-4"), Backend::Claude);
         assert_eq!(backend_for_model("gpt-5.5"), Backend::Codex);
         assert_eq!(backend_for_model("opencode/kimi"), Backend::Opencode);
+        assert_eq!(backend_for_model("cursor/auto"), Backend::Cursor);
+        assert_eq!(
+            backend_for_model("grok/grok-composer-2.5-fast"),
+            Backend::Grok
+        );
     }
 }

@@ -4,6 +4,8 @@ import {
   AnthropicIcon,
   ClaudeIcon,
   CodexIcon,
+  CursorIcon,
+  GrokIcon,
   OpenAIIcon,
   OpenCodeIcon,
 } from "@/components/icons/brand"
@@ -18,6 +20,8 @@ export const PROVIDER_ICON: Record<
   claude: AnthropicIcon,
   codex: OpenAIIcon,
   opencode: OpenCodeIcon,
+  cursor: CursorIcon,
+  grok: GrokIcon,
 }
 
 /** A provider's product mark, shown where the agent itself is surfaced
@@ -29,7 +33,15 @@ export const PRODUCT_ICON: Record<
   claude: ClaudeIcon,
   codex: CodexIcon,
   opencode: OpenCodeIcon,
+  cursor: CursorIcon,
+  grok: GrokIcon,
 }
 
 /** Stable display order for providers. */
-export const PROVIDER_ORDER: Provider[] = ["claude", "codex", "opencode"]
+export const PROVIDER_ORDER: Provider[] = [
+  "claude",
+  "codex",
+  "opencode",
+  "cursor",
+  "grok",
+]

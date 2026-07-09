@@ -46,7 +46,8 @@ pub async fn github_status() -> CommandResult<ToolStatus> {
 #[tauri::command]
 #[specta::specta]
 pub async fn install_github_cli() -> CommandResult<()> {
-    cli::install(Tool::Gh, None).await.map_err(Into::into)
+    cli::install(Tool::Gh, None).await?;
+    Ok(())
 }
 
 /// Reinstall the managed GitHub CLI at the latest published version.

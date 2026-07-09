@@ -68,6 +68,27 @@ export function listOpencodeModels(): Promise<OpencodeModel[]> {
   return invoke("list_opencode_models")
 }
 
+/** A model the local Cursor install can run, as `id` (picker model id, prefixed
+ *  `cursor/`) and `label`. */
+export interface CursorModel {
+  id: string
+  label: string
+}
+
+export function listCursorModels(): Promise<CursorModel[]> {
+  return invoke("list_cursor_models")
+}
+
+/** A model the local Grok install can run, as `id` (prefixed `grok/`) and `label`. */
+export interface GrokModel {
+  id: string
+  label: string
+}
+
+export function listGrokModels(): Promise<GrokModel[]> {
+  return invoke("list_grok_models")
+}
+
 export function installProvider(id: Provider): Promise<void> {
   return invoke("install_provider", { id })
 }

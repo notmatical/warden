@@ -22,6 +22,8 @@ pub async fn run(backend: Backend, working_dir: &Path, prompt: &str) -> Option<S
         Backend::Opencode => {
             crate::provider::opencode::agent::run_oneshot(working_dir, prompt).await
         }
+        Backend::Cursor => crate::provider::cursor::agent::run_oneshot(working_dir, prompt).await,
+        Backend::Grok => crate::provider::grok::agent::run_oneshot(working_dir, prompt).await,
     }
 }
 

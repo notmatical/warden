@@ -54,11 +54,7 @@ export function useToolInstall({
 
   let action: ToolAction | null = null
   if (!status.installed) {
-    action = {
-      label: "Install",
-      primary: true,
-      onClick: () => void run(onInstall),
-    }
+    action = { label: "Install", primary: true, onClick: () => void run(onInstall) }
   } else if (!status.authed && onSignIn) {
     action = { label: "Sign in", primary: true, onClick: onSignIn }
   } else if (status.updateAvailable) {

@@ -23,7 +23,26 @@ pub fn cli_dir(tool: Tool) -> Option<PathBuf> {
 
 /// Absolute path to a tool's managed binary (whether or not it exists yet).
 pub fn managed_binary_path(tool: Tool) -> Option<PathBuf> {
-    cli_dir(tool).map(|dir| dir.join(host_binary_name(tool.bin())))
+    let dir = cli_dir(tool)?;
+    Some(match tool {
+        // Grok installs from npm, which drops its executable shim under
+        // node_modules/.bin (a `.cmd` shim on Windows), not at the dir root.
+        Tool::Grok => dir
+            .join("node_modules")
+            .join(".bin")
+            .join(npm_bin_name(tool.bin())),
+        _ => dir.join(host_binary_name(tool.bin())),
+    })
+}
+
+/// npm's on-disk shim name for a package bin (`grok` → `grok.cmd` on Windows,
+/// where npm writes `.cmd`/`.ps1` shims rather than a bare executable).
+fn npm_bin_name(bin: &str) -> String {
+    if cfg!(windows) {
+        format!("{bin}.cmd")
+    } else {
+        bin.to_string()
+    }
 }
 
 /// The managed binary, only if it is actually installed on disk.

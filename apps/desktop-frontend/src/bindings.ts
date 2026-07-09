@@ -737,7 +737,32 @@ async listOpencodeModels() : Promise<Result<OpencodeModel[], IpcError>> {
 }
 },
 /**
- * Install warden's managed copy of a provider CLI (latest version).
+ * The models the local Cursor install can run — the picker's Cursor pane, since
+ * availability is per-account.
+ */
+async listCursorModels() : Promise<Result<CursorModel[], IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("list_cursor_models") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * The models the local Grok install can run (falls back to the known pair).
+ */
+async listGrokModels() : Promise<Result<GrokModel[], IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("list_grok_models") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Install a provider CLI (latest version). Most install a warden-managed copy;
+ * Cursor runs its own installer onto the system PATH, so on that outcome the
+ * source preference is switched to System and persisted.
  */
 async installProvider(id: string) : Promise<Result<null, IpcError>> {
     try {
@@ -748,7 +773,7 @@ async installProvider(id: string) : Promise<Result<null, IpcError>> {
 }
 },
 /**
- * Reinstall the managed copy at the latest published version.
+ * Reinstall/upgrade the provider CLI at the latest published version.
  */
 async updateProvider(id: string) : Promise<Result<null, IpcError>> {
     try {
@@ -1130,7 +1155,7 @@ path: string; isImage: boolean; isDir: boolean }
  * is keyed by this enum. Adding a backend is: a variant here + an adapter that
  * implements `Provider` + one registration — nothing else dispatches on it.
  */
-export type Backend = "claude" | "codex" | "opencode"
+export type Backend = "claude" | "codex" | "opencode" | "cursor" | "grok"
 /**
  * Aggregate CI-check state for a session's pull request, distilled from `gh`'s
  * `statusCheckRollup`. Absent when the PR has no checks.
@@ -1186,6 +1211,18 @@ linearIssueId: string | null;
  * Worktree branch name (e.g. `feature/WAR-123` derived from an issue).
  */
 branchHint: string | null }
+/**
+ * One selectable Cursor model for the picker.
+ */
+export type CursorModel = { 
+/**
+ * Picker model id, prefixed so it routes to the Cursor backend (`cursor/<model>`).
+ */
+id: string; 
+/**
+ * Readable label as Cursor prints it.
+ */
+label: string }
 /**
  * What deleting a session would destroy, so the UI can ask before — instead of
  * force-deleting work. All zeros when nothing is at risk: checkout sessions
@@ -1331,6 +1368,18 @@ newText: string | null }
  */
 export type GhIssue = { number: number; title: string; url: string; body: string; labels: string[]; author: string; updatedAt: string }
 export type GhIssueComment = { author: string; body: string; createdAt: string }
+/**
+ * One selectable Grok model for the picker.
+ */
+export type GrokModel = { 
+/**
+ * Picker model id, prefixed so it routes to the Grok backend (`grok/<model>`).
+ */
+id: string; 
+/**
+ * Readable label.
+ */
+label: string }
 /**
  * The top-level workspace: a named set of project roots plus a saved pane
  * layout. Sessions are opened against a group and may pull any of its roots

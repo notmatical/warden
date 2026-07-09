@@ -27,11 +27,13 @@ pub enum Backend {
     Claude,
     Codex,
     Opencode,
+    Cursor,
+    Grok,
 }
 
 impl Backend {
     /// The canonical string — identical to the serde, DB, and CLI token form
-    /// (`"claude"`, `"codex"`, `"opencode"`).
+    /// (`"claude"`, `"codex"`, `"opencode"`, `"cursor"`, `"grok"`).
     pub fn as_str(self) -> &'static str {
         self.into()
     }
