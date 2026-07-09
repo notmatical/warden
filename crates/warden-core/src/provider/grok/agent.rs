@@ -87,10 +87,19 @@ fn build_message(instructions: &str, prompt: &str) -> String {
 
 // ----- ACP notification translation -------------------------------------------
 
-/// The ACP session id from a notification (`params.sessionId`) or the terminal
-/// prompt response (`result._meta.sessionId`).
+/// The ACP session id from any message that carries one: the `session/new` and
+/// `session/load` responses (`result.sessionId`, or bare `sessionId` if the
+/// caller passed the unwrapped result), a `session/update` notification
+/// (`params.sessionId`), or a terminal prompt response (`result._meta.sessionId`).
+///
+/// The canonical `result.sessionId` is checked before `result._meta.sessionId`:
+/// `session/new` responses can carry a separate metadata id under `_meta`, and
+/// prompting with that instead of the real session id fails with "unknown
+/// session id".
 pub(super) fn extract_acp_session_id(value: &Value) -> Option<String> {
     for path in [
+        ["result", "sessionId"].as_slice(),
+        ["sessionId"].as_slice(),
         ["params", "sessionId"].as_slice(),
         ["result", "_meta", "sessionId"].as_slice(),
     ] {
@@ -706,6 +715,30 @@ mod tests {
         assert_eq!(
             extract_acp_session_id(&json!({"result":{"_meta":{"sessionId":"s8"}}})).as_deref(),
             Some("s8")
+        );
+    }
+
+    #[test]
+    fn extracts_session_id_from_new_session_response() {
+        // The session/new response carries the real id at result.sessionId.
+        assert_eq!(
+            extract_acp_session_id(&json!({"result":{"sessionId":"grok-1"}})).as_deref(),
+            Some("grok-1")
+        );
+        // Unwrapped result (bare sessionId) and terminal "end" messages.
+        assert_eq!(
+            extract_acp_session_id(&json!({"sessionId":"grok-2"})).as_deref(),
+            Some("grok-2")
+        );
+        // When both are present, the canonical result.sessionId wins over a
+        // separate _meta id — prompting with the _meta id fails as "unknown
+        // session id".
+        assert_eq!(
+            extract_acp_session_id(
+                &json!({"result":{"sessionId":"real","_meta":{"sessionId":"meta"}}})
+            )
+            .as_deref(),
+            Some("real")
         );
     }
 }
