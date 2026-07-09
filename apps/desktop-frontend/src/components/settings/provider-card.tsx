@@ -45,7 +45,7 @@ function SourcePicker({
     },
   ]
   return (
-    <div className="flex w-fit rounded-lg bg-muted/70 p-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 has-[:focus-visible]:opacity-100">
+    <div className="flex w-fit rounded-lg bg-muted/70 p-0.5">
       {options.map((opt) => {
         const active = status.source === opt.value
         const unavailable = opt.value === "system" && !status.systemDetected
@@ -109,15 +109,21 @@ export function ProviderCard({
 
   return (
     <div className="group relative flex flex-col rounded-xl border border-border/60 bg-card p-4 shadow-xs transition-colors hover:border-border">
-      <div
-        className={cn(
-          "flex size-10 items-center justify-center rounded-lg ring-1 ring-inset transition-colors",
-          installed
-            ? "bg-muted/50 text-foreground ring-border/60"
-            : "bg-muted/30 text-muted-foreground/60 ring-border/50"
-        )}
-      >
-        <Icon className="size-5" />
+      <div className="flex items-center justify-between gap-2">
+        <div
+          className={cn(
+            "flex size-10 items-center justify-center rounded-lg ring-1 ring-inset transition-colors",
+            installed
+              ? "bg-muted/50 text-foreground ring-border/60"
+              : "bg-muted/30 text-muted-foreground/60 ring-border/50"
+          )}
+        >
+          <Icon className="size-5" />
+        </div>
+        <span className="flex items-center gap-1.5 text-muted-foreground text-xs">
+          <span className={cn("size-1.5 rounded-full", DOT[state.kind])} />
+          {state.label}
+        </span>
       </div>
 
       <div className="mt-3 flex items-baseline gap-2">
@@ -163,19 +169,25 @@ export function ProviderCard({
             {primary.label}
             <ArrowRight className="transition-transform group-hover:translate-x-0.5" />
           </Button>
+        ) : updatePending ? (
+          <Button
+            size="sm"
+            onClick={runUpdate}
+            loading={busy}
+            className="w-full"
+          >
+            Update
+            {status.version && status.latestVersion ? (
+              <span className="font-mono text-[11px] opacity-80">
+                v{status.version.replace(/^v/, "")} → v
+                {status.latestVersion.replace(/^v/, "")}
+              </span>
+            ) : null}
+          </Button>
         ) : (
           <div className="flex min-h-7 items-center justify-between gap-2">
-            <span className="flex items-center gap-1.5 text-muted-foreground text-xs">
-              <span className={cn("size-1.5 rounded-full", DOT[state.kind])} />
-              {state.label}
-            </span>
-            {updatePending ? (
-              <Button size="xs" onClick={runUpdate} loading={busy}>
-                Update
-              </Button>
-            ) : (
-              <SourcePicker status={status} onSetSource={onSetSource} />
-            )}
+            <span className="text-muted-foreground text-xs">Source</span>
+            <SourcePicker status={status} onSetSource={onSetSource} />
           </div>
         )}
       </div>
