@@ -1,15 +1,18 @@
-import { Volume2 } from "lucide-react"
-import { SettingsSection } from "@/components/settings/settings-section"
-import { Button } from "@/components/ui/button"
+import { Button } from "@warden/ui/components/button"
+import { Label } from "@warden/ui/components/label"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
-import { Slider } from "@/components/ui/slider"
-import { Switch } from "@/components/ui/switch"
+} from "@warden/ui/components/select"
+import { Slider } from "@warden/ui/components/slider"
+import { Switch } from "@warden/ui/components/switch"
+import { Volume2 } from "lucide-react"
+
+import { SettingsSection } from "@/components/settings/settings-section"
+import { ToolList } from "@/components/settings/tool-list"
 import {
   NOTIFY_EVENTS,
   notifyTest,
@@ -28,7 +31,7 @@ export function NotificationsSection() {
       title="Notifications"
       description="Popup notifications shown while the window is in the background."
     >
-      <div className="divide-y divide-border/60 overflow-hidden rounded-xl bg-card shadow-xs ring-1 ring-foreground/10">
+      <ToolList>
         <div className="flex items-center gap-3.5 px-4 py-3.5">
           <div className="min-w-0 flex-1">
             <p className="font-medium text-foreground text-sm">Sound volume</p>
@@ -36,15 +39,22 @@ export function NotificationsSection() {
               Applies to every notification sound.
             </p>
           </div>
-          <Slider
-            aria-label="Sound volume"
-            className="w-32"
-            max={100}
-            min={0}
-            onValueChange={([v]) => setNotifyVolume((v ?? 50) / 100)}
-            step={5}
-            value={[Math.round(prefs.volume * 100)]}
-          />
+          {/* Fixed-width wrapper + control min-width override: coss's Slider
+              defaults to w-full / min-w-44, which would swamp the row. */}
+          <div className="w-36 shrink-0">
+            <Slider
+              aria-label="Sound volume"
+              className="[&_[data-slot=slider-control]]:!min-w-0"
+              max={100}
+              min={0}
+              step={5}
+              value={[Math.round(prefs.volume * 100)]}
+              onValueChange={(v) => {
+                const next = Array.isArray(v) ? (v[0] ?? 50) : v
+                setNotifyVolume(next / 100)
+              }}
+            />
+          </div>
           <Button
             aria-label="Preview volume"
             onClick={() => playSound("notify", prefs.volume)}
@@ -54,21 +64,23 @@ export function NotificationsSection() {
             <Volume2 />
           </Button>
         </div>
+
         {NOTIFY_EVENTS.map(({ event, label, hint }) => {
           const pref = prefs.events[event]
           return (
             <div key={event} className="flex items-center gap-3.5 px-4 py-3.5">
               <div className="min-w-0 flex-1">
-                <label
+                <Label
                   htmlFor={`notify-${event}`}
                   className="font-medium text-foreground text-sm"
                 >
                   {label}
-                </label>
+                </Label>
                 <p className="mt-0.5 text-muted-foreground text-xs">{hint}</p>
               </div>
               <Select
                 value={pref.sound}
+                disabled={!pref.enabled}
                 onValueChange={(value) => {
                   const sound = value as SoundName
                   setNotifySound(event, sound)
@@ -77,11 +89,15 @@ export function NotificationsSection() {
               >
                 <SelectTrigger
                   aria-label={`${label} sound`}
-                  className="w-28"
-                  disabled={!pref.enabled}
                   size="sm"
+                  className="w-28"
                 >
-                  <SelectValue />
+                  <SelectValue>
+                    {(value) =>
+                      SOUND_OPTIONS.find((o) => o.value === value)?.label ??
+                      String(value)
+                    }
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {SOUND_OPTIONS.map(({ value, label: soundLabel }) => (
@@ -99,6 +115,7 @@ export function NotificationsSection() {
             </div>
           )
         })}
+
         <div className="flex items-center gap-3.5 px-4 py-3.5">
           <div className="min-w-0 flex-1">
             <p className="font-medium text-foreground text-sm">
@@ -108,11 +125,11 @@ export function NotificationsSection() {
               Send a sample popup to check the look and sound.
             </p>
           </div>
-          <Button onClick={notifyTest} variant="secondary">
+          <Button onClick={notifyTest} variant="secondary" size="sm">
             Send test
           </Button>
         </div>
-      </div>
+      </ToolList>
     </SettingsSection>
   )
 }

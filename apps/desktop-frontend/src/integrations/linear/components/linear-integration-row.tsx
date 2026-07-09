@@ -1,13 +1,13 @@
-import { Loader2 } from "lucide-react"
+import { Button } from "@warden/ui/components/button"
+import { Input } from "@warden/ui/components/input"
+import { Switch } from "@warden/ui/components/switch"
 import { type FormEvent, useEffect, useState } from "react"
 import { toast } from "sonner"
 
 import { LinearIcon } from "@/components/icons/brand"
 import { ToolListRow } from "@/components/settings/tool-list"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Switch } from "@/components/ui/switch"
 import { setWardenMcpEnabled, wardenMcpEnabled } from "@/lib/ipc"
+import { errorMessage } from "@/store/shared"
 
 import { linearConnect, linearDisconnect, linearStatus } from "../ipc"
 
@@ -55,7 +55,9 @@ export function LinearIntegrationRow() {
       setPhase("connected")
       toast.success(`Connected to Linear as ${viewer.name}`)
     } catch (e) {
-      toast.error("Couldn't connect to Linear", { description: String(e) })
+      toast.error("Couldn't connect to Linear", {
+        description: errorMessage(e),
+      })
     } finally {
       setBusy(false)
     }
@@ -67,7 +69,7 @@ export function LinearIntegrationRow() {
       await linearDisconnect()
       setPhase("disconnected")
     } catch (e) {
-      toast.error("Couldn't disconnect", { description: String(e) })
+      toast.error("Couldn't disconnect", { description: errorMessage(e) })
     } finally {
       setBusy(false)
     }
@@ -106,10 +108,10 @@ export function LinearIntegrationRow() {
             variant="ghost"
             size="xs"
             onClick={() => void handleDisconnect()}
-            disabled={busy}
-            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+            loading={busy}
+            className="text-destructive-foreground hover:bg-destructive/10"
           >
-            {busy ? <Loader2 className="size-3 animate-spin" /> : "Disconnect"}
+            Disconnect
           </Button>
         ) : (
           <form onSubmit={handleConnect} className="flex items-center gap-2">
@@ -124,12 +126,11 @@ export function LinearIntegrationRow() {
             />
             <Button
               type="submit"
-              variant="ghost"
               size="xs"
-              disabled={busy || phase === "loading" || !keyInput.trim()}
-              className="bg-foreground text-background hover:bg-foreground/90"
+              loading={busy}
+              disabled={phase === "loading" || !keyInput.trim()}
             >
-              {busy ? <Loader2 className="size-3 animate-spin" /> : "Connect"}
+              Connect
             </Button>
           </form>
         )

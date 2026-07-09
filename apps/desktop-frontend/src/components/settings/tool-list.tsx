@@ -1,7 +1,7 @@
-import { ArrowUpCircle, Loader2 } from "lucide-react"
+import { Button } from "@warden/ui/components/button"
+import { ArrowUpCircle } from "lucide-react"
 import type { ComponentType, ReactNode } from "react"
 
-import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import type { ProviderSource, ProviderStatus } from "@/types"
 
@@ -115,8 +115,8 @@ export function ToolListRow({
   )
 }
 
-/** Compact two-state source picker. Each option's hint shows up as a tooltip,
- *  so users see implications *before* picking — not as documentation after. */
+/** Compact two-state source picker: a segmented control. Each option's hint is a
+ *  tooltip, so implications are visible *before* picking, not after. */
 function SourcePicker({
   status,
   onSetSource,
@@ -125,7 +125,7 @@ function SourcePicker({
   onSetSource: (source: ProviderSource) => void
 }) {
   return (
-    <div className="flex w-fit shrink-0 rounded-md border border-border/60 bg-muted/30 p-0.5">
+    <div className="flex w-fit shrink-0 rounded-lg bg-muted p-0.5">
       {SOURCES.map((opt) => {
         const active = status.source === opt.value
         // Managed is always selectable (selecting it offers Install);
@@ -139,11 +139,11 @@ function SourcePicker({
             onClick={() => onSetSource(opt.value)}
             title={unavailable ? "Not found on PATH" : opt.hint}
             className={cn(
-              "rounded-[5px] px-2 py-0.5 font-medium text-[11px] transition-colors",
+              "rounded-[7px] px-2 py-0.5 font-medium text-[11px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
               unavailable
                 ? "cursor-not-allowed text-muted-foreground/40"
                 : active
-                  ? "bg-background text-foreground shadow-[0_1px_2px_rgb(0_0_0/0.06)]"
+                  ? "bg-background text-foreground shadow-xs ring-1 ring-border/50"
                   : "text-muted-foreground hover:text-foreground"
             )}
           >
@@ -209,15 +209,15 @@ export function ToolRow({
       </div>
       <div className="h-1 overflow-hidden rounded-full bg-border">
         <div
-          className="h-full rounded-full bg-foreground/80 transition-[width] duration-300"
+          className="h-full rounded-full bg-primary transition-[width] duration-300 ease-out"
           style={{ width: `${progress.percent}%` }}
         />
       </div>
     </div>
   ) : updatePending ? (
-    <div className="flex items-center gap-2.5 border-sky-500/20 border-t bg-sky-500/10 px-4 py-2">
-      <ArrowUpCircle className="size-4 shrink-0 text-sky-500" />
-      <span className="min-w-0 flex-1 truncate text-sky-600 text-xs dark:text-sky-400">
+    <div className="flex items-center gap-2.5 border-primary/20 border-t bg-primary/8 px-4 py-2">
+      <ArrowUpCircle className="size-4 shrink-0 text-primary" />
+      <span className="min-w-0 flex-1 truncate text-primary text-xs">
         Update available
         {status.version && status.latestVersion ? (
           <span className="ml-1.5 font-mono text-[11px] tabular-nums opacity-80">
@@ -229,10 +229,10 @@ export function ToolRow({
       <Button
         size="xs"
         onClick={runUpdate}
-        disabled={busy}
-        className="shrink-0 bg-sky-500 text-white hover:bg-sky-600 dark:bg-sky-500 dark:hover:bg-sky-400"
+        loading={busy}
+        className="shrink-0"
       >
-        {busy ? <Loader2 className="size-3 animate-spin" /> : "Update"}
+        Update
       </Button>
     </div>
   ) : null
@@ -251,22 +251,13 @@ export function ToolRow({
           <SourcePicker status={status} onSetSource={onSetSource} />
           {rowAction ? (
             <Button
-              variant="ghost"
+              variant={rowAction.primary ? "default" : "ghost"}
               size="xs"
               onClick={rowAction.onClick}
-              disabled={busy}
-              className={cn(
-                "shrink-0",
-                rowAction.primary
-                  ? "bg-foreground text-background hover:bg-foreground/90"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
+              loading={busy}
+              className="shrink-0"
             >
-              {busy ? (
-                <Loader2 className="size-3 animate-spin" />
-              ) : (
-                rowAction.label
-              )}
+              {rowAction.label}
             </Button>
           ) : null}
         </>
