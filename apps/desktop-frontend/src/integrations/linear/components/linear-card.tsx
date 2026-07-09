@@ -1,6 +1,7 @@
 import { Button } from "@warden/ui/components/button"
 import { Input } from "@warden/ui/components/input"
 import { Switch } from "@warden/ui/components/switch"
+import { Unplug } from "lucide-react"
 import { type FormEvent, useEffect, useState } from "react"
 import { toast } from "sonner"
 
@@ -90,12 +91,14 @@ export function LinearCard() {
         connected ? (
           <Button
             variant="ghost"
-            size="xs"
+            size="icon-xs"
             onClick={() => void handleDisconnect()}
             loading={busy}
-            className="text-destructive-foreground opacity-0 transition-opacity hover:bg-destructive/10 group-hover:opacity-100 group-focus-within:opacity-100"
+            title="Disconnect Linear"
+            aria-label="Disconnect Linear"
+            className="text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 group-focus-within:opacity-100"
           >
-            Disconnect
+            <Unplug />
           </Button>
         ) : undefined
       }
