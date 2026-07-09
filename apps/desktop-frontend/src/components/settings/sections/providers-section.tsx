@@ -1,5 +1,5 @@
-import { ProviderCard } from "@/components/settings/provider-card"
 import { SettingsSection } from "@/components/settings/settings-section"
+import { ToolCard } from "@/components/settings/tool-card"
 import { runInLoginTerminal, shellBin } from "@/lib/cli-login"
 import { PROVIDER_ICON } from "@/lib/provider-icons"
 import { useAppStore } from "@/store/app-store"
@@ -44,7 +44,7 @@ export function ProvidersSection() {
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {providers.map((status) => (
-            <ProviderCard
+            <ToolCard
               key={status.id}
               status={status}
               icon={PROVIDER_ICON[status.id]}
