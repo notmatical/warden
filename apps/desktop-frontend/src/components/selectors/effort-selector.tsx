@@ -76,6 +76,9 @@ export function EffortSelector({
     return () => window.removeEventListener("keydown", onKeyDown, true)
   }, [open, onChange, setOpen, options])
 
+  // Backends without a reasoning-effort control (Cursor) render nothing.
+  if (options.length === 0) return null
+
   const triggerButton =
     variant === "form" ? (
       <Button

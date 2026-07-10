@@ -34,7 +34,11 @@ impl Provider for ClaudeProvider {
     fn handles_model(&self, model: &str) -> bool {
         // Claude is the default backend: it claims anything the others don't.
         let id = model.to_ascii_lowercase();
-        !(id.starts_with("opencode") || id.starts_with("gpt") || id.starts_with("codex"))
+        !(id.starts_with("opencode")
+            || id.starts_with("gpt")
+            || id.starts_with("codex")
+            || id.starts_with("cursor/")
+            || id.starts_with("grok/"))
     }
 
     fn fast_model(&self) -> &'static str {

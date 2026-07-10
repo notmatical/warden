@@ -90,6 +90,16 @@ export interface AppState {
   opencodeModels: ModelOption[]
   /** True while the OpenCode model listing CLI is running. */
   opencodeModelsLoading: boolean
+  /** Picker entries for the models the local Cursor install can run, loaded
+   *  live from its CLI (per-account, like OpenCode). */
+  cursorModels: ModelOption[]
+  /** True while the Cursor model listing CLI is running. */
+  cursorModelsLoading: boolean
+  /** Picker entries for the models the local Grok install can run, loaded live
+   *  from its CLI (falls back to the known pair). */
+  grokModels: ModelOption[]
+  /** True while the Grok model listing CLI is running. */
+  grokModelsLoading: boolean
   /** Install/auth status of the GitHub CLI (loaded lazily by Settings). */
   githubStatus: ProviderStatus | null
   eventsBySession: Record<string, EventRecord[]>
@@ -202,8 +212,8 @@ export interface AppState {
     sessionId: string
   ) => void
   setDragging: (sessionId: string | null) => void
-  /** Move an open tab to just before another in the strip. */
-  reorderTab: (draggedId: string, targetId: string) => void
+  /** Move an open tab to an index in the strip (arrayMove semantics). */
+  moveTab: (id: string, toIndex: number) => void
   /** Persist the global view-state (layout + open tabs + active tab). */
   saveView: () => void
   createSession: (opts: CreateSessionOptions) => Promise<Session | null>

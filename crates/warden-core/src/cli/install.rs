@@ -5,7 +5,7 @@
 //! [`crate::dist::distribution`].
 
 use super::{paths, Tool};
-use crate::dist;
+use crate::dist::{self, Installed};
 use crate::error::{AppError, Result};
 use crate::event::{self, payloads::InstallProgress};
 use crate::net::version::extract_version;
@@ -20,42 +20,40 @@ pub fn emit_progress(tool: Tool, stage: &str, message: &str, percent: u8) {
     });
 }
 
-/// Install (or reinstall) a tool's managed binary, fetching the latest version
-/// unless one is given. Emits `cli:install-progress` events as it runs.
-pub async fn install(tool: Tool, version: Option<String>) -> Result<()> {
+/// Install (or reinstall) a tool, fetching the latest version unless one is
+/// given. Emits `cli:install-progress` events as it runs. Returns where the
+/// binary landed so the caller can persist a source switch for vendor installs.
+pub async fn install(tool: Tool, version: Option<String>) -> Result<Installed> {
     paths::ensure_cli_dir(tool)?;
-    let binary_path = paths::managed_binary_path(tool)
-        .ok_or_else(|| AppError::Invalid("app data dir is not initialized".to_string()))?;
-
     let dist = dist::distribution(tool);
 
     emit_progress(tool, "starting", "Preparing installation…", 0);
-    let version = match version {
-        Some(v) => v,
-        None => dist.latest_version().await?,
-    };
-
-    // The distribution emits the download/extract/verify stages it knows about.
-    let binary = dist.fetch(&version).await?;
-
-    emit_progress(
-        tool,
-        "installing",
-        &format!("Installing {}…", tool.name()),
-        70,
-    );
-    crate::platform::install::write_binary_file(&binary_path, &binary)?;
+    // The distribution resolves the version if needed and emits its own
+    // download/npm/installer stages.
+    let installed = dist.install(tool, version.as_deref()).await?;
 
     emit_progress(tool, "verifying", "Verifying installation…", 90);
-    if current_version(&binary_path).is_none() {
-        return Err(AppError::Integration(format!(
-            "{} did not run after install",
-            tool.name()
-        )));
+    match installed {
+        Installed::Managed => {
+            let binary_path = paths::managed_binary_path(tool)
+                .ok_or_else(|| AppError::Invalid("app data dir is not initialized".to_string()))?;
+            if current_version(&binary_path).is_none() {
+                return Err(AppError::Integration(format!(
+                    "{} did not run after install",
+                    tool.name()
+                )));
+            }
+        }
+        // A vendor installer adds the binary to a PATH entry the running
+        // process captured at launch. Re-read PATH so the tool resolves on the
+        // next status refresh without an app restart. Don't hard-fail if it's
+        // still not visible (some installers need a full re-login) — the
+        // installer itself succeeded.
+        Installed::System => crate::platform::refresh_path(),
     }
 
     emit_progress(tool, "complete", "Installation complete", 100);
-    Ok(())
+    Ok(installed)
 }
 
 /// The latest published version string for a tool, via its distribution.

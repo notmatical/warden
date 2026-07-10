@@ -10,6 +10,10 @@ type ProvidersSlice = Pick<
   | "providers"
   | "opencodeModels"
   | "opencodeModelsLoading"
+  | "cursorModels"
+  | "cursorModelsLoading"
+  | "grokModels"
+  | "grokModelsLoading"
   | "githubStatus"
   | "loadProviders"
   | "installProvider"
@@ -21,11 +25,37 @@ type ProvidersSlice = Pick<
   | "setGithubSource"
 >
 
-/** OpenCode model availability is per-account and the listing shells out to
- *  its CLI, so refreshes (provider loads re-run on every window focus) are
- *  throttled. */
-const OPENCODE_MODELS_TTL_MS = 60_000
-let opencodeModelsFetchedAt = 0
+/** Dynamic model availability is per-account and each listing shells out to its
+ *  CLI, so refreshes (provider loads re-run on every window focus) are throttled. */
+const MODELS_TTL_MS = 60_000
+
+/** The backends whose picker models come live from their CLI rather than the
+ *  static catalog. Each maps a provider id to its listing call and store slots. */
+const DYNAMIC_MODEL_BACKENDS = [
+  {
+    id: "opencode",
+    provider: "OpenCode",
+    list: ipc.listOpencodeModels,
+    models: "opencodeModels",
+    loading: "opencodeModelsLoading",
+  },
+  {
+    id: "cursor",
+    provider: "Cursor",
+    list: ipc.listCursorModels,
+    models: "cursorModels",
+    loading: "cursorModelsLoading",
+  },
+  {
+    id: "grok",
+    provider: "Grok",
+    list: ipc.listGrokModels,
+    models: "grokModels",
+    loading: "grokModelsLoading",
+  },
+] as const
+
+const modelsFetchedAt: Record<string, number> = {}
 
 /** Agent-CLI provider status (Claude/Codex/OpenCode) and the GitHub CLI: load,
  *  install, update, and switch managed/system source. */
@@ -38,6 +68,10 @@ export const createProvidersSlice: StateCreator<
   providers: [],
   opencodeModels: [],
   opencodeModelsLoading: false,
+  cursorModels: [],
+  cursorModelsLoading: false,
+  grokModels: [],
+  grokModelsLoading: false,
   githubStatus: null,
 
   loadProviders: async () => {
@@ -45,30 +79,33 @@ export const createProvidersSlice: StateCreator<
       const providers = await ipc.listProviderStatus()
       set({ providers })
 
-      // Refresh the OpenCode model catalog alongside provider status: the
-      // picker only shows models the account can run, which shifts with
+      // Refresh each dynamic backend's model catalog alongside provider status:
+      // the picker only shows models the account can run, which shifts with
       // sign-ins done inside or outside the app.
-      const opencode = providers.find((p) => p.id === "opencode")
-      const stale = Date.now() - opencodeModelsFetchedAt > OPENCODE_MODELS_TTL_MS
-      if (opencode?.installed && (stale || get().opencodeModels.length === 0)) {
-        opencodeModelsFetchedAt = Date.now()
+      for (const backend of DYNAMIC_MODEL_BACKENDS) {
+        const status = providers.find((p) => p.id === backend.id)
+        const stale = Date.now() - (modelsFetchedAt[backend.id] ?? 0) > MODELS_TTL_MS
+        const empty = (get()[backend.models] as unknown[]).length === 0
+        if (!status?.installed || !(stale || empty)) continue
+
+        modelsFetchedAt[backend.id] = Date.now()
         // The listing shells out to the CLI (seconds); the picker shows a
         // skeleton while this is true and no models are known yet.
-        set({ opencodeModelsLoading: true })
-        void ipc
-          .listOpencodeModels()
+        set({ [backend.loading]: true } as Partial<AppState>)
+        void backend
+          .list()
           .then((models) =>
             set({
-              opencodeModels: models.map((m) => ({
+              [backend.models]: models.map((m) => ({
                 ...m,
-                provider: "OpenCode",
+                provider: backend.provider,
               })),
-            })
+            } as Partial<AppState>)
           )
           .catch(() => {
             // CLI hiccups just leave the previous (possibly empty) list.
           })
-          .finally(() => set({ opencodeModelsLoading: false }))
+          .finally(() => set({ [backend.loading]: false } as Partial<AppState>))
       }
     } catch (error) {
       reportError("Failed to load providers", error)

@@ -1,0 +1,141 @@
+import { Button } from "@warden/ui/components/button"
+import { Input } from "@warden/ui/components/input"
+import { Switch } from "@warden/ui/components/switch"
+import { Unplug } from "lucide-react"
+import { type FormEvent, useEffect, useState } from "react"
+import { toast } from "sonner"
+
+import { LinearIcon } from "@/components/icons/brand"
+import { SettingsCard } from "@/components/settings/settings-card"
+import { setWardenMcpEnabled, wardenMcpEnabled } from "@/lib/ipc"
+import { errorMessage } from "@/store/shared"
+
+import { linearConnect, linearDisconnect, linearStatus } from "../ipc"
+
+type Phase = "loading" | "disconnected" | "connected"
+
+/** Linear card for Settings → Integrations. API-key based (no CLI to manage):
+ *  paste a personal key to connect; once connected, an in-card toggle governs
+ *  whether agents can act on issues, and Disconnect reveals on hover. */
+export function LinearCard() {
+  const [phase, setPhase] = useState<Phase>("loading")
+  const [keyInput, setKeyInput] = useState("")
+  const [busy, setBusy] = useState(false)
+  const [agentTools, setAgentTools] = useState(true)
+
+  useEffect(() => {
+    linearStatus()
+      .then(({ connected }) =>
+        setPhase(connected ? "connected" : "disconnected")
+      )
+      .catch(() => setPhase("disconnected"))
+  }, [])
+
+  useEffect(() => {
+    if (phase !== "connected") return
+    wardenMcpEnabled()
+      .then(setAgentTools)
+      .catch(() => {})
+  }, [phase])
+
+  const toggleAgentTools = (next: boolean) => {
+    setAgentTools(next) // optimistic; the setting read on next spawn is source of truth
+    void setWardenMcpEnabled(next).catch(() => {
+      setAgentTools(!next)
+      toast.error("Couldn't update agent access")
+    })
+  }
+
+  const handleConnect = async (e: FormEvent) => {
+    e.preventDefault()
+    const key = keyInput.trim()
+    if (!key) return
+    setBusy(true)
+    try {
+      const viewer = await linearConnect(key)
+      setKeyInput("")
+      setPhase("connected")
+      toast.success(`Connected to Linear as ${viewer.name}`)
+    } catch (e) {
+      toast.error("Couldn't connect to Linear", {
+        description: errorMessage(e),
+      })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleDisconnect = async () => {
+    setBusy(true)
+    try {
+      await linearDisconnect()
+      setPhase("disconnected")
+    } catch (e) {
+      toast.error("Couldn't disconnect", { description: errorMessage(e) })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const connected = phase === "connected"
+
+  return (
+    <SettingsCard
+      icon={LinearIcon}
+      present={connected}
+      name="Linear"
+      description="Triage your assigned issues in Tasks and send them to agents."
+      statusKind={connected ? "ok" : "off"}
+      statusLabel={connected ? "Connected" : "Not connected"}
+      headerAction={
+        connected ? (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={() => void handleDisconnect()}
+            loading={busy}
+            title="Disconnect Linear"
+            aria-label="Disconnect Linear"
+            className="text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 group-focus-within:opacity-100"
+          >
+            <Unplug />
+          </Button>
+        ) : undefined
+      }
+    >
+      {connected ? (
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-medium text-foreground text-xs">
+              Let agents manage issues
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              Create, comment, and set status during a session.
+            </p>
+          </div>
+          <Switch checked={agentTools} onCheckedChange={toggleAgentTools} />
+        </div>
+      ) : (
+        <form onSubmit={handleConnect} className="flex items-center gap-2">
+          <Input
+            type="password"
+            autoComplete="off"
+            value={keyInput}
+            onChange={(e) => setKeyInput(e.target.value)}
+            placeholder="lin_api_…"
+            disabled={phase === "loading"}
+            className="h-8 min-w-0 flex-1 font-mono text-xs"
+          />
+          <Button
+            type="submit"
+            size="sm"
+            loading={busy}
+            disabled={phase === "loading" || !keyInput.trim()}
+          >
+            Connect
+          </Button>
+        </form>
+      )}
+    </SettingsCard>
+  )
+}

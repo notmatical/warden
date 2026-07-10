@@ -28,12 +28,12 @@ import {
   FilterMenu,
   SwatchStack,
 } from "@/components/common/filter-menu"
+import { NativeCliSub } from "@/components/common/native-cli-sub"
 import {
   CheckCounts,
   PrStateIcon,
   PrStatusPill,
 } from "@/components/common/pr-badges"
-import { NativeCliSub } from "@/components/common/native-cli-sub"
 import { useConfirm } from "@/components/confirm-dialog"
 import { LabelChip, LabelPicker, labelColor } from "@/components/label-picker"
 import { PrHoverCard } from "@/components/pr-hover-card"
@@ -65,7 +65,7 @@ import { BindLinearBanner } from "@/integrations/linear/components/bind-linear-b
 import { FolderTasksSection } from "@/integrations/linear/components/folder-tasks-section"
 import { useFolderLinearBinding } from "@/integrations/linear/hooks"
 import * as ipc from "@/lib/ipc"
-import { DEFAULT_CHAT_MODEL } from "@/lib/models"
+import { defaultChatModel } from "@/lib/models"
 import { formatDate, relativeTime } from "@/lib/time"
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store/app-store"
@@ -235,7 +235,7 @@ export function FolderView({ projectId }: { projectId: string }) {
     void createSession({
       projectId,
       title: kind === "terminal" ? "Terminal" : "New session",
-      model: DEFAULT_CHAT_MODEL,
+      model: defaultChatModel(),
       permissionMode: "bypassPermissions",
       role: "chat",
       kind,

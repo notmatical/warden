@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
-import { backendForModel, DEFAULT_CHAT_MODEL } from "@/lib/models"
+import { backendForModel, defaultChatModel } from "@/lib/models"
 import { useAppStore } from "@/store/app-store"
 import type { CreateSessionOptions } from "@/store/types"
 import type { PermissionMode, Session } from "@/types"
@@ -81,7 +81,7 @@ export function SendToAgentDialogCore({
   }, [rootsByGroup])
 
   const [folder, setFolder] = useState<FolderRef | null>(null)
-  const [model, setModel] = useState(DEFAULT_CHAT_MODEL)
+  const [model, setModel] = useState(defaultChatModel())
   const [mode, setMode] = useState<PermissionMode>("bypassPermissions")
   const [isolate, setIsolate] = useState(false)
   const [branch, setBranch] = useState("")

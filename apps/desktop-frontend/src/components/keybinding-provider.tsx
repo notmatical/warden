@@ -25,6 +25,16 @@ export function runCommand(id: CommandId): void {
     case "sidebar.toggle":
       store.setSidebarCollapsed(!store.sidebarCollapsed)
       break
+    case "tabs.next":
+    case "tabs.previous": {
+      const { openTabs } = store
+      if (openTabs.length < 2) break
+      const index = activeTabId ? openTabs.indexOf(activeTabId) : -1
+      const delta = id === "tabs.next" ? 1 : -1
+      const next = openTabs[(index + delta + openTabs.length) % openTabs.length]
+      if (next) store.selectTab(next)
+      break
+    }
     case "session.cancel":
       if (session?.status === "running") void store.cancel(session.id)
       break

@@ -74,8 +74,10 @@ pub async fn start_terminal(
     // next time. (Claude decides resume-vs-fresh from its on-disk conversation
     // file, so it doesn't rely on this flag.)
     if let Some(session) = session {
-        if matches!(session.backend, Backend::Codex | Backend::Opencode)
-            && session.terminal_command.is_some()
+        if matches!(
+            session.backend,
+            Backend::Codex | Backend::Opencode | Backend::Cursor | Backend::Grok
+        ) && session.terminal_command.is_some()
             && !session.terminal_started
         {
             state.store.set_terminal_started(&terminal_id)?;

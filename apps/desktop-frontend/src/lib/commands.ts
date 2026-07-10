@@ -5,6 +5,8 @@ import type { KeyCombo } from "@/lib/keybindings"
 export type CommandId =
   | "palette.toggle"
   | "sidebar.toggle"
+  | "tabs.next"
+  | "tabs.previous"
   | "session.cancel"
   | "session.cycleMode"
   | "composer.toggleModelMenu"
@@ -28,6 +30,20 @@ export const COMMANDS: Record<CommandId, CommandDef> = {
     title: "Toggle sidebar",
     category: "View",
     defaultCombo: { key: "b", mod: true },
+    allowInInput: true,
+  },
+  // Literal `ctrl` (not `mod`): Ctrl+Tab is the cross-platform convention, and
+  // on macOS Cmd+Tab is the system app switcher.
+  "tabs.next": {
+    title: "Next tab",
+    category: "View",
+    defaultCombo: { key: "Tab", ctrl: true },
+    allowInInput: true,
+  },
+  "tabs.previous": {
+    title: "Previous tab",
+    category: "View",
+    defaultCombo: { key: "Tab", ctrl: true, shift: true },
     allowInInput: true,
   },
   "session.cancel": {

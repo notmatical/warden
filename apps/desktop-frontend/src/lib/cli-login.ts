@@ -1,12 +1,18 @@
 import { toast } from "sonner"
 
 import * as ipc from "@/lib/ipc"
-import { DEFAULT_CHAT_MODEL } from "@/lib/models"
+import { defaultChatModel } from "@/lib/models"
+import { isWindows } from "@/lib/platform"
 import { useAppStore } from "@/store/app-store"
 
-/** Quote a resolved binary path for the shell; falls back to the bare name. */
+/** A resolved binary path as a runnable command token for the login terminal.
+ *  On Windows that terminal is PowerShell, where a line starting with a quoted
+ *  string is a string literal, not an invocation — so prefix the call operator
+ *  `&`. Elsewhere (POSIX shells) a quoted path runs as-is. Falls back to the
+ *  bare name, which is a command in either shell (no operator needed). */
 export function shellBin(path: string | null, fallback: string): string {
-  return path ? `"${path}"` : fallback
+  if (!path) return fallback
+  return isWindows ? `& "${path}"` : `"${path}"`
 }
 
 /**
@@ -31,7 +37,7 @@ export async function runInLoginTerminal(
   const session = await store.createSession({
     projectId,
     title,
-    model: DEFAULT_CHAT_MODEL,
+    model: defaultChatModel(),
     permissionMode: "bypassPermissions",
     role: "chat",
     kind: "terminal",

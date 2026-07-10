@@ -7,7 +7,9 @@
 
 mod claude;
 mod codex;
+mod cursor;
 mod gh;
+mod grok;
 mod opencode;
 
 use std::path::Path;
@@ -49,14 +51,55 @@ impl HostTarget {
     }
 }
 
-/// A managed tool's distribution: where its versions and binaries come from.
-/// `fetch` emits the per-stage download/extract/verify progress it knows about.
+/// Where a completed install placed the tool's binary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Installed {
+    /// A warden-managed copy at the tool's managed binary path (verify it runs).
+    Managed,
+    /// A vendor installer put the binary on the system PATH; warden switches the
+    /// tool's source to System so it's the one that gets used.
+    System,
+}
+
+/// A managed tool's distribution: where its versions and binaries come from, and
+/// how it's installed. Most tools download a single host binary; some ship via a
+/// package manager (npm) or a vendor installer script and override [`install`].
+///
+/// [`install`]: ToolDistribution::install
 #[async_trait::async_trait]
 pub trait ToolDistribution: Send + Sync {
     /// The latest published version string.
     async fn latest_version(&self) -> Result<String>;
-    /// The verified, extracted host binary bytes for `version`.
-    async fn fetch(&self, version: &str) -> Result<Vec<u8>>;
+
+    /// The verified, extracted host binary bytes for `version`. Binary
+    /// distributions implement this; command-installed tools (npm, vendor
+    /// scripts) override [`install`](Self::install) and never call it.
+    async fn fetch(&self, _version: &str) -> Result<Vec<u8>> {
+        Err(AppError::Integration(
+            "this tool has no downloadable binary".to_string(),
+        ))
+    }
+
+    /// Install the tool, resolving the latest version when `version` is `None`,
+    /// and emit progress. The default downloads the host binary and writes it to
+    /// the managed binary path; command-installed tools override this.
+    async fn install(&self, tool: Tool, version: Option<&str>) -> Result<Installed> {
+        let path = crate::cli::managed_binary_path(tool)
+            .ok_or_else(|| AppError::Invalid("app data dir is not initialized".to_string()))?;
+        let version = match version {
+            Some(v) => v.to_string(),
+            None => self.latest_version().await?,
+        };
+        let binary = self.fetch(&version).await?;
+        emit_progress(
+            tool,
+            "installing",
+            &format!("Installing {}…", tool.name()),
+            70,
+        );
+        crate::platform::install::write_binary_file(&path, &binary)?;
+        Ok(Installed::Managed)
+    }
 }
 
 /// The distribution for a tool — the single dispatch point install goes through.
@@ -65,6 +108,8 @@ pub fn distribution(tool: Tool) -> Box<dyn ToolDistribution> {
         Tool::Claude => Box::new(claude::ClaudeDist),
         Tool::Codex => Box::new(codex::dist()),
         Tool::Opencode => Box::new(opencode::dist()),
+        Tool::Cursor => Box::new(cursor::CursorDist),
+        Tool::Grok => Box::new(grok::GrokDist),
         Tool::Gh => Box::new(gh::dist()),
     }
 }

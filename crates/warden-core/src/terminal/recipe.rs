@@ -87,6 +87,15 @@ pub fn launch_recipe(
                 None => vec!["--continue".to_string()],
             },
         },
+        // Cursor and Grok expose no local history to scan, so a native terminal
+        // resumes only the chat/session id warden captured during an agent turn
+        // (`--resume <id>`); the first launch starts a fresh conversation.
+        Backend::Cursor | Backend::Grok => match session.terminal_started {
+            true if !session.agent_session_id.is_empty() => {
+                vec!["--resume".to_string(), session.agent_session_id.clone()]
+            }
+            _ => Vec::new(),
+        },
     };
     Ok((Some(deps.program.clone()), args))
 }

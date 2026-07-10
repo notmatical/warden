@@ -1,10 +1,14 @@
 import type { EventRecord, TokenUsage } from "@/types"
 
 /** The model's context-window size in tokens. Defaults to 200k; the `[1m]`
- *  long-context variants get 1M, and GPT/Codex models their larger window. */
+ *  long-context variants get 1M, and GPT/Codex models their larger window.
+ *  Cursor and Grok use conservative estimates (Grok's models advertise ~256k;
+ *  Cursor routes to varied models, so it falls back to the 200k default). */
 export function contextWindow(model: string): number {
   const m = model.toLowerCase()
   if (m.includes("[1m]") || m.includes("-1m")) return 1_000_000
+  if (m.startsWith("grok/")) return 256_000
+  if (m.startsWith("cursor/")) return 200_000
   if (m.startsWith("gpt") || m.startsWith("codex")) return 400_000
   return 200_000
 }

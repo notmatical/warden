@@ -1,5 +1,5 @@
 import { SettingsSection } from "@/components/settings/settings-section"
-import { ToolList, ToolRow } from "@/components/settings/tool-list"
+import { ToolCard } from "@/components/settings/tool-card"
 import { runInLoginTerminal, shellBin } from "@/lib/cli-login"
 import { PROVIDER_ICON } from "@/lib/provider-icons"
 import { useAppStore } from "@/store/app-store"
@@ -9,6 +9,8 @@ const PROVIDER_DESCRIPTION: Record<Provider, string> = {
   claude: "Runs your Claude model sessions.",
   codex: "Runs your GPT model sessions.",
   opencode: "Runs open and third-party models through OpenCode.",
+  cursor: "Runs your Cursor Agent model sessions.",
+  grok: "Runs your Grok model sessions.",
 }
 
 /** The interactive command that signs each provider in. */
@@ -16,6 +18,8 @@ const SIGN_IN_ARGS: Record<Provider, string> = {
   claude: "",
   codex: " login",
   opencode: " auth login",
+  cursor: " login",
+  grok: " login --device-auth",
 }
 
 function signInProvider(status: ProviderStatus) {
@@ -38,9 +42,9 @@ export function ProvidersSection() {
       {providers.length === 0 ? (
         <p className="text-muted-foreground text-xs">No providers detected.</p>
       ) : (
-        <ToolList>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {providers.map((status) => (
-            <ToolRow
+            <ToolCard
               key={status.id}
               status={status}
               icon={PROVIDER_ICON[status.id]}
@@ -51,7 +55,7 @@ export function ProvidersSection() {
               onSignIn={() => signInProvider(status)}
             />
           ))}
-        </ToolList>
+        </div>
       )}
     </SettingsSection>
   )

@@ -2,11 +2,6 @@
 
 import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
-import { cva, type VariantProps } from "class-variance-authority";
-import { PanelLeftIcon } from "lucide-react";
-import * as React from "react";
-import { useMediaQuery } from "@warden/ui/hooks/use-media-query";
-import { cn } from "@warden/ui/lib/utils";
 import { Button } from "@warden/ui/components/button";
 import { Input } from "@warden/ui/components/input";
 import { ScrollArea } from "@warden/ui/components/scroll-area";
@@ -24,6 +19,11 @@ import {
   TooltipPopup,
   TooltipTrigger,
 } from "@warden/ui/components/tooltip";
+import { useMediaQuery } from "@warden/ui/hooks/use-media-query";
+import { cn } from "@warden/ui/lib/utils";
+import { cva, type VariantProps } from "class-variance-authority";
+import { PanelLeftIcon } from "lucide-react";
+import * as React from "react";
 
 const SIDEBAR_COOKIE_NAME: string = "sidebar_state";
 const SIDEBAR_COOKIE_MAX_AGE: number = 60 * 60 * 24 * 7;
@@ -80,6 +80,7 @@ export function SidebarProvider({
   defaultOpen = true,
   open: openProp,
   onOpenChange: setOpenProp,
+  keyboardShortcut = SIDEBAR_KEYBOARD_SHORTCUT,
   className,
   style,
   children,
@@ -88,6 +89,8 @@ export function SidebarProvider({
   defaultOpen?: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** Mod+key that toggles the sidebar; pass `null` when the app owns the binding. */
+  keyboardShortcut?: string | null;
 }): React.ReactElement {
   const isMobile = useMediaQuery("max-md");
   const [openMobile, setOpenMobile] = React.useState(false);
@@ -105,7 +108,9 @@ export function SidebarProvider({
         _setOpen(openState);
       }
 
-      // This sets the cookie to keep the sidebar state.
+      // This sets the cookie to keep the sidebar state. The Cookie Store API
+      // is Chromium-only — skip persistence on WebKit (macOS/Linux webviews).
+      if (typeof cookieStore === "undefined") return;
       await cookieStore.set({
         expires: Date.now() + SIDEBAR_COOKIE_MAX_AGE * 1000,
         name: SIDEBAR_COOKIE_NAME,
@@ -123,9 +128,10 @@ export function SidebarProvider({
 
   // Adds a keyboard shortcut to toggle the sidebar.
   React.useEffect(() => {
+    if (keyboardShortcut === null) return;
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (
-        event.key === SIDEBAR_KEYBOARD_SHORTCUT &&
+        event.key === keyboardShortcut &&
         (event.metaKey || event.ctrlKey)
       ) {
         event.preventDefault();
@@ -135,7 +141,7 @@ export function SidebarProvider({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [toggleSidebar]);
+  }, [toggleSidebar, keyboardShortcut]);
 
   // We add a state so that we can do data-state="expanded" or "collapsed".
   // This makes it easier to style the sidebar with Tailwind classes.
@@ -252,9 +258,11 @@ export function Sidebar({
         )}
         data-slot="sidebar-gap"
       />
+      {/* `--sidebar-top` (default 0) lets a full-width header above the
+          provider push the fixed sidebar down below it. */}
       <div
         className={cn(
-          "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear md:flex",
+          "fixed top-(--sidebar-top,0px) bottom-0 z-10 hidden w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear md:flex",
           side === "left"
             ? "left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]"
             : "right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]",

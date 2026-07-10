@@ -101,6 +101,8 @@ pub fn run() {
         // providers
         commands::providers::list_provider_status,
         commands::providers::list_opencode_models,
+        commands::providers::list_cursor_models,
+        commands::providers::list_grok_models,
         commands::providers::install_provider,
         commands::providers::update_provider,
         commands::providers::set_provider_source,

@@ -3,6 +3,8 @@
 //! and the GitHub CLI are all [`Tool`]s; this module is the tool-agnostic
 //! machinery (paths, source preference, install, status) they share. The actual
 //! download/extract logic lives behind [`crate::dist::ToolDistribution`].
+//! Grok installs via npm into the managed CLI dir; Cursor runs its own vendor
+//! installer, which places the binary on the system PATH.
 
 pub mod install;
 mod paths;
@@ -15,8 +17,9 @@ use std::time::Duration;
 use serde::Serialize;
 use specta::Type;
 
+pub use crate::dist::Installed;
 pub use install::{current_version, emit_progress, install, is_newer, latest_version};
-pub use paths::{managed_installed, resolve, system_binary};
+pub use paths::{cli_dir, managed_binary_path, managed_installed, resolve, system_binary};
 pub use source::{set_source, source, Source};
 
 /// A managed CLI warden knows how to install and run.
@@ -25,11 +28,20 @@ pub enum Tool {
     Claude,
     Codex,
     Opencode,
+    Cursor,
+    Grok,
     Gh,
 }
 
 impl Tool {
-    pub const ALL: [Tool; 4] = [Tool::Claude, Tool::Codex, Tool::Opencode, Tool::Gh];
+    pub const ALL: [Tool; 6] = [
+        Tool::Claude,
+        Tool::Codex,
+        Tool::Opencode,
+        Tool::Cursor,
+        Tool::Grok,
+        Tool::Gh,
+    ];
 
     /// Stable id used on the IPC boundary and for settings keys.
     pub fn id(self) -> &'static str {
@@ -37,6 +49,8 @@ impl Tool {
             Tool::Claude => "claude",
             Tool::Codex => "codex",
             Tool::Opencode => "opencode",
+            Tool::Cursor => "cursor",
+            Tool::Grok => "grok",
             Tool::Gh => "gh",
         }
     }
@@ -47,16 +61,22 @@ impl Tool {
             Tool::Claude => "Claude",
             Tool::Codex => "Codex",
             Tool::Opencode => "OpenCode",
+            Tool::Cursor => "Cursor",
+            Tool::Grok => "Grok",
             Tool::Gh => "GitHub CLI",
         }
     }
 
-    /// Binary name resolved on PATH (no extension).
+    /// Binary name resolved on PATH (no extension). Cursor ships its CLI as
+    /// `cursor-agent` (the canonical, unambiguous name — a bare `agent` would
+    /// collide with unrelated tools); Grok's npm package installs `grok`.
     pub fn bin(self) -> &'static str {
         match self {
             Tool::Claude => "claude",
             Tool::Codex => "codex",
             Tool::Opencode => "opencode",
+            Tool::Cursor => "cursor-agent",
+            Tool::Grok => "grok",
             Tool::Gh => "gh",
         }
     }
@@ -67,6 +87,8 @@ impl Tool {
             Tool::Claude => "claude-cli",
             Tool::Codex => "codex-cli",
             Tool::Opencode => "opencode-cli",
+            Tool::Cursor => "cursor-cli",
+            Tool::Grok => "grok-cli",
             Tool::Gh => "gh-cli",
         }
     }

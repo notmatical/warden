@@ -7,8 +7,13 @@ import { createRoot } from "react-dom/client"
 import "@/styles/globals.css"
 import { ErrorBoundary } from "@/components/error-boundary.tsx"
 import { ThemeProvider } from "@/components/theme-provider.tsx"
+import { startModelCatalogSync } from "@/lib/model-catalog"
 import { queryClient } from "@/lib/query"
 import App from "./App.tsx"
+
+// Revalidate the model catalog in the background (cache/bundled serve reads
+// until then), then hourly.
+startModelCatalogSync()
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

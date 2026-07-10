@@ -1,4 +1,4 @@
-export type Backend = "claude" | "codex" | "opencode"
+export type Backend = "claude" | "codex" | "opencode" | "cursor" | "grok"
 
 /** An agent CLI provider; one-to-one with the session backends. */
 export type Provider = Backend

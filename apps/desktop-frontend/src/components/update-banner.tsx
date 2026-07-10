@@ -1,18 +1,17 @@
+import {
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  useSidebar,
+} from "@warden/ui/components/sidebar"
 import { ArrowUp, Loader2, X } from "lucide-react"
 import { type ReactNode, useState } from "react"
-
 import { Button } from "@/components/ui/button"
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
-import {
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  useSidebar,
-} from "@/components/ui/sidebar"
 import {
   Tooltip,
   TooltipContent,

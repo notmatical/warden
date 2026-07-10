@@ -1,22 +1,23 @@
 import {
   DndContext,
   type DragEndEvent,
+  type DragOverEvent,
   DragOverlay,
   type DragStartEvent,
+  defaultDropAnimationSideEffects,
   PointerSensor,
   pointerWithin,
   useSensor,
   useSensors,
 } from "@dnd-kit/core"
-import { type CSSProperties, useCallback, useEffect } from "react"
+import { SidebarInset, SidebarProvider } from "@warden/ui/components/sidebar"
+import { type CSSProperties, useCallback, useEffect, useState } from "react"
 
 import { DragPreview } from "@/components/drag-preview"
 import { EmptyState } from "@/components/empty-state"
 import { PaneGrid } from "@/components/pane-grid"
-import { SessionTabs } from "@/components/session-tabs"
 import { Sidebar } from "@/components/sidebar"
 import { Titlebar } from "@/components/titlebar"
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { useAppStore } from "@/store/app-store"
 import type { SplitSide } from "@/types"
@@ -53,6 +54,14 @@ export function AppShell() {
     useAppStore.getState().setDragging(sessionId ?? null)
   }, [])
 
+  // Whether the drag is currently over the tab strip — the drop animation
+  // glides the clone into its slot on reorder, but pane drops land instantly.
+  const [overTab, setOverTab] = useState(false)
+
+  const onDragOver = useCallback((event: DragOverEvent) => {
+    setOverTab(event.over?.data.current?.type === "tab")
+  }, [])
+
   const onDragEnd = useCallback((event: DragEndEvent) => {
     useAppStore.getState().setDragging(null)
     const sessionId = event.active.data.current?.sessionId as string | undefined
@@ -61,9 +70,11 @@ export function AppShell() {
       | undefined
     if (!sessionId || !data) return
     const store = useAppStore.getState()
-    // Dropped on a tab → reorder the strip; on a pane → compose the viewport.
+    // Dropped on a tab → commit the previewed reorder; on a pane → compose the
+    // viewport.
     if (data.type === "tab" && data.sessionId) {
-      store.reorderTab(sessionId, data.sessionId)
+      const to = store.openTabs.indexOf(data.sessionId)
+      if (to !== -1) store.moveTab(sessionId, to)
     } else if (data.leafId) {
       if (!data.side || data.side === "center") {
         store.assignToPane(data.leafId, sessionId)
@@ -83,41 +94,60 @@ export function AppShell() {
         sensors={sensors}
         collisionDetection={pointerWithin}
         onDragStart={onDragStart}
+        onDragOver={onDragOver}
         onDragEnd={onDragEnd}
         onDragCancel={onDragCancel}
       >
-        <div
-          style={{ "--header-height": "2.5rem" } as CSSProperties}
-          className="relative flex h-svh min-h-0 flex-col overflow-hidden bg-background text-foreground"
+        {/* Inset frame: the provider paints the window frame (bg-sidebar); the
+            titlebar and sidebar sit on it, the content floats as a card. */}
+        <SidebarProvider
+          open={!sidebarCollapsed}
+          onOpenChange={onOpenChange}
+          keyboardShortcut={null}
+          style={
+            {
+              "--header-height": "2.5rem",
+              "--sidebar-top": "2.5rem",
+            } as CSSProperties
+          }
+          className="h-svh min-h-svh flex-col overflow-hidden text-foreground"
         >
           <Titlebar />
-          <SidebarProvider
-            open={!sidebarCollapsed}
-            onOpenChange={onOpenChange}
-            className="relative min-h-0 flex-1 overflow-hidden"
-          >
+          <div className="flex min-h-0 w-full flex-1">
             <Sidebar />
-            <SidebarInset className="min-w-0">
-              <SessionTabs />
-              <main className="min-h-0 flex-1">
-                {/* Open tabs win — group-independent destinations (Workflows,
-                    Settings, Tasks, Issues) render even with no groups. The
-                    create-group / add-root guidance only shows when nothing's
-                    open. */}
-                {hasTabs && layout ? (
-                  <PaneGrid layout={layout} />
-                ) : !hasGroup ? (
-                  <EmptyState variant="no-project" />
-                ) : !hasRoots ? (
-                  <EmptyState variant="no-root" />
-                ) : (
-                  <EmptyState variant="no-session" />
-                )}
-              </main>
+            <SidebarInset className="min-h-0 min-w-0 overflow-hidden md:peer-data-[variant=inset]:mt-0 md:peer-data-[variant=inset]:shadow-[0px_0px_2px_1px_#0000001A]">
+            <div className="flex min-h-0 flex-1 flex-col">
+              {/* Open tabs win — group-independent destinations (Workflows,
+                  Settings, Tasks, Issues) render even with no groups. The
+                  create-group / add-root guidance only shows when nothing's
+                  open. */}
+              {hasTabs && layout ? (
+                <PaneGrid layout={layout} />
+              ) : !hasGroup ? (
+                <EmptyState variant="no-project" />
+              ) : !hasRoots ? (
+                <EmptyState variant="no-root" />
+              ) : (
+                <EmptyState variant="no-session" />
+              )}
+            </div>
             </SidebarInset>
-          </SidebarProvider>
-        </div>
-        <DragOverlay dropAnimation={null}>
+          </div>
+        </SidebarProvider>
+        <DragOverlay
+          dropAnimation={
+            overTab
+              ? {
+                  duration: 180,
+                  easing: "cubic-bezier(0.23, 1, 0.32, 1)",
+                  // Keep the hidden original invisible until the clone lands.
+                  sideEffects: defaultDropAnimationSideEffects({
+                    styles: { active: { opacity: "0" } },
+                  }),
+                }
+              : null
+          }
+        >
           {draggingSessionId ? (
             <DragPreview sessionId={draggingSessionId} />
           ) : null}

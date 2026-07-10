@@ -25,9 +25,9 @@ import {
   baseModelId,
   formatModelName,
   isFastModel,
-  MODELS,
   providerEntries,
   supportsFast,
+  useModels,
   withFast,
 } from "@/lib/models"
 import { PRODUCT_ICON } from "@/lib/provider-icons"
@@ -67,15 +67,25 @@ export function ModelMenu({
   const providers = useAppStore((s) => s.providers)
   const opencodeModels = useAppStore((s) => s.opencodeModels)
   const opencodeLoading = useAppStore((s) => s.opencodeModelsLoading)
+  const cursorModels = useAppStore((s) => s.cursorModels)
+  const cursorLoading = useAppStore((s) => s.cursorModelsLoading)
+  const grokModels = useAppStore((s) => s.grokModels)
+  const grokLoading = useAppStore((s) => s.grokModelsLoading)
   const base = baseModelId(value)
   const fast = isFastModel(value)
   const canFast = supportsFast(base)
+  const catalogModels = useModels()
 
-  // Static models plus the account's live OpenCode catalog. The session's
-  // current model always renders, even when no longer listed (a retired id,
-  // or an OpenCode model the account lost access to).
+  // Catalog models plus each account's live CLI catalog (OpenCode, Cursor, Grok).
+  // The session's current model always renders, even when no longer listed (a
+  // retired id, or a model the account lost access to).
   const models = useMemo(() => {
-    const all = [...MODELS, ...opencodeModels]
+    const all = [
+      ...catalogModels,
+      ...opencodeModels,
+      ...cursorModels,
+      ...grokModels,
+    ]
     if (!all.some((m) => m.id === base)) {
       all.push({
         id: base,
@@ -84,16 +94,31 @@ export function ModelMenu({
       })
     }
     return all
-  }, [opencodeModels, base])
-  // While the OpenCode catalog is still loading there are no entries to
-  // derive a rail item from — pin one so the pane exists and can skeleton.
+  }, [catalogModels, opencodeModels, cursorModels, grokModels, base])
+
+  // Backends whose lists load from a CLI; used to pin a rail entry + skeleton.
+  const loadingByBackend: Partial<Record<Backend, boolean>> = {
+    opencode: opencodeLoading,
+    cursor: cursorLoading,
+    grok: grokLoading,
+  }
+
   const allEntries = useMemo(() => {
     const entries = providerEntries(models)
-    if (opencodeLoading && !entries.some((e) => e.backend === "opencode")) {
-      entries.push({ name: "OpenCode", backend: "opencode" })
+    // While a CLI listing is still loading there are no entries to derive a rail
+    // item from — pin one so the pane exists and can skeleton.
+    const dynamic: { name: string; backend: Backend; loading: boolean }[] = [
+      { name: "OpenCode", backend: "opencode", loading: opencodeLoading },
+      { name: "Cursor", backend: "cursor", loading: cursorLoading },
+      { name: "Grok", backend: "grok", loading: grokLoading },
+    ]
+    for (const d of dynamic) {
+      if (d.loading && !entries.some((e) => e.backend === d.backend)) {
+        entries.push({ name: d.name, backend: d.backend })
+      }
     }
     return entries
-  }, [models, opencodeLoading])
+  }, [models, opencodeLoading, cursorLoading, grokLoading])
 
   const activeProvider =
     models.find((m) => m.id === base)?.provider ?? allEntries[0].name
@@ -146,12 +171,11 @@ export function ModelMenu({
         m.label.toLowerCase().includes(q) ||
         m.id.toLowerCase().includes(q)
     )
-  // The OpenCode pane fills from a CLI listing that takes a few seconds on
-  // first load — skeleton it rather than claiming "no models".
+  // The dynamic panes fill from a CLI listing that takes a few seconds on first
+  // load — skeleton them rather than claiming "no models".
+  const paneBackend = entries.find((e) => e.name === paneName)?.backend
   const paneLoading =
-    opencodeLoading &&
-    paneModels.length === 0 &&
-    entries.find((e) => e.name === paneName)?.backend === "opencode"
+    paneModels.length === 0 && !!paneBackend && !!loadingByBackend[paneBackend]
 
   const ValueIcon = PRODUCT_ICON[backendForModel(value)]
   const trigger =

@@ -1,8 +1,10 @@
+import { useSidebar } from "@warden/ui/components/sidebar"
 import { PanelLeft } from "lucide-react"
 
 import { CliUpdates } from "@/components/cli-updates"
 import { GithubButton } from "@/components/github-button"
 import { OpenInButtons } from "@/components/open-in-buttons"
+import { SessionTabs } from "@/components/session-tabs"
 import { Button } from "@/components/ui/button"
 import { WindowControls } from "@/components/window-controls"
 import { isMac, isTauri } from "@/lib/platform"
@@ -19,18 +21,21 @@ function SidebarToggle() {
       onClick={() => setCollapsed(!collapsed)}
       aria-label="Toggle sidebar"
       title="Toggle sidebar (Ctrl+B)"
-      className="shrink-0 text-muted-foreground hover:text-foreground"
+      className="shrink-0 text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
     >
       <PanelLeft />
     </Button>
   )
 }
 
-/** The full-width window titlebar. The left cluster (sidebar toggle) and right
- *  cluster (global actions + window controls) stay interactive; only the bare
- *  middle is the drag region. On macOS we reserve space for the native traffic
- *  lights; on Windows/Linux we render our own controls (native decorations off). */
+/** The full-width window titlebar, drawn on the frame (bg-sidebar). It hosts
+ *  the tab strip: the left cluster tracks the sidebar column's width so tabs
+ *  start at the inset card's left edge and the active tab can merge into it.
+ *  On macOS we reserve space for the native traffic lights; on Windows/Linux
+ *  we render our own controls. */
 export function Titlebar() {
+  const { state } = useSidebar()
+
   // The active session's working directory, falling back to the group's first
   // root.
   const openPath = useAppStore((s) => {
@@ -41,15 +46,26 @@ export function Titlebar() {
   })
 
   return (
-    <header className="flex h-(--header-height) shrink-0 items-stretch bg-background">
+    // z-10 paints the tabs above the inset card's ring, which sits 1px outside
+    // the card's box — otherwise it draws a hairline across the active tab's base.
+    <header className="relative z-10 flex h-(--header-height) w-full shrink-0 items-stretch">
       <div
-        className={cn("flex items-center gap-1 pr-2 pl-3", isMac && "pl-20")}
+        className={cn(
+          "flex shrink-0 items-center gap-1 pl-3 transition-[width] duration-200 ease-linear",
+          isMac && "min-w-[6.5rem] pl-20",
+          // Collapsed width = icon rail + its padding + the inset card's ms-2,
+          // so the cluster's right edge tracks the card's left edge in both
+          // states and the tabs' corner fillers always sit above the card.
+          state === "collapsed"
+            ? "w-[calc(var(--sidebar-width-icon)+(--spacing(6))+2px)]"
+            : "w-(--sidebar-width)"
+        )}
       >
         <SidebarToggle />
+        <div data-tauri-drag-region className="h-full min-w-0 flex-1" />
       </div>
 
-      {/* Draggable region — the bare middle. Clusters stay interactive. */}
-      <div data-tauri-drag-region className="flex-1" />
+      <SessionTabs />
 
       <div className="flex items-center gap-1 px-2">
         <CliUpdates />

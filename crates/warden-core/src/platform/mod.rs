@@ -71,6 +71,55 @@ pub fn ensure_macos_path() {
 #[cfg(not(target_os = "macos"))]
 pub fn ensure_macos_path() {}
 
+/// Re-read the persisted `PATH` after an external installer changed it — the
+/// process captured its `PATH` at launch, so a freshly-installed binary won't
+/// resolve until this runs. Windows: merge the Machine + User `PATH` from the
+/// registry (where installers persist their additions); Unix: re-derive from a
+/// login shell. Unlike [`ensure_macos_path`], this runs on every call.
+pub fn refresh_path() {
+    #[cfg(windows)]
+    {
+        let mut cmd = Command::new("powershell");
+        let output = silent_command(&mut cmd)
+            .args([
+                "-NoProfile",
+                "-Command",
+                "[Environment]::GetEnvironmentVariable('Path','Machine') + ';' + \
+                 [Environment]::GetEnvironmentVariable('Path','User')",
+            ])
+            .output();
+        if let Ok(output) = output {
+            if output.status.success() {
+                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !path.is_empty() {
+                    std::env::set_var("PATH", path);
+                }
+            }
+        }
+    }
+    #[cfg(unix)]
+    {
+        let shell = std::env::var("SHELL").unwrap_or_else(|_| {
+            if cfg!(target_os = "macos") {
+                "/bin/zsh".to_string()
+            } else {
+                "/bin/bash".to_string()
+            }
+        });
+        if let Ok(output) = Command::new(&shell)
+            .args(["-l", "-c", "echo $PATH"])
+            .output()
+        {
+            if output.status.success() {
+                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !path.is_empty() {
+                    std::env::set_var("PATH", path);
+                }
+            }
+        }
+    }
+}
+
 /// Configure a `Command` for background use: never flash a console on Windows,
 /// and run with the user's full PATH on macOS. A no-op elsewhere. Do NOT use for
 /// commands that intentionally open UI (terminals, editors, file explorers).
