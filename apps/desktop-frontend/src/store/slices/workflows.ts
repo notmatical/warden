@@ -343,7 +343,6 @@ export const createWorkflowsSlice: StateCreator<
     }
   },
 
-
   applyWorkflowRun: (view: WorkflowRunView) => {
     const prev = get().workflowRun
     const workflowId = view.run.workflowId ?? null

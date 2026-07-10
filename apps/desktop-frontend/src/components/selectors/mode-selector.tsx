@@ -121,7 +121,9 @@ export function ModeSelector({
       <Popover open={open} onOpenChange={setOpen}>
         {variant === "toolbar" ? (
           <Tooltip>
-            <TooltipTrigger render={<PopoverTrigger render={triggerButton} />} />
+            <TooltipTrigger
+              render={<PopoverTrigger render={triggerButton} />}
+            />
             <TooltipPopup side="top" className="flex items-center gap-1.5">
               Mode
               <Shortcut combo={{ key: "Tab", shift: true }} />
@@ -142,7 +144,7 @@ export function ModeSelector({
               className={cn(
                 "relative flex origin-(--transform-origin) flex-col overflow-hidden rounded-xl border bg-popover p-1.5 text-popover-foreground shadow-lg/8 outline-none transition-[transform,opacity] before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-xl)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] data-ending-style:scale-98 data-starting-style:scale-98 data-ending-style:opacity-0 data-starting-style:opacity-0 dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
                 "w-64",
-                variant === "form" && "min-w-[var(--anchor-width)]",
+                variant === "form" && "min-w-[var(--anchor-width)]"
               )}
             >
               {MODE_ORDER.map((mode) => {
@@ -163,7 +165,7 @@ export function ModeSelector({
                     }}
                     className={cn(
                       "flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 text-sm outline-none transition-colors",
-                      selected ? "bg-accent" : "hover:bg-accent/50",
+                      selected ? "bg-accent" : "hover:bg-accent/50"
                     )}
                   >
                     <Icon className="size-4 shrink-0 text-muted-foreground" />

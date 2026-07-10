@@ -260,7 +260,10 @@ function Tab({ sessionId, divider }: { sessionId: string; divider: boolean }) {
                 {role === "planner" ? "plan" : "code"}
               </Badge>
             ) : null}
-            <CloseButton label="Close tab" onClose={() => closeTab(sessionId)} />
+            <CloseButton
+              label="Close tab"
+              onClose={() => closeTab(sessionId)}
+            />
           </div>
           {active ? <TabCorner side="right" /> : null}
           {divider ? <TabDivider /> : null}
@@ -371,20 +374,15 @@ export function SessionTabs() {
             }
           }}
         >
-          <SortableContext items={order} strategy={horizontalListSortingStrategy}>
+          <SortableContext
+            items={order}
+            strategy={horizontalListSortingStrategy}
+          >
             {order.map((id, i) =>
               describe(id).kind === "session" ? (
-                <Tab
-                  key={id}
-                  sessionId={id}
-                  divider={i < order.length - 1}
-                />
+                <Tab key={id} sessionId={id} divider={i < order.length - 1} />
               ) : (
-                <StaticTab
-                  key={id}
-                  tabId={id}
-                  divider={i < order.length - 1}
-                />
+                <StaticTab key={id} tabId={id} divider={i < order.length - 1} />
               )
             )}
           </SortableContext>

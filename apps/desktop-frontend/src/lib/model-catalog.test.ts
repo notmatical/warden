@@ -12,7 +12,11 @@ const validDefaults = {
   grokChat: "grok/grok-composer-2.5-fast",
 }
 
-const model = { id: "claude-opus-4-8", label: "Opus 4.8", provider: "Anthropic" }
+const model = {
+  id: "claude-opus-4-8",
+  label: "Opus 4.8",
+  provider: "Anthropic",
+}
 
 describe("parseCatalog", () => {
   it("accepts a minimal valid catalog", () => {
@@ -29,7 +33,9 @@ describe("parseCatalog", () => {
     expect(
       parseCatalog({ version: 2, models: [model], defaults: validDefaults })
     ).toBeNull()
-    expect(parseCatalog({ models: [model], defaults: validDefaults })).toBeNull()
+    expect(
+      parseCatalog({ models: [model], defaults: validDefaults })
+    ).toBeNull()
   })
 
   it("drops malformed model entries without rejecting the catalog", () => {

@@ -100,7 +100,9 @@ export function FolderWorkflowsSection({ projectId }: { projectId: string }) {
             const onDuplicate = () =>
               runAction(
                 () =>
-                  void duplicateWorkflow(w.id).then((c) => c && openWorkflow(c.id))
+                  void duplicateWorkflow(w.id).then(
+                    (c) => c && openWorkflow(c.id)
+                  )
               )
             const onExport = () => runAction(() => void exportWorkflow(w.id))
             const onCancel = () => runAction(() => void cancelWorkflow(w.id))

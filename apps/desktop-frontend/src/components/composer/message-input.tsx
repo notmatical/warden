@@ -1,7 +1,6 @@
+import { Button } from "@warden/ui/components/button"
 import { CornerDownLeft, Square } from "lucide-react"
 import type { KeyboardEvent, RefObject } from "react"
-
-import { Button } from "@warden/ui/components/button"
 import { AttachmentRow } from "@/components/attachment-row"
 import { MentionHighlight } from "@/components/mention-highlight"
 import { MentionPopover } from "@/components/mention-popover"

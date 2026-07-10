@@ -116,21 +116,21 @@ export function AppShell() {
           <div className="flex min-h-0 w-full flex-1">
             <Sidebar />
             <SidebarInset className="min-h-0 min-w-0 overflow-hidden md:peer-data-[variant=inset]:mt-0 md:peer-data-[variant=inset]:shadow-[0px_0px_2px_1px_#0000001A]">
-            <div className="flex min-h-0 flex-1 flex-col">
-              {/* Open tabs win — group-independent destinations (Workflows,
+              <div className="flex min-h-0 flex-1 flex-col">
+                {/* Open tabs win — group-independent destinations (Workflows,
                   Settings, Tasks, Issues) render even with no groups. The
                   create-group / add-root guidance only shows when nothing's
                   open. */}
-              {hasTabs && layout ? (
-                <PaneGrid layout={layout} />
-              ) : !hasGroup ? (
-                <EmptyState variant="no-project" />
-              ) : !hasRoots ? (
-                <EmptyState variant="no-root" />
-              ) : (
-                <EmptyState variant="no-session" />
-              )}
-            </div>
+                {hasTabs && layout ? (
+                  <PaneGrid layout={layout} />
+                ) : !hasGroup ? (
+                  <EmptyState variant="no-project" />
+                ) : !hasRoots ? (
+                  <EmptyState variant="no-root" />
+                ) : (
+                  <EmptyState variant="no-session" />
+                )}
+              </div>
             </SidebarInset>
           </div>
         </SidebarProvider>

@@ -37,6 +37,10 @@ export function ComposerStatusRow({ sessionId }: { sessionId: string }) {
     )
   }
   return (
-    <GitStatusChips statuses={statuses} sessionId={sessionId} refresh={refresh} />
+    <GitStatusChips
+      statuses={statuses}
+      sessionId={sessionId}
+      refresh={refresh}
+    />
   )
 }

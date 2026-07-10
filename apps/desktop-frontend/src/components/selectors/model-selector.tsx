@@ -170,13 +170,11 @@ export function ModelSelector({
       (m) =>
         !q ||
         m.label.toLowerCase().includes(q) ||
-        m.id.toLowerCase().includes(q),
+        m.id.toLowerCase().includes(q)
     )
   const paneBackend = entries.find((e) => e.name === paneName)?.backend
   const paneLoading =
-    paneModels.length === 0 &&
-    !!paneBackend &&
-    !!loadingByBackend[paneBackend]
+    paneModels.length === 0 && !!paneBackend && !!loadingByBackend[paneBackend]
 
   const ValueIcon = PRODUCT_ICON[backendForModel(value)]
   const triggerButton =
@@ -212,7 +210,9 @@ export function ModelSelector({
       <Popover open={open} onOpenChange={setOpen}>
         {variant === "toolbar" ? (
           <Tooltip>
-            <TooltipTrigger render={<PopoverTrigger render={triggerButton} />} />
+            <TooltipTrigger
+              render={<PopoverTrigger render={triggerButton} />}
+            />
             <TooltipPopup side="top" className="flex items-center gap-1.5">
               Model
               <Shortcut combo={{ key: "e", mod: true }} />
@@ -233,7 +233,7 @@ export function ModelSelector({
               className={cn(
                 "relative flex origin-(--transform-origin) flex-col overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-lg/8 outline-none transition-[transform,opacity] before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-xl)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] data-ending-style:scale-98 data-starting-style:scale-98 data-ending-style:opacity-0 data-starting-style:opacity-0 dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
                 showRail ? "w-[22rem]" : "w-72",
-                variant === "form" && "min-w-[var(--anchor-width)]",
+                variant === "form" && "min-w-[var(--anchor-width)]"
               )}
             >
               {/* Search */}
@@ -273,7 +273,7 @@ export function ModelSelector({
                                     ? "cursor-not-allowed opacity-30"
                                     : selected
                                       ? "bg-accent"
-                                      : "hover:bg-accent/50",
+                                      : "hover:bg-accent/50"
                                 )}
                               />
                             }
@@ -304,7 +304,10 @@ export function ModelSelector({
                             key={width}
                             className="flex items-center px-2 py-2"
                           >
-                            <Skeleton className="h-4 rounded" style={{ width }} />
+                            <Skeleton
+                              className="h-4 rounded"
+                              style={{ width }}
+                            />
                           </div>
                         ))}
                       </div>
@@ -331,7 +334,7 @@ export function ModelSelector({
                             }}
                             className={cn(
                               "flex cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm outline-none transition-colors",
-                              selected ? "bg-accent" : "hover:bg-accent/50",
+                              selected ? "bg-accent" : "hover:bg-accent/50"
                             )}
                           >
                             <span className="min-w-0 flex-1 truncate">
@@ -353,7 +356,7 @@ export function ModelSelector({
                                         "flex size-5 shrink-0 items-center justify-center rounded-md outline-none transition-colors",
                                         rowFast
                                           ? "text-primary"
-                                          : "text-muted-foreground/40 hover:bg-foreground/10 hover:text-foreground",
+                                          : "text-muted-foreground/40 hover:bg-foreground/10 hover:text-foreground"
                                       )}
                                     >
                                       <AnimatedZap

@@ -84,7 +84,8 @@ export const createProvidersSlice: StateCreator<
       // sign-ins done inside or outside the app.
       for (const backend of DYNAMIC_MODEL_BACKENDS) {
         const status = providers.find((p) => p.id === backend.id)
-        const stale = Date.now() - (modelsFetchedAt[backend.id] ?? 0) > MODELS_TTL_MS
+        const stale =
+          Date.now() - (modelsFetchedAt[backend.id] ?? 0) > MODELS_TTL_MS
         const empty = (get()[backend.models] as unknown[]).length === 0
         if (!status?.installed || !(stale || empty)) continue
 
