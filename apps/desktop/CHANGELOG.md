@@ -1,5 +1,21 @@
 # @warden/desktop
 
+## 0.1.13
+
+### Patch Changes
+
+- 7d8f47f: Add Cursor and Grok as agent backends. Cursor runs per-turn against the
+  `cursor-agent` CLI (stdout stream-json, `--resume` continuation); Grok runs over
+  a pooled per-session ACP connection (`grok agent stdio`, JSON-RPC over stdio,
+  answering the agent's file/terminal/permission requests inline). Both list their
+  models live from the CLI and route by `cursor/`/`grok/` model-id prefixes. Both
+  install from the provider settings panel: Grok as a warden-managed npm install
+  (into the managed CLI dir, versioned from the npm registry), Cursor by running
+  its official installer onto the system PATH (the source preference then switches
+  to System). Effort tiers: Grok exposes low/medium/high; Cursor has none.
+- 7d8f47f: Dynamic model catalog: the model list, fast-tier variants, and per-role defaults now refresh at runtime from the published models.json (main branch) with a localStorage cache and the bundled copy as offline fallback — new or retired models reach every install without a release. The catalog schema is versioned (v1) and gains per-model `fastId`, `recommended`, `deprecated`, and `hidden` flags. See docs/MODEL-CATALOG.md.
+- 7d8f47f: Adopt a browser-style inset shell: session tabs move into the 40px titlebar and the active tab merges into the floating content card (concave corner fillers, hairline dividers, hover pills). Tabs reorder live while dragging — neighbors slide aside and a lifted clone follows the cursor, gliding into its slot on drop — and Ctrl+Tab / Ctrl+Shift+Tab cycle through open tabs. The sidebar migrates to the @warden/ui inset-variant sidebar, and the window frame token steps below the content color in both themes so the card floats. The @warden/ui sidebar gains a `--sidebar-top` header offset, a `keyboardShortcut` opt-out, and a Cookie Store API guard for WebKit webviews.
+
 ## 0.1.12
 
 ### Patch Changes
