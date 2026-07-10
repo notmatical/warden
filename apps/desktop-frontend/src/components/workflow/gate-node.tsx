@@ -121,8 +121,8 @@ export function GateNode({ id, data, selected }: NodeProps) {
                 </Callout>
               ) : null}
               <Callout size="sm">
-                The run pauses here until you approve. Rejecting cancels the rest
-                of the run.
+                The run pauses here until you approve. Rejecting cancels the
+                rest of the run.
               </Callout>
             </div>
           </div>

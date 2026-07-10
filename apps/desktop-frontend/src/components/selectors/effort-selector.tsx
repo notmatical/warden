@@ -110,7 +110,9 @@ export function EffortSelector({
       <Popover open={open} onOpenChange={setOpen}>
         {variant === "toolbar" ? (
           <Tooltip>
-            <TooltipTrigger render={<PopoverTrigger render={triggerButton} />} />
+            <TooltipTrigger
+              render={<PopoverTrigger render={triggerButton} />}
+            />
             <TooltipPopup side="top" className="w-fit whitespace-nowrap">
               Effort
             </TooltipPopup>
@@ -130,7 +132,7 @@ export function EffortSelector({
               className={cn(
                 "relative flex origin-(--transform-origin) flex-col overflow-hidden rounded-xl border bg-popover p-1.5 text-popover-foreground shadow-lg/8 outline-none transition-[transform,opacity] before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-xl)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] data-ending-style:scale-98 data-starting-style:scale-98 data-ending-style:opacity-0 data-starting-style:opacity-0 dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
                 "w-48",
-                variant === "form" && "min-w-[var(--anchor-width)]",
+                variant === "form" && "min-w-[var(--anchor-width)]"
               )}
             >
               {options.map((option, index) => {
@@ -149,13 +151,13 @@ export function EffortSelector({
                     }}
                     className={cn(
                       "flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm outline-none transition-colors",
-                      selected ? "bg-accent" : "hover:bg-accent/50",
+                      selected ? "bg-accent" : "hover:bg-accent/50"
                     )}
                   >
                     <Gauge
                       className={cn(
                         "size-4 shrink-0",
-                        EFFORT_COLOR[option.value],
+                        EFFORT_COLOR[option.value]
                       )}
                     />
                     <span className="flex-1 truncate">{option.label}</span>

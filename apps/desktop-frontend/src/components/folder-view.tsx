@@ -154,8 +154,8 @@ function StaleBadge({ updatedAt }: { updatedAt: string }) {
         </span>
       </TooltipTrigger>
       <TooltipContent>
-        No activity since {formatDate(updatedAt)}. This session may no longer
-        be needed.
+        No activity since {formatDate(updatedAt)}. This session may no longer be
+        needed.
       </TooltipContent>
     </Tooltip>
   )

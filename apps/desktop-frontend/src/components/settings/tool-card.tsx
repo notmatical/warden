@@ -2,7 +2,10 @@ import { Button } from "@warden/ui/components/button"
 import { ArrowRight } from "lucide-react"
 import type { ComponentType } from "react"
 
-import { type CardStateKind, SettingsCard } from "@/components/settings/settings-card"
+import {
+  type CardStateKind,
+  SettingsCard,
+} from "@/components/settings/settings-card"
 import { cn } from "@/lib/utils"
 import type { ProviderSource, ProviderStatus } from "@/types"
 

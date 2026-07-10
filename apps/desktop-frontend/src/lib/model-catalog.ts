@@ -67,7 +67,11 @@ function nonEmptyString(value: unknown): value is string {
 function parseModel(value: unknown): CatalogModel | null {
   if (!isRecord(value)) return null
   const { id, label, provider } = value
-  if (!nonEmptyString(id) || !nonEmptyString(label) || !nonEmptyString(provider))
+  if (
+    !nonEmptyString(id) ||
+    !nonEmptyString(label) ||
+    !nonEmptyString(provider)
+  )
     return null
   return {
     id,
@@ -177,7 +181,9 @@ function setSnapshot(catalog: ModelCatalog): void {
 
 // ----- refresh ----------------------------------------------------------------
 
-async function fetchRemoteCatalog(force: boolean): Promise<ModelCatalog | null> {
+async function fetchRemoteCatalog(
+  force: boolean
+): Promise<ModelCatalog | null> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
   try {

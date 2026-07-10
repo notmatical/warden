@@ -135,7 +135,9 @@ export function AgentConfig({
           </span>
           <Input
             value={config.branchHint ?? ""}
-            onChange={(e) => patchConfig({ branchHint: e.target.value || null })}
+            onChange={(e) =>
+              patchConfig({ branchHint: e.target.value || null })
+            }
             placeholder="defaults to the run's branch"
             spellCheck={false}
             className="nodrag h-7 font-mono text-[12px]"

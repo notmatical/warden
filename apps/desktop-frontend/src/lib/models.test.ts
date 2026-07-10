@@ -24,8 +24,12 @@ describe("fast-tier semantics", () => {
   })
 
   it("withFast resolves the catalog variant and is reversible", () => {
-    expect(withFast("claude-opus-4-8[1m]", true)).toBe("claude-opus-4-8[1m]-fast")
-    expect(withFast("claude-opus-4-8[1m]-fast", false)).toBe("claude-opus-4-8[1m]")
+    expect(withFast("claude-opus-4-8[1m]", true)).toBe(
+      "claude-opus-4-8[1m]-fast"
+    )
+    expect(withFast("claude-opus-4-8[1m]-fast", false)).toBe(
+      "claude-opus-4-8[1m]"
+    )
     // A native -fast id has no variant, so toggling fast is a no-op.
     expect(withFast("grok/grok-composer-2.5-fast", true)).toBe(
       "grok/grok-composer-2.5-fast"
